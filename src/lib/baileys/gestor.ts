@@ -1,0 +1,357 @@
+import path from "node:path";
+import fs from "node:fs";
+import {
+  Browsers,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+  makeWASocket,
+  useMultiFileAuthState,
+  type WASocket,
+} from "@whiskeysockets/baileys";
+import pino from "pino";
+import qrcodeTerminal from "qrcode-terminal";
+import {
+  actualizarEstadoCuenta,
+  listarCuentas,
+  obtenerCuenta,
+  type Cuenta,
+} from "../baseDatos";
+import {
+  procesarBandejaSalidaDeCuenta,
+  registrarManejadores,
+} from "./manejador";
+
+interface ErrorConCodigo {
+  output?: { statusCode?: number };
+  statusCode?: number;
+}
+
+interface SocketCuenta {
+  cuentaId: number;
+  etiqueta: string;
+  sock: WASocket;
+  temporizadorReconexion: NodeJS.Timeout | null;
+}
+
+const logger = pino({ level: "silent" });
+
+function rutaAuthCuenta(cuentaId: number): string {
+  return path.resolve(process.cwd(), "auth", String(cuentaId));
+}
+
+function asegurarDirectorio(ruta: string): void {
+  if (!fs.existsSync(ruta)) {
+    fs.mkdirSync(ruta, { recursive: true });
+  }
+}
+
+function extraerTelefonoDeJID(jid: string | undefined): string | null {
+  if (!jid) return null;
+  const sinSufijo = jid.split("@")[0];
+  if (!sinSufijo) return null;
+  const sinDispositivo = sinSufijo.split(":")[0];
+  return sinDispositivo || null;
+}
+
+/**
+ * Migración legacy: si existe contenido directo en auth/ (de la versión
+ * single-account), lo movemos a auth/1/.
+ */
+function migrarAuthLegacy(): void {
+  const dirAuth = path.resolve(process.cwd(), "auth");
+  if (!fs.existsSync(dirAuth)) return;
+  const entradas = fs.readdirSync(dirAuth, { withFileTypes: true });
+  const tieneArchivosSueltos = entradas.some((e) => e.isFile());
+  if (!tieneArchivosSueltos) return;
+  const dirCuenta1 = rutaAuthCuenta(1);
+  asegurarDirectorio(dirCuenta1);
+  for (const entrada of entradas) {
+    if (!entrada.isFile()) continue;
+    const origen = path.join(dirAuth, entrada.name);
+    const destino = path.join(dirCuenta1, entrada.name);
+    if (!fs.existsSync(destino)) {
+      fs.renameSync(origen, destino);
+    } else {
+      fs.unlinkSync(origen);
+    }
+  }
+  console.log("[gestor] Sesión legacy auth/ movida a auth/1/");
+}
+
+class GestorCuentas {
+  private sockets = new Map<number, SocketCuenta>();
+  private detenido = false;
+
+  async iniciar(): Promise<void> {
+    migrarAuthLegacy();
+    await this.sincronizar();
+  }
+
+  async sincronizar(): Promise<void> {
+    if (this.detenido) return;
+    const cuentas = listarCuentas().filter(
+      (c) => c.esta_activa && !c.esta_archivada,
+    );
+    const idsActivos = new Set(cuentas.map((c) => c.id));
+
+    // Apagar sockets de cuentas que ya no están activas
+    for (const [id, entrada] of this.sockets) {
+      if (!idsActivos.has(id)) {
+        console.log(`[gestor] Apagando cuenta ${id} (${entrada.etiqueta})`);
+        await this.apagarSocket(id);
+      }
+    }
+
+    // Iniciar sockets para cuentas nuevas
+    for (const cuenta of cuentas) {
+      if (!this.sockets.has(cuenta.id)) {
+        try {
+          await this.iniciarSocketCuenta(cuenta);
+        } catch (err) {
+          console.error(
+            `[gestor] Error iniciando socket cuenta ${cuenta.id}:`,
+            err,
+          );
+        }
+      }
+    }
+  }
+
+  private async iniciarSocketCuenta(cuenta: Cuenta): Promise<void> {
+    const dirAuth = rutaAuthCuenta(cuenta.id);
+    asegurarDirectorio(dirAuth);
+    const { state, saveCreds } = await useMultiFileAuthState(dirAuth);
+
+    let version: [number, number, number] | undefined;
+    try {
+      const obtenida = await fetchLatestBaileysVersion();
+      version = obtenida.version;
+    } catch {
+      // ignorar, se usa la versión default
+    }
+
+    const estadoActual = obtenerCuenta(cuenta.id);
+    if (estadoActual && estadoActual.estado === "desconectado") {
+      actualizarEstadoCuenta(cuenta.id, { estado: "conectando" });
+    }
+
+    const sock = makeWASocket({
+      version,
+      auth: state,
+      logger,
+      browser: Browsers.macOS("Desktop"),
+      // markOnlineOnConnect=true es necesario para que el indicador
+      // "escribiendo..." funcione: WhatsApp solo lo muestra cuando
+      // estamos online ante el contacto.
+      markOnlineOnConnect: true,
+      syncFullHistory: false,
+    });
+
+    const entrada: SocketCuenta = {
+      cuentaId: cuenta.id,
+      etiqueta: cuenta.etiqueta,
+      sock,
+      temporizadorReconexion: null,
+    };
+    this.sockets.set(cuenta.id, entrada);
+
+    sock.ev.on("creds.update", saveCreds);
+
+    const prefijo = `[bot:${cuenta.etiqueta}]`;
+
+    sock.ev.on("connection.update", (update) => {
+      const { connection, lastDisconnect, qr } = update;
+
+      if (qr) {
+        console.log(`${prefijo} QR generado, esperando escaneo...`);
+        qrcodeTerminal.generate(qr, { small: true });
+        actualizarEstadoCuenta(cuenta.id, {
+          estado: "qr",
+          cadena_qr: qr,
+          telefono: null,
+        });
+        return;
+      }
+
+      if (connection === "connecting") {
+        const actual = obtenerCuenta(cuenta.id);
+        if (actual && actual.estado === "desconectado") {
+          actualizarEstadoCuenta(cuenta.id, { estado: "conectando" });
+        }
+        return;
+      }
+
+      if (connection === "open") {
+        const telefono = extraerTelefonoDeJID(sock.user?.id);
+        console.log(`${prefijo} conexión abierta. Número: ${telefono ?? "?"}`);
+        actualizarEstadoCuenta(cuenta.id, {
+          estado: "conectado",
+          cadena_qr: null,
+          telefono,
+        });
+        // Anunciar disponibilidad para que el indicador "escribiendo..."
+        // sea visible a los contactos.
+        sock.sendPresenceUpdate("available").catch(() => {});
+        return;
+      }
+
+      if (connection === "close") {
+        const error = lastDisconnect?.error as ErrorConCodigo | undefined;
+        const codigo = error?.output?.statusCode ?? error?.statusCode;
+        console.log(
+          `${prefijo} conexión cerrada. Código: ${codigo ?? "desconocido"}`,
+        );
+
+        if (codigo === DisconnectReason.loggedOut) {
+          console.log(
+            `${prefijo} sesión cerrada por el usuario. Limpiando estado.`,
+          );
+          actualizarEstadoCuenta(cuenta.id, {
+            estado: "desconectado",
+            cadena_qr: null,
+            telefono: null,
+          });
+          try {
+            fs.rmSync(dirAuth, { recursive: true, force: true });
+            asegurarDirectorio(dirAuth);
+          } catch (errBorrado) {
+            console.warn(
+              `${prefijo} no se pudo limpiar carpeta auth:`,
+              errBorrado,
+            );
+          }
+          return;
+        }
+
+        this.programarReconexion(cuenta.id, codigo);
+      }
+    });
+
+    registrarManejadores(sock, cuenta.id, cuenta.etiqueta);
+  }
+
+  private programarReconexion(
+    cuentaId: number,
+    codigo: number | undefined,
+  ): void {
+    const entrada = this.sockets.get(cuentaId);
+    if (!entrada) return;
+    if (entrada.temporizadorReconexion) return;
+    const espera = codigo === 440 ? 15000 : 5000;
+    console.log(
+      `[bot:${entrada.etiqueta}] reintentando conexión en ${espera / 1000}s...`,
+    );
+    entrada.temporizadorReconexion = setTimeout(async () => {
+      entrada.temporizadorReconexion = null;
+      const cuenta = obtenerCuenta(cuentaId);
+      if (!cuenta || cuenta.esta_archivada || !cuenta.esta_activa) {
+        await this.apagarSocket(cuentaId);
+        return;
+      }
+      try {
+        entrada.sock.end(undefined);
+      } catch {
+        // ignorar
+      }
+      this.sockets.delete(cuentaId);
+      try {
+        await this.iniciarSocketCuenta(cuenta);
+      } catch (err) {
+        console.error(
+          `[gestor] falló reconexión cuenta ${cuentaId}:`,
+          err,
+        );
+        this.programarReconexion(cuentaId, codigo);
+      }
+    }, espera);
+  }
+
+  async desconectar(cuentaId: number, limpiarAuth: boolean): Promise<void> {
+    const entrada = this.sockets.get(cuentaId);
+    if (entrada) {
+      if (entrada.temporizadorReconexion) {
+        clearTimeout(entrada.temporizadorReconexion);
+      }
+      try {
+        await entrada.sock.logout();
+      } catch {
+        // ignorar
+      }
+      try {
+        entrada.sock.end(undefined);
+      } catch {
+        // ignorar
+      }
+      this.sockets.delete(cuentaId);
+    }
+    if (limpiarAuth) {
+      try {
+        fs.rmSync(rutaAuthCuenta(cuentaId), { recursive: true, force: true });
+      } catch {
+        // ignorar
+      }
+    }
+    actualizarEstadoCuenta(cuentaId, {
+      estado: "desconectado",
+      cadena_qr: null,
+      telefono: null,
+    });
+  }
+
+  private async apagarSocket(cuentaId: number): Promise<void> {
+    const entrada = this.sockets.get(cuentaId);
+    if (!entrada) return;
+    if (entrada.temporizadorReconexion) {
+      clearTimeout(entrada.temporizadorReconexion);
+    }
+    try {
+      entrada.sock.end(undefined);
+    } catch {
+      // ignorar
+    }
+    this.sockets.delete(cuentaId);
+  }
+
+  async apagarTodo(): Promise<void> {
+    this.detenido = true;
+    for (const id of Array.from(this.sockets.keys())) {
+      await this.apagarSocket(id);
+    }
+  }
+
+  obtenerSocket(cuentaId: number): WASocket | null {
+    return this.sockets.get(cuentaId)?.sock ?? null;
+  }
+
+  cuentasActivas(): number[] {
+    return Array.from(this.sockets.keys());
+  }
+
+  async procesarBandejasDeSalida(): Promise<void> {
+    for (const [cuentaId, entrada] of this.sockets) {
+      try {
+        await procesarBandejaSalidaDeCuenta(
+          entrada.sock,
+          cuentaId,
+          entrada.etiqueta,
+        );
+      } catch (err) {
+        console.error(
+          `[bot:${entrada.etiqueta}] error procesando bandeja:`,
+          err,
+        );
+      }
+    }
+  }
+}
+
+let gestorSingleton: GestorCuentas | null = null;
+
+export function obtenerGestor(): GestorCuentas {
+  if (!gestorSingleton) {
+    gestorSingleton = new GestorCuentas();
+  }
+  return gestorSingleton;
+}
+
+export type { GestorCuentas };

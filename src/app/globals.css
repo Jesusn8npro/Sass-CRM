@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: var(--fuente-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* ============================================================
+   Capa base — fondo de página y degradados ambient
+   ============================================================ */
+html, body {
+  height: 100%;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+/* Modo claro (default) */
+body {
+  color: #18181b;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(5, 150, 105, 0.05), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(217, 119, 6, 0.04), transparent 60%),
+    #fafafa;
+}
+
+/* Modo oscuro */
+.dark body {
+  color: #fafafa;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(16, 185, 129, 0.06), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(245, 158, 11, 0.04), transparent 60%),
+    #09090b;
+}
+
+::selection {
+  background: rgba(16, 185, 129, 0.25);
+}
+
+/* Scrollbar discreto adaptado a tema */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.dark *::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  background-clip: content-box;
+  border: 2px solid transparent;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.30);
+  background-clip: content-box;
+  border: 2px solid transparent;
+}
+.dark *::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+  background-clip: content-box;
+  border: 2px solid transparent;
+}
+
+/* ============================================================
+   Animaciones
+   ============================================================ */
+@keyframes pulso-suave {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.15);
+  }
+}
+.animate-pulso-suave {
+  animation: pulso-suave 1.8s ease-in-out infinite;
+}
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-aparecer {
+  animation: aparecer 200ms ease-out both;
+}
