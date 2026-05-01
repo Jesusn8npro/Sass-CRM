@@ -66,6 +66,16 @@ export async function generarAudioTTS(
 
   if (!respuesta.ok) {
     const cuerpo = await respuesta.text().catch(() => "");
+    // El 402 paid_plan_required pasa cuando se intenta usar una voz de
+    // la biblioteca personal con plan free. Devolvemos un mensaje más
+    // útil que el JSON crudo de ElevenLabs.
+    if (respuesta.status === 402 && cuerpo.includes("paid_plan_required")) {
+      throw new Error(
+        "Esta voz es de tu biblioteca personal y requiere plan pago de ElevenLabs. " +
+          "Cambiá a una voz default (Sarah: EXAVITQu4vr4xnSDxMaL, Aria: 9BWtsMINqrJLrRacOk9x, " +
+          "Rachel: 21m00Tcm4TlvDq8ikWAM, Adam: pNInz6obpgDQGcFmaJgB, Antoni: ErXwobaYiN019PkySvjV).",
+      );
+    }
     throw new Error(
       `ElevenLabs error ${respuesta.status}: ${cuerpo.slice(0, 300)}`,
     );

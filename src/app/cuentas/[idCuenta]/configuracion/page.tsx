@@ -28,6 +28,16 @@ interface RespuestaBiblioteca {
   medios: MedioBiblioteca[];
 }
 
+// Voces default de ElevenLabs (funcionan con plan free vía API).
+// Las voces de la biblioteca personal devuelven 402 paid_plan_required.
+const VOCES_DEFAULT = [
+  { nombre: "Sarah (mujer)", id: "EXAVITQu4vr4xnSDxMaL" },
+  { nombre: "Aria (mujer)", id: "9BWtsMINqrJLrRacOk9x" },
+  { nombre: "Rachel (mujer)", id: "21m00Tcm4TlvDq8ikWAM" },
+  { nombre: "Adam (hombre)", id: "pNInz6obpgDQGcFmaJgB" },
+  { nombre: "Antoni (hombre)", id: "ErXwobaYiN019PkySvjV" },
+];
+
 export default function PaginaConfiguracion() {
   const params = useParams<{ idCuenta: string }>();
   const idCuenta = Number(params?.idCuenta);
@@ -940,8 +950,36 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
             placeholder="Ej: 21m00Tcm4TlvDq8ikWAM (o vacío para texto)"
             className={`${inputClases()} font-mono text-xs`}
           />
+
+          <div className="mt-2 flex flex-col gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/5 p-2.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-800 dark:text-amber-300">
+              Voces default (gratis con plan free)
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {VOCES_DEFAULT.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setVoz(v.id)}
+                  className={`rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors ${
+                    voz.trim() === v.id
+                      ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
+                      : "border-zinc-300 bg-white text-zinc-700 hover:border-emerald-500/40 hover:bg-emerald-500/5 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                  }`}
+                >
+                  {v.nombre}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] leading-relaxed text-amber-800/80 dark:text-amber-300/80">
+              Las voces de tu <em>biblioteca personal</em> requieren plan
+              pago. Si pegás una y ves error 402 al probar, usá una de
+              estas.
+            </p>
+          </div>
+
           <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-            Cómo obtenerlo:{" "}
+            Cómo obtener otras voces:{" "}
             <a
               href="https://elevenlabs.io/app/voice-library"
               target="_blank"
