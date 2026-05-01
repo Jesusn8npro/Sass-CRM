@@ -56,8 +56,10 @@ export async function generarAudioTTS(
       text: texto,
       model_id: MODELO_TTS,
       voice_settings: {
+        // similarity_boost alto preserva mejor el acento/timbre de la
+        // voz original (importante para voces clonadas en español).
         stability: 0.5,
-        similarity_boost: 0.75,
+        similarity_boost: 0.9,
         style: 0.3,
         use_speaker_boost: true,
       },

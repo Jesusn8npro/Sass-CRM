@@ -26,6 +26,9 @@ export function ClonadorVoz({ idCuenta, onClonada }: Props) {
   const [duracion, setDuracion] = useState(0);
   const [blobGrabado, setBlobGrabado] = useState<Blob | null>(null);
   const [nombre, setNombre] = useState("Mi voz");
+  const [descripcion, setDescripcion] = useState(
+    "Voz en español, acento neutro/latinoamericano, tono cálido y natural.",
+  );
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
@@ -148,6 +151,9 @@ export function ClonadorVoz({ idCuenta, onClonada }: Props) {
       const formData = new FormData();
       formData.append("archivo", archivo);
       formData.append("nombre", nombre.trim());
+      if (descripcion.trim()) {
+        formData.append("descripcion", descripcion.trim());
+      }
       const res = await fetch(`/api/cuentas/${idCuenta}/voz/clonar`, {
         method: "POST",
         body: formData,
@@ -253,8 +259,8 @@ export function ClonadorVoz({ idCuenta, onClonada }: Props) {
               </span>
             )}
           </p>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="flex-1">
+          <div className="flex flex-col gap-3">
+            <div>
               <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
                 Nombre para la voz
               </label>
@@ -263,15 +269,33 @@ export function ClonadorVoz({ idCuenta, onClonada }: Props) {
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 disabled={enviando}
-                placeholder="Mi voz"
+                placeholder="Ej: Jesús (colombiano)"
                 className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-600"
               />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                Descripción (idioma + acento + tono)
+              </label>
+              <textarea
+                value={descripcion}
+                onChange={(e) => setDescripcion(e.target.value)}
+                disabled={enviando}
+                rows={2}
+                placeholder="Ej: Voz en español, acento colombiano, tono cálido y profesional, hombre/mujer adulto."
+                className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-600"
+              />
+              <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">
+                Mencioná el idioma, acento (colombiano, mexicano, neutro, etc.)
+                y el tono. Ayuda a ElevenLabs a categorizar la voz, pero el
+                resultado real depende sobre todo de lo que grabaste.
+              </p>
             </div>
             <button
               type="button"
               onClick={enviar}
               disabled={enviando || duracion < MIN_SEGUNDOS || !nombre.trim()}
-              className="rounded-xl bg-emerald-500 px-5 py-2 text-sm font-semibold text-white transition-all hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className="self-start rounded-xl bg-emerald-500 px-5 py-2 text-sm font-semibold text-white transition-all hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {enviando ? "Clonando..." : "Clonar voz"}
             </button>

@@ -866,8 +866,8 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState(false);
-  const [vocesClonadas, setVocesClonadas] = useState<
-    Array<{ voice_id: string; name: string }>
+  const [vocesPersonales, setVocesPersonales] = useState<
+    Array<{ voice_id: string; name: string; category: string }>
   >([]);
   const [cargandoVoces, setCargandoVoces] = useState(false);
   const [errorVoces, setErrorVoces] = useState<string | null>(null);
@@ -887,8 +887,12 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
           }
         | { error: string };
       if (res.ok && "voces" in data) {
-        const clonadas = data.voces.filter((v) => v.category === "cloned");
-        setVocesClonadas(clonadas);
+        // Mostramos todas las voces que NO son premade default. Eso
+        // incluye: cloned (IVC), professional (PVC), generated (Voice
+        // Designer) y famous. Así aparecen también las que agregaste
+        // desde la Voice Library de ElevenLabs.
+        const personales = data.voces.filter((v) => v.category !== "premade");
+        setVocesPersonales(personales);
       } else {
         setErrorVoces(
           ("error" in data && data.error) ||
@@ -949,12 +953,13 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
             <BotonReproducirVoz vozId={voz} variante="icon" />
           </div>
 
-          {/* Voces clonadas (las que el usuario clonó por API) */}
-          {vocesClonadas.length > 0 && (
+          {/* Voces personales: cloned, professional, generated, famous.
+              Cualquier cosa que no sea premade default. */}
+          {vocesPersonales.length > 0 && (
             <div className="mt-2 flex flex-col gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-2.5">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
-                  Tus voces clonadas
+                  Tus voces ({vocesPersonales.length})
                 </p>
                 <button
                   type="button"
@@ -967,8 +972,18 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
                 </button>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {vocesClonadas.map((v) => {
+                {vocesPersonales.map((v) => {
                   const seleccionada = voz.trim() === v.voice_id;
+                  const etiquetaCat =
+                    v.category === "cloned"
+                      ? "clonada"
+                      : v.category === "professional"
+                      ? "PVC"
+                      : v.category === "generated"
+                      ? "diseñada"
+                      : v.category === "famous"
+                      ? "famosa"
+                      : v.category;
                   return (
                     <div
                       key={v.voice_id}
@@ -981,15 +996,24 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
                       <button
                         type="button"
                         onClick={() => setVoz(v.voice_id)}
-                        className="text-[11px]"
+                        className="flex items-baseline gap-1.5 text-[11px]"
                       >
-                        {v.name}
+                        <span>{v.name}</span>
+                        <span className="text-[9px] uppercase tracking-wider text-emerald-700/60 dark:text-emerald-400/60">
+                          {etiquetaCat}
+                        </span>
                       </button>
                       <BotonReproducirVoz vozId={v.voice_id} variante="pill" />
                     </div>
                   );
                 })}
               </div>
+              <p className="text-[10px] leading-relaxed text-emerald-800/80 dark:text-emerald-300/80">
+                💡 El preview ▶ a veces suena en inglés (es un MP3 fijo de
+                ElevenLabs). Cuando el bot responde a un cliente, le pasa
+                texto en español al modelo y usa esta voz — sí responderá
+                en español con su acento.
+              </p>
             </div>
           )}
 
