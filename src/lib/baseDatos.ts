@@ -89,8 +89,26 @@ export interface Conversacion {
   nombre: string | null;
   modo: ModoConversacion;
   necesita_humano: 0 | 1;
+  etapa_id: number | null;
   ultimo_mensaje_en: number | null;
   creada_en: number;
+}
+
+export interface EtapaPipeline {
+  id: number;
+  cuenta_id: number;
+  nombre: string;
+  color: string;
+  orden: number;
+  creada_en: number;
+}
+
+export interface ContactoEmail {
+  id: number;
+  cuenta_id: number;
+  conversacion_id: number | null;
+  email: string;
+  capturado_en: number;
 }
 
 export interface EtiquetaResumen {
@@ -247,6 +265,31 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_biblioteca_cuenta
     ON biblioteca_medios(cuenta_id);
 
+  CREATE TABLE IF NOT EXISTS etapas_pipeline (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cuenta_id INTEGER NOT NULL,
+    nombre TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT 'zinc',
+    orden INTEGER NOT NULL DEFAULT 0,
+    creada_en INTEGER NOT NULL DEFAULT (unixepoch()),
+    UNIQUE(cuenta_id, nombre)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_etapas_cuenta
+    ON etapas_pipeline(cuenta_id, orden);
+
+  CREATE TABLE IF NOT EXISTS contactos_email (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cuenta_id INTEGER NOT NULL,
+    conversacion_id INTEGER,
+    email TEXT NOT NULL,
+    capturado_en INTEGER NOT NULL DEFAULT (unixepoch()),
+    UNIQUE(cuenta_id, email)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_contactos_email_cuenta
+    ON contactos_email(cuenta_id, capturado_en DESC);
+
   CREATE TABLE IF NOT EXISTS conversaciones (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cuenta_id INTEGER NOT NULL,
@@ -328,6 +371,7 @@ asegurarColumna(
   "TEXT NOT NULL DEFAULT 'texto'",
 );
 asegurarColumna("bandeja_salida", "media_path", "TEXT");
+asegurarColumna("conversaciones", "etapa_id", "INTEGER");
 
 // ============================================================
 // Auto-recuperación: si hay carpetas auth/{id}/ sin cuenta correspondiente,
@@ -494,7 +538,10 @@ export function crearCuenta(
 ): Cuenta {
   const prompt = promptSistema?.trim() || PROMPT_SISTEMA_DEFAULT;
   const info = stmtInsertarCuenta.run(etiqueta.trim(), prompt, modelo ?? null);
-  return obtenerCuenta(Number(info.lastInsertRowid)) as Cuenta;
+  const cuenta = obtenerCuenta(Number(info.lastInsertRowid)) as Cuenta;
+  // Sembramos etapas default del pipeline para que el Kanban tenga columnas.
+  sembrarEtapasSiVacias(cuenta.id);
+  return cuenta;
 }
 
 export function actualizarCuenta(
@@ -1121,6 +1168,328 @@ export function actualizarDescripcionMedio(
 
 export function borrarMedioBiblioteca(id: number): void {
   stmtBorrarMedioBiblioteca.run(id);
+}
+
+// ============================================================
+// API pública: pipeline (etapas)
+// ============================================================
+const stmtListarEtapas = db.prepare(
+  `SELECT * FROM etapas_pipeline WHERE cuenta_id = ? ORDER BY orden ASC, id ASC`,
+);
+const stmtObtenerEtapa = db.prepare(
+  `SELECT * FROM etapas_pipeline WHERE id = ?`,
+);
+const stmtInsertarEtapa = db.prepare(
+  `INSERT INTO etapas_pipeline (cuenta_id, nombre, color, orden) VALUES (?, ?, ?, ?)`,
+);
+const stmtActualizarEtapa = db.prepare(
+  `UPDATE etapas_pipeline SET nombre = ?, color = ?, orden = ? WHERE id = ?`,
+);
+const stmtBorrarEtapa = db.prepare(
+  `DELETE FROM etapas_pipeline WHERE id = ?`,
+);
+const stmtMaxOrdenEtapas = db.prepare(
+  `SELECT COALESCE(MAX(orden), 0) AS m FROM etapas_pipeline WHERE cuenta_id = ?`,
+);
+const stmtCambiarEtapaConv = db.prepare(
+  `UPDATE conversaciones SET etapa_id = ? WHERE id = ?`,
+);
+const stmtLimpiarEtapaConvDeEtapa = db.prepare(
+  `UPDATE conversaciones SET etapa_id = NULL WHERE etapa_id = ?`,
+);
+
+export function listarEtapas(cuentaId: number): EtapaPipeline[] {
+  return stmtListarEtapas.all(cuentaId) as EtapaPipeline[];
+}
+
+export function obtenerEtapa(id: number): EtapaPipeline | null {
+  return (stmtObtenerEtapa.get(id) as EtapaPipeline | undefined) ?? null;
+}
+
+export function crearEtapa(
+  cuentaId: number,
+  nombre: string,
+  color: string,
+): EtapaPipeline {
+  const max = (stmtMaxOrdenEtapas.get(cuentaId) as { m: number }).m;
+  const info = stmtInsertarEtapa.run(cuentaId, nombre, color, max + 1);
+  return obtenerEtapa(Number(info.lastInsertRowid)) as EtapaPipeline;
+}
+
+export function actualizarEtapa(
+  id: number,
+  parametros: { nombre?: string; color?: string; orden?: number },
+): EtapaPipeline | null {
+  const actual = obtenerEtapa(id);
+  if (!actual) return null;
+  stmtActualizarEtapa.run(
+    parametros.nombre ?? actual.nombre,
+    parametros.color ?? actual.color,
+    parametros.orden ?? actual.orden,
+    id,
+  );
+  return obtenerEtapa(id);
+}
+
+export function reordenarEtapas(
+  cuentaId: number,
+  ordenIds: number[],
+): void {
+  // Asigna orden 1..N a las etapas pasadas, en el orden recibido.
+  // Las que no estén en la lista mantienen su orden actual.
+  const stmt = db.prepare(
+    `UPDATE etapas_pipeline SET orden = ? WHERE id = ? AND cuenta_id = ?`,
+  );
+  const tx = db.transaction((ids: number[]) => {
+    ids.forEach((id, idx) => stmt.run(idx + 1, id, cuentaId));
+  });
+  tx(ordenIds);
+}
+
+export function borrarEtapa(id: number): void {
+  stmtLimpiarEtapaConvDeEtapa.run(id);
+  stmtBorrarEtapa.run(id);
+}
+
+export function cambiarEtapaConversacion(
+  conversacionId: number,
+  etapaId: number | null,
+): void {
+  stmtCambiarEtapaConv.run(etapaId, conversacionId);
+}
+
+// Etapas default que sembramos al crear una cuenta nueva.
+const ETAPAS_DEFAULT: Array<{ nombre: string; color: string }> = [
+  { nombre: "Nuevo", color: "zinc" },
+  { nombre: "Contactado", color: "azul" },
+  { nombre: "Interesado", color: "amarillo" },
+  { nombre: "Negociando", color: "ambar" },
+  { nombre: "Cerrado", color: "esmeralda" },
+  { nombre: "Perdido", color: "rojo" },
+];
+
+export function sembrarEtapasSiVacias(cuentaId: number): void {
+  const existentes = listarEtapas(cuentaId);
+  if (existentes.length > 0) return;
+  const tx = db.transaction(() => {
+    ETAPAS_DEFAULT.forEach((e, idx) => {
+      stmtInsertarEtapa.run(cuentaId, e.nombre, e.color, idx + 1);
+    });
+  });
+  tx();
+}
+
+// ============================================================
+// API pública: contactos_email
+// ============================================================
+const stmtInsertarContactoEmail = db.prepare(
+  `INSERT OR IGNORE INTO contactos_email (cuenta_id, conversacion_id, email)
+   VALUES (?, ?, ?)`,
+);
+const stmtListarContactosEmail = db.prepare(
+  `SELECT ce.*, c.nombre AS nombre_contacto, c.telefono
+   FROM contactos_email ce
+   LEFT JOIN conversaciones c ON c.id = ce.conversacion_id
+   WHERE ce.cuenta_id = ?
+   ORDER BY ce.capturado_en DESC, ce.id DESC`,
+);
+const stmtBorrarContactoEmail = db.prepare(
+  `DELETE FROM contactos_email WHERE id = ?`,
+);
+const stmtContarContactosEmail = db.prepare(
+  `SELECT COUNT(*) AS n FROM contactos_email WHERE cuenta_id = ?`,
+);
+
+export interface ContactoEmailConTelefono extends ContactoEmail {
+  nombre_contacto: string | null;
+  telefono: string | null;
+}
+
+const REGEX_EMAIL =
+  /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g;
+
+export function extraerEmailsDelTexto(texto: string): string[] {
+  if (!texto) return [];
+  const matches = texto.match(REGEX_EMAIL) ?? [];
+  // Normalizamos a minúsculas y deduplicamos
+  return Array.from(new Set(matches.map((m) => m.toLowerCase())));
+}
+
+export function guardarContactosEmail(
+  cuentaId: number,
+  conversacionId: number,
+  emails: string[],
+): number {
+  if (emails.length === 0) return 0;
+  let nuevos = 0;
+  const tx = db.transaction(() => {
+    for (const email of emails) {
+      const r = stmtInsertarContactoEmail.run(cuentaId, conversacionId, email);
+      if (r.changes > 0) nuevos++;
+    }
+  });
+  tx();
+  return nuevos;
+}
+
+export function listarContactosEmail(
+  cuentaId: number,
+): ContactoEmailConTelefono[] {
+  return stmtListarContactosEmail.all(
+    cuentaId,
+  ) as ContactoEmailConTelefono[];
+}
+
+export function borrarContactoEmail(id: number): void {
+  stmtBorrarContactoEmail.run(id);
+}
+
+export function contarContactosEmail(cuentaId: number): number {
+  return (stmtContarContactosEmail.get(cuentaId) as { n: number }).n;
+}
+
+// ============================================================
+// API pública: métricas para el dashboard
+// ============================================================
+export interface MetricasCuenta {
+  conversaciones_total: number;
+  conversaciones_necesitan_humano: number;
+  conversaciones_modo_ia: number;
+  conversaciones_modo_humano: number;
+  mensajes_total: number;
+  mensajes_recibidos: number;
+  mensajes_enviados_bot: number;
+  mensajes_enviados_humano: number;
+  mensajes_hoy: number;
+  mensajes_ultimos_7d: number;
+  emails_capturados: number;
+  por_etapa: Array<{
+    etapa_id: number | null;
+    nombre: string;
+    color: string;
+    count: number;
+  }>;
+  por_etiqueta: Array<{
+    etiqueta_id: number;
+    nombre: string;
+    color: string;
+    count: number;
+  }>;
+  mensajes_por_dia: Array<{ dia: string; count: number }>;
+}
+
+const stmtMetricasConv = db.prepare(
+  `SELECT
+     COUNT(*) AS total,
+     SUM(CASE WHEN necesita_humano = 1 THEN 1 ELSE 0 END) AS atencion,
+     SUM(CASE WHEN modo = 'IA' THEN 1 ELSE 0 END) AS modo_ia,
+     SUM(CASE WHEN modo = 'HUMANO' THEN 1 ELSE 0 END) AS modo_humano
+   FROM conversaciones WHERE cuenta_id = ?`,
+);
+const stmtMetricasMensajes = db.prepare(
+  `SELECT
+     COUNT(*) AS total,
+     SUM(CASE WHEN rol = 'usuario' THEN 1 ELSE 0 END) AS recibidos,
+     SUM(CASE WHEN rol = 'asistente' THEN 1 ELSE 0 END) AS enviados_bot,
+     SUM(CASE WHEN rol = 'humano' THEN 1 ELSE 0 END) AS enviados_humano,
+     SUM(CASE WHEN creado_en >= ? THEN 1 ELSE 0 END) AS hoy,
+     SUM(CASE WHEN creado_en >= ? THEN 1 ELSE 0 END) AS ult7d
+   FROM mensajes WHERE cuenta_id = ?`,
+);
+const stmtMetricasPorEtapa = db.prepare(
+  `SELECT e.id AS etapa_id, e.nombre, e.color, COUNT(c.id) AS count
+   FROM etapas_pipeline e
+   LEFT JOIN conversaciones c ON c.etapa_id = e.id
+   WHERE e.cuenta_id = ?
+   GROUP BY e.id, e.nombre, e.color, e.orden
+   ORDER BY e.orden ASC`,
+);
+const stmtMetricasSinEtapa = db.prepare(
+  `SELECT COUNT(*) AS n FROM conversaciones WHERE cuenta_id = ? AND etapa_id IS NULL`,
+);
+const stmtMetricasPorEtiqueta = db.prepare(
+  `SELECT et.id AS etiqueta_id, et.nombre, et.color, COUNT(ce.conversacion_id) AS count
+   FROM etiquetas et
+   LEFT JOIN conversacion_etiquetas ce ON ce.etiqueta_id = et.id
+   WHERE et.cuenta_id = ?
+   GROUP BY et.id, et.nombre, et.color, et.orden
+   ORDER BY et.orden ASC`,
+);
+const stmtMensajesPorDia = db.prepare(
+  `SELECT date(creado_en, 'unixepoch') AS dia, COUNT(*) AS count
+   FROM mensajes
+   WHERE cuenta_id = ? AND creado_en >= ?
+   GROUP BY dia
+   ORDER BY dia ASC`,
+);
+
+export function obtenerMetricas(cuentaId: number): MetricasCuenta {
+  const ahora = Math.floor(Date.now() / 1000);
+  const inicioHoy = ahora - (ahora % 86400);
+  const inicio7d = ahora - 7 * 86400;
+
+  const conv = stmtMetricasConv.get(cuentaId) as {
+    total: number;
+    atencion: number;
+    modo_ia: number;
+    modo_humano: number;
+  };
+  const msg = stmtMetricasMensajes.get(inicioHoy, inicio7d, cuentaId) as {
+    total: number;
+    recibidos: number;
+    enviados_bot: number;
+    enviados_humano: number;
+    hoy: number;
+    ult7d: number;
+  };
+  const porEtapa = stmtMetricasPorEtapa.all(cuentaId) as Array<{
+    etapa_id: number;
+    nombre: string;
+    color: string;
+    count: number;
+  }>;
+  const sinEtapa = (
+    stmtMetricasSinEtapa.get(cuentaId) as { n: number }
+  ).n;
+  const porEtiqueta = stmtMetricasPorEtiqueta.all(cuentaId) as Array<{
+    etiqueta_id: number;
+    nombre: string;
+    color: string;
+    count: number;
+  }>;
+  const mensajesDia = stmtMensajesPorDia.all(cuentaId, inicio7d) as Array<{
+    dia: string;
+    count: number;
+  }>;
+
+  return {
+    conversaciones_total: conv.total ?? 0,
+    conversaciones_necesitan_humano: conv.atencion ?? 0,
+    conversaciones_modo_ia: conv.modo_ia ?? 0,
+    conversaciones_modo_humano: conv.modo_humano ?? 0,
+    mensajes_total: msg.total ?? 0,
+    mensajes_recibidos: msg.recibidos ?? 0,
+    mensajes_enviados_bot: msg.enviados_bot ?? 0,
+    mensajes_enviados_humano: msg.enviados_humano ?? 0,
+    mensajes_hoy: msg.hoy ?? 0,
+    mensajes_ultimos_7d: msg.ult7d ?? 0,
+    emails_capturados: contarContactosEmail(cuentaId),
+    por_etapa: [
+      ...(sinEtapa > 0
+        ? [
+            {
+              etapa_id: null,
+              nombre: "Sin asignar",
+              color: "zinc",
+              count: sinEtapa,
+            },
+          ]
+        : []),
+      ...porEtapa,
+    ],
+    por_etiqueta: porEtiqueta,
+    mensajes_por_dia: mensajesDia,
+  };
 }
 
 export default db;

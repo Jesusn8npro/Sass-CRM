@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type {
   Conversacion,
   ConversacionConPreview,
@@ -24,6 +25,7 @@ interface RespuestaConversaciones {
 }
 
 export function PuertaConexion() {
+  const searchParams = useSearchParams();
   const [cuentas, setCuentas] = useState<CuentaConEstado[]>([]);
   const [cargandoCuentas, setCargandoCuentas] = useState(true);
   const [idCuentaSeleccionada, setIdCuentaSeleccionada] = useState<number | null>(null);
@@ -36,6 +38,8 @@ export function PuertaConexion() {
   // Sin esto, el botón "Volver" en móvil quedaba pisado: limpiabas idConv y
   // el effect lo volvía a setear instantáneamente.
   const refCuentaAutoSeleccionada = useRef<number | null>(null);
+  // Deep-link ?cuenta=X&conv=Y solo se aplica una vez al montar.
+  const refDeepLinkAplicado = useRef(false);
 
   // Función estable que SIEMPRE limpia conv + lista al cambiar cuenta.
   // Llamamos esto desde el handler del click en la sidebar Y también
@@ -71,6 +75,28 @@ export function PuertaConexion() {
       clearInterval(intervalo);
     };
   }, []);
+
+  // Aplicar deep-link ?cuenta=X&conv=Y una sola vez cuando la lista llegó.
+  useEffect(() => {
+    if (refDeepLinkAplicado.current) return;
+    if (cuentas.length === 0) return;
+    const idCuentaParam = Number(searchParams?.get("cuenta") ?? "");
+    if (
+      Number.isFinite(idCuentaParam) &&
+      idCuentaParam > 0 &&
+      cuentas.some((c) => c.id === idCuentaParam)
+    ) {
+      seleccionarCuenta(idCuentaParam);
+      const idConvParam = Number(searchParams?.get("conv") ?? "");
+      if (Number.isFinite(idConvParam) && idConvParam > 0) {
+        // Esperamos al próximo effect (cuando carguen conversaciones)
+        // a que setee la conv. Para que no la pise el auto-select.
+        setIdConvSeleccionada(idConvParam);
+        refCuentaAutoSeleccionada.current = idCuentaParam;
+      }
+    }
+    refDeepLinkAplicado.current = true;
+  }, [cuentas, searchParams, seleccionarCuenta]);
 
   // Auto-seleccionar la primera cuenta si no hay ninguna seleccionada
   useEffect(() => {

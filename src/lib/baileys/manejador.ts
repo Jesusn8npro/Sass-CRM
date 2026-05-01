@@ -6,6 +6,8 @@ import {
   type WAMessage,
 } from "@whiskeysockets/baileys";
 import {
+  extraerEmailsDelTexto,
+  guardarContactosEmail,
   insertarMensaje,
   listarBiblioteca,
   marcarConversacionNecesitaHumano,
@@ -628,6 +630,27 @@ export function registrarManejadores(
           tipo,
           media_path: mediaPath,
         });
+
+        // Extracción de emails: si el cliente tipeó un email en el mensaje
+        // (texto, transcripción de audio, o caption de imagen), lo capturamos
+        // en contactos_email para usar después en CRM/email marketing.
+        try {
+          const emails = extraerEmailsDelTexto(contenido);
+          if (emails.length > 0) {
+            const nuevos = guardarContactosEmail(
+              cuentaId,
+              conversacion.id,
+              emails,
+            );
+            if (nuevos > 0) {
+              console.log(
+                `${prefijo} 📧 ${nuevos} email(s) nuevos capturados: [${emails.join(", ")}]`,
+              );
+            }
+          }
+        } catch (err) {
+          console.error(`${prefijo} error extrayendo emails:`, err);
+        }
 
         const fresca = obtenerConversacionPorId(conversacion.id);
         if (!fresca || fresca.modo !== "IA") {
