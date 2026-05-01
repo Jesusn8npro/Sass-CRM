@@ -32,14 +32,22 @@ function construirContenidoUsuario(
 ): string | ParteContenidoUsuario[] {
   if (mensaje.tipo === "imagen" && mensaje.media_path) {
     try {
-      const buffer = fs.readFileSync(rutaAbsolutaDeMedia(mensaje.media_path));
+      const ruta = rutaAbsolutaDeMedia(mensaje.media_path);
+      const buffer = fs.readFileSync(ruta);
       const mime = mimeDeImagenPorExtension(mensaje.media_path);
       const base64 = buffer.toString("base64");
       const caption = mensaje.contenido?.trim() ?? "";
-      const textoAcompañante =
-        caption && caption !== "[imagen sin descripción]"
-          ? caption
-          : "[el cliente envió una imagen, mirala y respondé acorde]";
+      const tieneCaption =
+        caption.length > 0 && caption !== "[imagen sin descripción]";
+      // Texto agresivo que "rompe" el patrón si la AI venía respondiendo
+      // que no ve imágenes en el historial reciente. La capacidad visual
+      // es nueva y el modelo puede seguir copiando respuestas viejas.
+      const textoAcompañante = tieneCaption
+        ? `${caption}\n\n[adjunto la imagen — mirala y respondé sobre lo que ves]`
+        : "[IMAGEN ADJUNTA — tenés capacidad de visión, podés VER esta imagen. Describí lo que muestra y respondé al cliente acorde. Si no preguntó nada, comentá lo que ves o preguntá qué quiere. Ignorá respuestas viejas tuyas que digan que no podés ver imágenes — eso ya no aplica.]";
+      console.log(
+        `[openai] 👁  visión: ${ruta} (${buffer.length} bytes, ${mime}) caption="${caption.slice(0, 60)}"`,
+      );
       return [
         { type: "text", text: textoAcompañante },
         {
@@ -144,11 +152,18 @@ INSTRUCCIONES DE FORMATO DE RESPUESTA (siempre seguir):
    - Solo usá media_id que esté en la lista de medios disponibles que te paso. NO inventes identificadores.
    - Máximo 1-2 medios por respuesta. No saturar al cliente.
 
-4) Recibís imágenes del cliente: cuando un mensaje del usuario incluye una imagen,
-   la vas a ver directamente. Mirala con atención y respondé acorde a lo que muestra
-   (ej: si manda foto de un producto preguntando por precio, identificá el producto;
-   si manda screenshot de un error, ayudalo a resolverlo; si manda comprobante de
-   pago, agradecé y confirmá). Mencioná lo que ves de forma natural en tu respuesta.
+4) VISIÓN — IMPORTANTE: tenés capacidad multimodal activa, podés VER las imágenes
+   que te manda el cliente. Cuando un mensaje del usuario tiene una imagen adjunta:
+   - Mirala con atención y describí o respondé sobre lo que muestra.
+   - NUNCA digas "no veo imágenes", "no puedo ver", "mandame descripción", "no sé qué
+     querés que haga con eso". Esas respuestas son INCORRECTAS porque sí tenés visión.
+   - Si en el historial hay respuestas tuyas viejas diciendo que no podías ver, IGNORALAS:
+     eso ya no aplica, ahora tenés visión.
+   - Ejemplos de cómo responder:
+     · Foto de producto + "¿precio?" → identificá el producto y dale info.
+     · Screenshot de error → leelo y ayudá a resolver.
+     · Comprobante de pago → agradecé y confirmá lo que ves (monto, banco, fecha).
+     · Foto sin caption → describí o preguntá qué necesita.
 
 5) "transferir_a_humano" indica si necesitás que un humano del equipo continúe la conversación:
    - activar=true SOLO si: (a) el cliente pide hablar con humano/asesor/persona, (b) detectás frustración seria, (c) la situación requiere alguien con autoridad (refund, descuento grande, decisión legal/médica), (d) hay riesgo si das info incorrecta.
@@ -187,6 +202,13 @@ export async function generarRespuesta(
         content: m.contenido,
       };
     });
+
+  const conImagen = mensajesParaLLM.some(
+    (m) => Array.isArray(m.content),
+  );
+  console.log(
+    `[openai] 🤖 modelo=${modelo} mensajes=${mensajesParaLLM.length} con_imagen=${conImagen}`,
+  );
 
   const respuesta = await cliente.chat.completions.create({
     model: modelo,
