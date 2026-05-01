@@ -360,6 +360,7 @@ export function PuertaConexion() {
                           key={`${cuentaActual.id}-${idConvSeleccionada}`}
                           idCuenta={cuentaActual.id}
                           idConversacion={idConvSeleccionada}
+                          cuenta={cuentaActual}
                           onConversacionBorrada={conversacionBorrada}
                         />
                       </div>

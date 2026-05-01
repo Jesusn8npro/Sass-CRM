@@ -637,7 +637,7 @@ export function registrarManejadores(
         try {
           const emails = extraerEmailsDelTexto(contenido);
           if (emails.length > 0) {
-            const nuevos = guardarContactosEmail(
+            const { nuevos, sospechosos } = guardarContactosEmail(
               cuentaId,
               conversacion.id,
               emails,
@@ -645,6 +645,11 @@ export function registrarManejadores(
             if (nuevos > 0) {
               console.log(
                 `${prefijo} 📧 ${nuevos} email(s) nuevos capturados: [${emails.join(", ")}]`,
+              );
+            }
+            if (sospechosos.length > 0) {
+              console.log(
+                `${prefijo} ⚠ email(s) sospechoso(s) (revisar): [${sospechosos.join(", ")}]`,
               );
             }
           }

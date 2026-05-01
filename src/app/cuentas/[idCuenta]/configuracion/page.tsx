@@ -188,6 +188,7 @@ export default function PaginaConfiguracion() {
         />
         <SeccionComportamiento cuenta={cuenta} onActualizada={setCuenta} />
         <SeccionVoz cuenta={cuenta} onActualizada={setCuenta} />
+        <SeccionVapi cuenta={cuenta} onActualizada={setCuenta} />
         <SeccionRespuestasRapidas
           idCuenta={cuenta.id}
           respuestas={respuestas}
@@ -1106,6 +1107,290 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
         />
       </form>
     </Tarjeta>
+  );
+}
+
+// ============================================================
+// Sección: Vapi (llamadas)
+// ============================================================
+function SeccionVapi({ cuenta, onActualizada }: PropsSeccionBase) {
+  const [apiKey, setApiKey] = useState(cuenta.vapi_api_key ?? "");
+  const [phoneId, setPhoneId] = useState(cuenta.vapi_phone_id ?? "");
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [exito, setExito] = useState(false);
+
+  const [phones, setPhones] = useState<
+    Array<{ id: string; number?: string; name?: string }>
+  >([]);
+  const [cargandoPhones, setCargandoPhones] = useState(false);
+  const [errorPhones, setErrorPhones] = useState<string | null>(null);
+
+  const [sincronizando, setSincronizando] = useState(false);
+  const [resultadoSync, setResultadoSync] = useState<string | null>(null);
+
+  useEffect(() => {
+    setApiKey(cuenta.vapi_api_key ?? "");
+    setPhoneId(cuenta.vapi_phone_id ?? "");
+    setError(null);
+    setExito(false);
+    setResultadoSync(null);
+    setPhones([]);
+  }, [cuenta.id]);
+
+  async function guardar(e: React.FormEvent) {
+    e.preventDefault();
+    if (guardando) return;
+    setGuardando(true);
+    setError(null);
+    setExito(false);
+    const r = await patchCuenta(cuenta.id, {
+      vapi_api_key: apiKey.trim() || null,
+      vapi_phone_id: phoneId.trim() || null,
+    });
+    if ("error" in r) setError(r.error);
+    else {
+      onActualizada(r);
+      setExito(true);
+      setTimeout(() => setExito(false), 2500);
+    }
+    setGuardando(false);
+  }
+
+  async function cargarPhones() {
+    if (cargandoPhones) return;
+    setCargandoPhones(true);
+    setErrorPhones(null);
+    try {
+      const res = await fetch(`/api/cuentas/${cuenta.id}/vapi/phones`, {
+        cache: "no-store",
+      });
+      const data = (await res.json().catch(() => ({}))) as
+        | { phones: typeof phones }
+        | { error: string };
+      if (res.ok && "phones" in data) {
+        setPhones(data.phones);
+      } else {
+        setErrorPhones(
+          ("error" in data && data.error) || `Error HTTP ${res.status}`,
+        );
+      }
+    } catch (err) {
+      setErrorPhones(err instanceof Error ? err.message : "Error de red");
+    } finally {
+      setCargandoPhones(false);
+    }
+  }
+
+  async function sincronizar() {
+    if (sincronizando) return;
+    setSincronizando(true);
+    setResultadoSync(null);
+    try {
+      const res = await fetch(
+        `/api/cuentas/${cuenta.id}/vapi/sincronizar`,
+        { method: "POST" },
+      );
+      const data = (await res.json().catch(() => ({}))) as
+        | {
+            ok: true;
+            creado: boolean;
+            assistant_id: string;
+            webhook_url: string;
+          }
+        | { error: string };
+      if (res.ok && "ok" in data) {
+        setResultadoSync(
+          `${data.creado ? "✓ Assistant creado" : "✓ Assistant actualizado"} (id: ${data.assistant_id.slice(0, 12)}...). Webhook: ${data.webhook_url}`,
+        );
+        // Recargar cuenta para que aparezca el assistant_id
+        const c = await fetch(`/api/cuentas/${cuenta.id}`, {
+          cache: "no-store",
+        });
+        if (c.ok) {
+          const d = (await c.json()) as { cuenta: typeof cuenta };
+          onActualizada(d.cuenta);
+        }
+      } else {
+        setResultadoSync(
+          "✗ " + (("error" in data && data.error) || `HTTP ${res.status}`),
+        );
+      }
+    } finally {
+      setSincronizando(false);
+    }
+  }
+
+  const tieneApiKey = !!cuenta.vapi_api_key?.trim();
+  const tieneAssistant = !!cuenta.vapi_assistant_id?.trim();
+  const tienePhone = !!cuenta.vapi_phone_id?.trim();
+  const tieneVoz = !!cuenta.voz_elevenlabs?.trim();
+  const todoListo = tieneApiKey && tieneAssistant && tienePhone && tieneVoz;
+
+  return (
+    <Tarjeta
+      titulo="Llamadas (Vapi)"
+      descripcion="Llamadas de voz salientes con tu agente. Vapi orquesta Twilio + LLM + ElevenLabs. Cada cuenta usa su propia API key, su Phone Number ID y su Assistant — todo por negocio. Necesita además tener Voice ID configurado en la sección Voz arriba."
+    >
+      <form onSubmit={guardar} className="flex flex-col gap-4">
+        <div>
+          <Etiqueta>Vapi API Key</Etiqueta>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="vapi_..."
+            className={`${inputClases()} font-mono text-xs`}
+          />
+          <p className="mt-1.5 text-[11px] text-zinc-500">
+            La obtenés en{" "}
+            <a
+              href="https://dashboard.vapi.ai/account"
+              target="_blank"
+              rel="noreferrer"
+              className="text-emerald-700 underline dark:text-emerald-400"
+            >
+              dashboard.vapi.ai/account
+            </a>
+            . Solo se guarda en tu base de datos local.
+          </p>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between">
+            <Etiqueta>Phone Number ID</Etiqueta>
+            <button
+              type="button"
+              onClick={cargarPhones}
+              disabled={!apiKey.trim() || cargandoPhones}
+              className="text-[11px] text-emerald-700 underline disabled:opacity-50 dark:text-emerald-400"
+            >
+              {cargandoPhones ? "Cargando..." : "Buscar mis números"}
+            </button>
+          </div>
+          <input
+            type="text"
+            value={phoneId}
+            onChange={(e) => setPhoneId(e.target.value)}
+            placeholder="phone_xxxxxxxx-xxxx-..."
+            className={`${inputClases()} font-mono text-xs`}
+          />
+          {phones.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {phones.map((p) => (
+                <button
+                  type="button"
+                  key={p.id}
+                  onClick={() => setPhoneId(p.id)}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                    phoneId === p.id
+                      ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
+                      : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                  }`}
+                >
+                  {p.name || p.number || p.id.slice(0, 8)}
+                </button>
+              ))}
+            </div>
+          )}
+          {errorPhones && (
+            <p className="mt-1 text-[11px] text-red-600 dark:text-red-400">
+              {errorPhones}
+            </p>
+          )}
+          <p className="mt-1.5 text-[11px] text-zinc-500">
+            En{" "}
+            <a
+              href="https://dashboard.vapi.ai/phone-numbers"
+              target="_blank"
+              rel="noreferrer"
+              className="text-emerald-700 underline dark:text-emerald-400"
+            >
+              dashboard.vapi.ai/phone-numbers
+            </a>{" "}
+            podés comprar un número o importar uno de Twilio.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 rounded-xl border border-dashed border-zinc-200 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+            Estado
+          </p>
+          <ul className="flex flex-col gap-1 text-[12px] text-zinc-700 dark:text-zinc-300">
+            <ItemEstado activo={tieneApiKey} texto="API key configurada" />
+            <ItemEstado activo={tienePhone} texto="Phone Number ID configurado" />
+            <ItemEstado
+              activo={tieneVoz}
+              texto="Voice ID de ElevenLabs (sección Voz)"
+            />
+            <ItemEstado
+              activo={tieneAssistant}
+              texto="Assistant sincronizado con Vapi"
+            />
+          </ul>
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={sincronizar}
+              disabled={
+                sincronizando || !tieneApiKey || !tieneVoz
+              }
+              className="rounded-xl bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            >
+              {sincronizando
+                ? "Sincronizando..."
+                : tieneAssistant
+                ? "Resincronizar assistant"
+                : "Crear assistant en Vapi"}
+            </button>
+            {todoListo && (
+              <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                ✓ Todo listo para llamar
+              </span>
+            )}
+          </div>
+          {resultadoSync && (
+            <p
+              className={`text-[11px] ${
+                resultadoSync.startsWith("✓")
+                  ? "text-emerald-700 dark:text-emerald-300"
+                  : "text-red-700 dark:text-red-300"
+              }`}
+            >
+              {resultadoSync}
+            </p>
+          )}
+          {!process.env.NEXT_PUBLIC_VAPI_PUBLIC_URL && (
+            <p className="mt-1 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+              ⚠ Para que Vapi pueda mandarte webhooks de eventos de llamada
+              (transcripción, resumen, grabación), tu panel necesita una URL
+              pública. En desarrollo usá <code>ngrok</code> /{" "}
+              <code>cloudflared</code> y seteá <code>VAPI_PUBLIC_URL</code> en{" "}
+              <code>.env.local</code> antes de Sincronizar. En producción
+              EasyPanel/Railway, esa URL ya es la pública del dominio.
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-3">
+          <MensajeEstado exito={exito} error={error} />
+          {botonGuardar({ guardando })}
+        </div>
+      </form>
+    </Tarjeta>
+  );
+}
+
+function ItemEstado({ activo, texto }: { activo: boolean; texto: string }) {
+  return (
+    <li className="flex items-center gap-2">
+      <span
+        className={`h-2 w-2 rounded-full ${
+          activo ? "bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-700"
+        }`}
+      />
+      <span className={activo ? "" : "text-zinc-500"}>{texto}</span>
+    </li>
   );
 }
 

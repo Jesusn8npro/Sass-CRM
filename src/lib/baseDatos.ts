@@ -33,11 +33,43 @@ export interface Cuenta {
   buffer_segundos: number;
   modelo: string | null;
   voz_elevenlabs: string | null;
+  vapi_api_key: string | null;
+  vapi_assistant_id: string | null;
+  vapi_phone_id: string | null;
+  vapi_webhook_secret: string | null;
   esta_activa: 0 | 1;
   esta_archivada: 0 | 1;
   actualizada_en: number;
   creada_en: number;
 }
+
+export type EstadoLlamada =
+  | "iniciando"
+  | "sonando"
+  | "en_curso"
+  | "completada"
+  | "sin_respuesta"
+  | "fallida"
+  | "finalizada";
+
+export interface LlamadaVapi {
+  id: number;
+  cuenta_id: number;
+  conversacion_id: number | null;
+  vapi_call_id: string;
+  telefono: string;
+  direccion: "saliente" | "entrante";
+  estado: EstadoLlamada;
+  transcripcion: string | null;
+  resumen: string | null;
+  audio_url: string | null;
+  duracion_seg: number | null;
+  costo_usd: number | null;
+  iniciada_en: number;
+  terminada_en: number | null;
+}
+
+export type ValidezEmail = "valido" | "sospechoso" | "invalido";
 
 export interface EntradaConocimiento {
   id: number;
@@ -108,6 +140,7 @@ export interface ContactoEmail {
   cuenta_id: number;
   conversacion_id: number | null;
   email: string;
+  validez: ValidezEmail;
   capturado_en: number;
 }
 
@@ -290,6 +323,28 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_contactos_email_cuenta
     ON contactos_email(cuenta_id, capturado_en DESC);
 
+  CREATE TABLE IF NOT EXISTS llamadas_vapi (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cuenta_id INTEGER NOT NULL,
+    conversacion_id INTEGER,
+    vapi_call_id TEXT NOT NULL UNIQUE,
+    telefono TEXT NOT NULL,
+    direccion TEXT NOT NULL DEFAULT 'saliente' CHECK(direccion IN ('saliente','entrante')),
+    estado TEXT NOT NULL DEFAULT 'iniciando',
+    transcripcion TEXT,
+    resumen TEXT,
+    audio_url TEXT,
+    duracion_seg INTEGER,
+    costo_usd REAL,
+    iniciada_en INTEGER NOT NULL DEFAULT (unixepoch()),
+    terminada_en INTEGER
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_llamadas_cuenta
+    ON llamadas_vapi(cuenta_id, iniciada_en DESC);
+  CREATE INDEX IF NOT EXISTS idx_llamadas_conversacion
+    ON llamadas_vapi(conversacion_id);
+
   CREATE TABLE IF NOT EXISTS conversaciones (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cuenta_id INTEGER NOT NULL,
@@ -372,6 +427,11 @@ asegurarColumna(
 );
 asegurarColumna("bandeja_salida", "media_path", "TEXT");
 asegurarColumna("conversaciones", "etapa_id", "INTEGER");
+asegurarColumna("cuentas", "vapi_api_key", "TEXT");
+asegurarColumna("cuentas", "vapi_assistant_id", "TEXT");
+asegurarColumna("cuentas", "vapi_phone_id", "TEXT");
+asegurarColumna("cuentas", "vapi_webhook_secret", "TEXT");
+asegurarColumna("contactos_email", "validez", "TEXT NOT NULL DEFAULT 'valido'");
 
 // ============================================================
 // Auto-recuperación: si hay carpetas auth/{id}/ sin cuenta correspondiente,
@@ -418,6 +478,10 @@ const stmtActualizarCuentaCampos = db.prepare(
      buffer_segundos = ?,
      modelo = ?,
      voz_elevenlabs = ?,
+     vapi_api_key = ?,
+     vapi_assistant_id = ?,
+     vapi_phone_id = ?,
+     vapi_webhook_secret = ?,
      actualizada_en = unixepoch()
    WHERE id = ?`,
 );
@@ -553,6 +617,10 @@ export function actualizarCuenta(
     buffer_segundos?: number;
     modelo?: string | null;
     voz_elevenlabs?: string | null;
+    vapi_api_key?: string | null;
+    vapi_assistant_id?: string | null;
+    vapi_phone_id?: string | null;
+    vapi_webhook_secret?: string | null;
   },
 ): Cuenta | null {
   const actual = obtenerCuenta(id);
@@ -576,6 +644,22 @@ export function actualizarCuenta(
     parametros.voz_elevenlabs === undefined
       ? actual.voz_elevenlabs
       : parametros.voz_elevenlabs;
+  const vapiKey =
+    parametros.vapi_api_key === undefined
+      ? actual.vapi_api_key
+      : parametros.vapi_api_key;
+  const vapiAssistant =
+    parametros.vapi_assistant_id === undefined
+      ? actual.vapi_assistant_id
+      : parametros.vapi_assistant_id;
+  const vapiPhone =
+    parametros.vapi_phone_id === undefined
+      ? actual.vapi_phone_id
+      : parametros.vapi_phone_id;
+  const vapiSecret =
+    parametros.vapi_webhook_secret === undefined
+      ? actual.vapi_webhook_secret
+      : parametros.vapi_webhook_secret;
   stmtActualizarCuentaCampos.run(
     etiqueta,
     prompt,
@@ -583,6 +667,10 @@ export function actualizarCuenta(
     buffer,
     modelo,
     voz,
+    vapiKey,
+    vapiAssistant,
+    vapiPhone,
+    vapiSecret,
     id,
   );
   return obtenerCuenta(id);
@@ -1283,8 +1371,8 @@ export function sembrarEtapasSiVacias(cuentaId: number): void {
 // API pública: contactos_email
 // ============================================================
 const stmtInsertarContactoEmail = db.prepare(
-  `INSERT OR IGNORE INTO contactos_email (cuenta_id, conversacion_id, email)
-   VALUES (?, ?, ?)`,
+  `INSERT OR IGNORE INTO contactos_email (cuenta_id, conversacion_id, email, validez)
+   VALUES (?, ?, ?, ?)`,
 );
 const stmtListarContactosEmail = db.prepare(
   `SELECT ce.*, c.nombre AS nombre_contacto, c.telefono
@@ -1319,17 +1407,26 @@ export function guardarContactosEmail(
   cuentaId: number,
   conversacionId: number,
   emails: string[],
-): number {
-  if (emails.length === 0) return 0;
+): { nuevos: number; sospechosos: string[] } {
+  if (emails.length === 0) return { nuevos: 0, sospechosos: [] };
   let nuevos = 0;
+  const sospechosos: string[] = [];
   const tx = db.transaction(() => {
     for (const email of emails) {
-      const r = stmtInsertarContactoEmail.run(cuentaId, conversacionId, email);
+      const validez = clasificarValidezEmail(email);
+      if (validez === "invalido") continue;
+      if (validez === "sospechoso") sospechosos.push(email);
+      const r = stmtInsertarContactoEmail.run(
+        cuentaId,
+        conversacionId,
+        email,
+        validez,
+      );
       if (r.changes > 0) nuevos++;
     }
   });
   tx();
-  return nuevos;
+  return { nuevos, sospechosos };
 }
 
 export function listarContactosEmail(
@@ -1346,6 +1443,171 @@ export function borrarContactoEmail(id: number): void {
 
 export function contarContactosEmail(cuentaId: number): number {
   return (stmtContarContactosEmail.get(cuentaId) as { n: number }).n;
+}
+
+const stmtActualizarValidezEmail = db.prepare(
+  `UPDATE contactos_email SET validez = ? WHERE id = ?`,
+);
+export function actualizarValidezEmail(
+  id: number,
+  validez: ValidezEmail,
+): void {
+  stmtActualizarValidezEmail.run(validez, id);
+}
+
+/**
+ * Heurística para detectar emails sospechosos (typos, faltan caracteres,
+ * dominios raros). NO reemplaza validación real (verification por email).
+ * El objetivo es flaggear para revisión humana o re-confirmación con el cliente.
+ */
+export function clasificarValidezEmail(email: string): ValidezEmail {
+  const e = email.trim().toLowerCase();
+  if (!e || !e.includes("@") || !e.includes(".")) return "invalido";
+  const [user, dominio] = e.split("@");
+  if (!user || !dominio) return "invalido";
+  if (user.length < 2) return "sospechoso";
+  if (user.length > 64) return "invalido";
+  if (!dominio.includes(".")) return "invalido";
+  if (dominio.length < 4) return "sospechoso";
+  // Caracteres repetidos extraños (ej: aaaaaa@gmail.com)
+  if (/(.)\1{4,}/.test(user)) return "sospechoso";
+  // TLD muy corto (.c, .co es válido pero .x no)
+  const tld = dominio.split(".").pop() ?? "";
+  if (tld.length < 2) return "invalido";
+  // Dominios típicos bien escritos: si no es típico, lo dejamos como válido
+  // pero podríamos detectar typos (gmial → gmail). Lo dejamos simple.
+  const dominiosComunes = [
+    "gmail.com",
+    "hotmail.com",
+    "outlook.com",
+    "yahoo.com",
+    "icloud.com",
+    "live.com",
+  ];
+  // Si el dominio es muy parecido a uno común pero no coincide, sospechoso.
+  for (const d of dominiosComunes) {
+    if (dominio === d) return "valido";
+    // Levenshtein 1 sin librería: distinto pero misma longitud y ≤2 chars distintos
+    if (dominio.length === d.length) {
+      let diffs = 0;
+      for (let i = 0; i < d.length; i++) {
+        if (dominio[i] !== d[i]) diffs++;
+      }
+      if (diffs > 0 && diffs <= 2) return "sospechoso";
+    }
+  }
+  return "valido";
+}
+
+// ============================================================
+// API pública: llamadas Vapi
+// ============================================================
+const stmtInsertarLlamada = db.prepare(
+  `INSERT INTO llamadas_vapi
+     (cuenta_id, conversacion_id, vapi_call_id, telefono, direccion, estado)
+   VALUES (?, ?, ?, ?, ?, ?)`,
+);
+const stmtActualizarLlamadaPorCallId = db.prepare(
+  `UPDATE llamadas_vapi SET
+     estado = COALESCE(?, estado),
+     transcripcion = COALESCE(?, transcripcion),
+     resumen = COALESCE(?, resumen),
+     audio_url = COALESCE(?, audio_url),
+     duracion_seg = COALESCE(?, duracion_seg),
+     costo_usd = COALESCE(?, costo_usd),
+     terminada_en = COALESCE(?, terminada_en)
+   WHERE vapi_call_id = ?`,
+);
+const stmtObtenerLlamadaPorId = db.prepare(
+  `SELECT * FROM llamadas_vapi WHERE id = ?`,
+);
+const stmtObtenerLlamadaPorCallId = db.prepare(
+  `SELECT * FROM llamadas_vapi WHERE vapi_call_id = ?`,
+);
+const stmtListarLlamadasDeCuenta = db.prepare(
+  `SELECT * FROM llamadas_vapi WHERE cuenta_id = ?
+   ORDER BY iniciada_en DESC, id DESC LIMIT ?`,
+);
+const stmtListarLlamadasDeConversacion = db.prepare(
+  `SELECT * FROM llamadas_vapi WHERE conversacion_id = ?
+   ORDER BY iniciada_en DESC, id DESC`,
+);
+const stmtBorrarLlamada = db.prepare(
+  `DELETE FROM llamadas_vapi WHERE id = ?`,
+);
+
+export function crearLlamadaVapi(
+  cuentaId: number,
+  conversacionId: number | null,
+  vapiCallId: string,
+  telefono: string,
+  direccion: "saliente" | "entrante" = "saliente",
+): LlamadaVapi {
+  const info = stmtInsertarLlamada.run(
+    cuentaId,
+    conversacionId,
+    vapiCallId,
+    telefono,
+    direccion,
+    "iniciando",
+  );
+  return obtenerLlamadaPorId(Number(info.lastInsertRowid)) as LlamadaVapi;
+}
+
+export function obtenerLlamadaPorId(id: number): LlamadaVapi | null {
+  return (
+    (stmtObtenerLlamadaPorId.get(id) as LlamadaVapi | undefined) ?? null
+  );
+}
+
+export function obtenerLlamadaPorCallId(
+  vapiCallId: string,
+): LlamadaVapi | null {
+  return (
+    (stmtObtenerLlamadaPorCallId.get(vapiCallId) as LlamadaVapi | undefined) ??
+    null
+  );
+}
+
+export function listarLlamadasDeCuenta(
+  cuentaId: number,
+  limite = 100,
+): LlamadaVapi[] {
+  return stmtListarLlamadasDeCuenta.all(cuentaId, limite) as LlamadaVapi[];
+}
+
+export function listarLlamadasDeConversacion(
+  conversacionId: number,
+): LlamadaVapi[] {
+  return stmtListarLlamadasDeConversacion.all(conversacionId) as LlamadaVapi[];
+}
+
+export function actualizarLlamadaPorCallId(
+  vapiCallId: string,
+  cambios: {
+    estado?: EstadoLlamada;
+    transcripcion?: string;
+    resumen?: string;
+    audio_url?: string;
+    duracion_seg?: number;
+    costo_usd?: number;
+    terminada_en?: number;
+  },
+): void {
+  stmtActualizarLlamadaPorCallId.run(
+    cambios.estado ?? null,
+    cambios.transcripcion ?? null,
+    cambios.resumen ?? null,
+    cambios.audio_url ?? null,
+    cambios.duracion_seg ?? null,
+    cambios.costo_usd ?? null,
+    cambios.terminada_en ?? null,
+    vapiCallId,
+  );
+}
+
+export function borrarLlamada(id: number): void {
+  stmtBorrarLlamada.run(id);
 }
 
 // ============================================================

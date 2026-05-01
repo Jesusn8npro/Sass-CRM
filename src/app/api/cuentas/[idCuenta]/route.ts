@@ -41,6 +41,9 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     buffer_segundos?: unknown;
     modelo?: unknown;
     voz_elevenlabs?: unknown;
+    vapi_api_key?: unknown;
+    vapi_assistant_id?: unknown;
+    vapi_phone_id?: unknown;
   };
   try {
     payload = await req.json();
@@ -74,6 +77,24 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
       : payload.voz_elevenlabs === null
       ? null
       : undefined;
+  const vapiKey =
+    typeof payload.vapi_api_key === "string"
+      ? payload.vapi_api_key
+      : payload.vapi_api_key === null
+      ? null
+      : undefined;
+  const vapiAssistant =
+    typeof payload.vapi_assistant_id === "string"
+      ? payload.vapi_assistant_id
+      : payload.vapi_assistant_id === null
+      ? null
+      : undefined;
+  const vapiPhone =
+    typeof payload.vapi_phone_id === "string"
+      ? payload.vapi_phone_id
+      : payload.vapi_phone_id === null
+      ? null
+      : undefined;
 
   const actualizada = actualizarCuenta(id, {
     etiqueta,
@@ -82,6 +103,9 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     buffer_segundos: buffer,
     modelo,
     voz_elevenlabs: voz,
+    vapi_api_key: vapiKey,
+    vapi_assistant_id: vapiAssistant,
+    vapi_phone_id: vapiPhone,
   });
   if (!actualizada) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });

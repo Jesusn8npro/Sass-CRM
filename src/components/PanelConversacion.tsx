@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   Conversacion,
+  Cuenta,
   Mensaje,
   ModoConversacion,
   RespuestaRapida,
@@ -12,10 +13,12 @@ import { InterruptorModo } from "./InterruptorModo";
 import { SelectorEmoji } from "./SelectorEmoji";
 import { GrabadoraAudio } from "./GrabadoraAudio";
 import { SelectorEtiquetas } from "./SelectorEtiquetas";
+import { BotonLlamar } from "./BotonLlamar";
 
 interface Props {
   idCuenta: number;
   idConversacion: number;
+  cuenta: Cuenta;
   onConversacionBorrada: (id: number) => void;
 }
 
@@ -27,6 +30,7 @@ interface RespuestaMensajes {
 export function PanelConversacion({
   idCuenta,
   idConversacion,
+  cuenta,
   onConversacionBorrada,
 }: Props) {
   const [conversacion, setConversacion] = useState<Conversacion | null>(null);
@@ -265,6 +269,11 @@ export function PanelConversacion({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
+          <BotonLlamar
+            cuenta={cuenta}
+            telefono={conversacion.telefono}
+            nombre={conversacion.nombre}
+          />
           <SelectorEtiquetas
             idCuenta={idCuenta}
             idConversacion={conversacion.id}
