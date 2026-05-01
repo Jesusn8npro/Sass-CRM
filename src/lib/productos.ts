@@ -26,6 +26,16 @@ function extensionSegura(nombre: string, mime: string | null): string {
   return "jpg";
 }
 
+function extensionVideoSegura(nombre: string, mime: string | null): string {
+  const e = (nombre.split(".").pop() ?? "").toLowerCase();
+  if (e && ["mp4", "webm", "mov", "m4v"].includes(e)) {
+    return e === "mov" ? "mov" : e;
+  }
+  if (mime?.includes("webm")) return "webm";
+  if (mime?.includes("quicktime")) return "mov";
+  return "mp4";
+}
+
 export function rutaCarpetaProductos(cuentaId: number): string {
   const dir = path.join(directorioBase, String(cuentaId));
   asegurarDir(dir);
@@ -70,3 +80,28 @@ export function borrarImagenProducto(rutaRelativa: string | null): void {
     // ignorar — ya borrada o sin permisos
   }
 }
+
+/**
+ * Igual que guardarImagenProducto pero para videos (mp4/webm/mov).
+ */
+export function guardarVideoProducto(
+  cuentaId: number,
+  buffer: Buffer,
+  nombreOriginal: string,
+  mimeType: string | null,
+): { rutaRelativa: string; rutaAbsoluta: string; nombreArchivo: string } {
+  const dir = rutaCarpetaProductos(cuentaId);
+  const ext = extensionVideoSegura(nombreOriginal, mimeType);
+  const nombreArchivo = `vid_${Date.now()}_${crypto
+    .randomBytes(4)
+    .toString("hex")}.${ext}`;
+  const rutaAbsoluta = path.join(dir, nombreArchivo);
+  fs.writeFileSync(rutaAbsoluta, buffer);
+  return {
+    rutaRelativa: `${cuentaId}/${nombreArchivo}`,
+    rutaAbsoluta,
+    nombreArchivo,
+  };
+}
+
+export const borrarVideoProducto = borrarImagenProducto; // misma lógica

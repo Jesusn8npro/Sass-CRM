@@ -169,6 +169,7 @@ export interface Producto {
   sku: string | null;
   categoria: string | null;
   imagen_path: string | null;
+  video_path: string | null;
   esta_activo: 0 | 1;
   orden: number;
   creada_en: number;
@@ -548,6 +549,7 @@ asegurarColumna("cuentas", "vapi_max_segundos", "INTEGER");
 asegurarColumna("cuentas", "vapi_grabar", "INTEGER NOT NULL DEFAULT 1");
 asegurarColumna("cuentas", "vapi_sincronizado_en", "INTEGER");
 asegurarColumna("contactos_email", "validez", "TEXT NOT NULL DEFAULT 'valido'");
+asegurarColumna("productos", "video_path", "TEXT");
 
 // ============================================================
 // Auto-recuperación: si hay carpetas auth/{id}/ sin cuenta correspondiente,
@@ -1685,6 +1687,7 @@ const stmtActualizarProducto = db.prepare(
      sku = ?,
      categoria = ?,
      imagen_path = ?,
+     video_path = ?,
      esta_activo = ?,
      orden = ?,
      actualizada_en = unixepoch()
@@ -1747,6 +1750,7 @@ export function actualizarProducto(
     sku: string | null;
     categoria: string | null;
     imagen_path: string | null;
+    video_path: string | null;
     esta_activo: 0 | 1;
     orden: number;
   }>,
@@ -1765,6 +1769,7 @@ export function actualizarProducto(
     datos.imagen_path === undefined
       ? actual.imagen_path
       : datos.imagen_path,
+    datos.video_path === undefined ? actual.video_path : datos.video_path,
     datos.esta_activo === undefined ? actual.esta_activo : datos.esta_activo,
     datos.orden === undefined ? actual.orden : datos.orden,
     id,

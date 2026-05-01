@@ -227,6 +227,14 @@ function TarjetaProducto({
             alt={producto.nombre}
             className="h-full w-full object-cover"
           />
+        ) : producto.video_path ? (
+          <video
+            src={`/api/productos/${producto.video_path}`}
+            muted
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-cover"
+          />
         ) : (
           <div className="flex h-full items-center justify-center text-zinc-400">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-10 w-10">
@@ -244,6 +252,14 @@ function TarjetaProducto({
         {sinStock && producto.esta_activo === 1 && (
           <span className="absolute left-2 top-2 rounded-full bg-red-500/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
             Sin stock
+          </span>
+        )}
+        {producto.video_path && (
+          <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-zinc-900/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="h-2.5 w-2.5">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            Video
           </span>
         )}
       </div>
@@ -349,11 +365,59 @@ function ModalProducto({
 
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [subiendoImagen, setSubiendoImagen] = useState(false);
+
+  // Imagen: si hay una pendiente (File en memoria), se sube tras guardar.
+  // Si ya hay una guardada en server (productoActual.imagen_path), la mostramos.
+  const [imagenPendiente, setImagenPendiente] = useState<File | null>(null);
   const [imagenActual, setImagenActual] = useState(
     productoActual?.imagen_path ?? null,
   );
-  const refInput = useRef<HTMLInputElement>(null);
+  const refInputImagen = useRef<HTMLInputElement>(null);
+
+  // Video: igual que imagen.
+  const [videoPendiente, setVideoPendiente] = useState<File | null>(null);
+  const [videoActual, setVideoActual] = useState(
+    productoActual?.video_path ?? null,
+  );
+  const refInputVideo = useRef<HTMLInputElement>(null);
+
+  // URLs locales (para preview de archivos en memoria) — useMemo para no
+  // crear un objectURL nuevo en cada render.
+  const urlImagenLocal = imagenPendiente
+    ? URL.createObjectURL(imagenPendiente)
+    : null;
+  const urlVideoLocal = videoPendiente
+    ? URL.createObjectURL(videoPendiente)
+    : null;
+  const urlImagen = urlImagenLocal
+    ? urlImagenLocal
+    : imagenActual
+    ? `/api/productos/${imagenActual}`
+    : null;
+  const urlVideo = urlVideoLocal
+    ? urlVideoLocal
+    : videoActual
+    ? `/api/productos/${videoActual}`
+    : null;
+
+  async function subirArchivo(
+    productoId: number,
+    tipo: "imagen" | "video",
+    file: File,
+  ): Promise<boolean> {
+    const fd = new FormData();
+    fd.append("archivo", file);
+    const res = await fetch(
+      `/api/cuentas/${idCuenta}/productos/${productoId}/${tipo}`,
+      { method: "POST", body: fd },
+    );
+    if (!res.ok) {
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(`Error subiendo ${tipo}: ${d.error ?? `HTTP ${res.status}`}`);
+      return false;
+    }
+    return true;
+  }
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
@@ -389,6 +453,19 @@ function ModalProducto({
         setError(d.error ?? `Error HTTP ${res.status}`);
         return;
       }
+      const data = (await res.json()) as { producto: Producto };
+      const productoId = data.producto.id;
+
+      // Si hay imagen pendiente o video pendiente → subir ahora.
+      if (imagenPendiente) {
+        const ok = await subirArchivo(productoId, "imagen", imagenPendiente);
+        if (!ok) return;
+      }
+      if (videoPendiente) {
+        const ok = await subirArchivo(productoId, "video", videoPendiente);
+        if (!ok) return;
+      }
+
       onGuardado();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error de red");
@@ -397,46 +474,55 @@ function ModalProducto({
     }
   }
 
-  async function subirImagen(file: File) {
-    if (!idEditar) {
-      setError(
-        "Guardá el producto primero (el botón abajo) y después podés subir imagen.",
-      );
+  function elegirImagen(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setError("El archivo debe ser una imagen");
       return;
     }
-    if (subiendoImagen) return;
-    setSubiendoImagen(true);
-    setError(null);
-    try {
-      const fd = new FormData();
-      fd.append("archivo", file);
-      const res = await fetch(
-        `/api/cuentas/${idCuenta}/productos/${idEditar}/imagen`,
-        { method: "POST", body: fd },
-      );
-      if (!res.ok) {
-        const d = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(d.error ?? `Error subiendo imagen`);
-        return;
-      }
-      const d = (await res.json()) as { producto: Producto };
-      setImagenActual(d.producto.imagen_path ?? null);
-    } finally {
-      setSubiendoImagen(false);
-      if (refInput.current) refInput.current.value = "";
+    if (file.size > 8 * 1024 * 1024) {
+      setError("Imagen muy grande (máx 8MB)");
+      return;
     }
+    setImagenPendiente(file);
+  }
+  function elegirVideo(file: File) {
+    if (!file.type.startsWith("video/")) {
+      setError("El archivo debe ser un video");
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      setError("Video muy grande (máx 50MB)");
+      return;
+    }
+    setVideoPendiente(file);
   }
 
   async function quitarImagen() {
-    if (!idEditar) return;
-    if (!confirm("¿Quitar la imagen?")) return;
+    if (imagenPendiente) {
+      setImagenPendiente(null);
+      if (refInputImagen.current) refInputImagen.current.value = "";
+      return;
+    }
+    if (!idEditar || !imagenActual) return;
+    if (!confirm("¿Quitar la imagen guardada?")) return;
     await fetch(`/api/cuentas/${idCuenta}/productos/${idEditar}/imagen`, {
       method: "DELETE",
     });
     setImagenActual(null);
   }
-
-  const urlImagen = imagenActual ? `/api/productos/${imagenActual}` : null;
+  async function quitarVideo() {
+    if (videoPendiente) {
+      setVideoPendiente(null);
+      if (refInputVideo.current) refInputVideo.current.value = "";
+      return;
+    }
+    if (!idEditar || !videoActual) return;
+    if (!confirm("¿Quitar el video guardado?")) return;
+    await fetch(`/api/cuentas/${idCuenta}/productos/${idEditar}/video`, {
+      method: "DELETE",
+    });
+    setVideoActual(null);
+  }
 
   return (
     <div
@@ -451,64 +537,127 @@ function ModalProducto({
         </h2>
 
         <form onSubmit={guardar} className="flex flex-col gap-3">
-          {/* Imagen */}
-          <div>
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-              Imagen
-            </label>
-            <div className="flex items-center gap-3">
-              <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-800">
+          {/* Imagen + video, ambos cargan en memoria y se suben al guardar */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {/* Imagen */}
+            <div className="rounded-xl border border-dashed border-zinc-200 p-3 dark:border-zinc-800">
+              <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                Imagen
+              </label>
+              <div
+                className="relative aspect-video overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800"
+              >
                 {urlImagen ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={urlImagen} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full items-center justify-center text-zinc-400">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-7 w-7">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-8 w-8">
                       <rect x="3" y="3" width="18" height="18" rx="2" />
                       <circle cx="8.5" cy="8.5" r="1.5" />
                       <polyline points="21 15 16 10 5 21" />
                     </svg>
                   </div>
                 )}
+                {imagenPendiente && (
+                  <span className="absolute bottom-1 left-1 rounded bg-amber-500/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">
+                    Pendiente
+                  </span>
+                )}
               </div>
-              <div className="flex-1">
-                <input
-                  ref={refInput}
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) subirImagen(f);
-                  }}
-                  className="hidden"
-                />
+              <input
+                ref={refInputImagen}
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) elegirImagen(f);
+                }}
+                className="hidden"
+              />
+              <div className="mt-2 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => refInput.current?.click()}
-                  disabled={!idEditar || subiendoImagen}
+                  onClick={() => refInputImagen.current?.click()}
+                  disabled={guardando}
                   className="rounded-xl border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
                 >
-                  {subiendoImagen
-                    ? "Subiendo..."
-                    : urlImagen
-                    ? "Cambiar imagen"
-                    : "Subir imagen"}
+                  {urlImagen ? "Cambiar" : "Elegir imagen"}
                 </button>
                 {urlImagen && (
                   <button
                     type="button"
                     onClick={quitarImagen}
-                    className="ml-2 text-[11px] text-red-600 hover:underline dark:text-red-400"
+                    className="text-[11px] text-red-600 hover:underline dark:text-red-400"
                   >
                     Quitar
                   </button>
                 )}
-                {!idEditar && (
-                  <p className="mt-1 text-[10px] text-zinc-500">
-                    Guardá primero, después podés subir imagen.
-                  </p>
+              </div>
+              <p className="mt-1 text-[10px] text-zinc-500">
+                JPG / PNG / WebP, máx 8MB.
+              </p>
+            </div>
+
+            {/* Video */}
+            <div className="rounded-xl border border-dashed border-zinc-200 p-3 dark:border-zinc-800">
+              <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                Video (opcional)
+              </label>
+              <div className="relative aspect-video overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                {urlVideo ? (
+                  <video
+                    key={urlVideo}
+                    src={urlVideo}
+                    controls
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-zinc-400">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-8 w-8">
+                      <polygon points="23 7 16 12 23 17 23 7" />
+                      <rect x="1" y="5" width="15" height="14" rx="2" />
+                    </svg>
+                  </div>
+                )}
+                {videoPendiente && (
+                  <span className="absolute bottom-1 left-1 rounded bg-amber-500/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">
+                    Pendiente
+                  </span>
                 )}
               </div>
+              <input
+                ref={refInputVideo}
+                type="file"
+                accept="video/*"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) elegirVideo(f);
+                }}
+                className="hidden"
+              />
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => refInputVideo.current?.click()}
+                  disabled={guardando}
+                  className="rounded-xl border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+                >
+                  {urlVideo ? "Cambiar" : "Elegir video"}
+                </button>
+                {urlVideo && (
+                  <button
+                    type="button"
+                    onClick={quitarVideo}
+                    className="text-[11px] text-red-600 hover:underline dark:text-red-400"
+                  >
+                    Quitar
+                  </button>
+                )}
+              </div>
+              <p className="mt-1 text-[10px] text-zinc-500">
+                MP4 / WebM / MOV, máx 50MB.
+              </p>
             </div>
           </div>
 

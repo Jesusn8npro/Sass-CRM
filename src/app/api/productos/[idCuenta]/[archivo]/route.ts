@@ -12,10 +12,16 @@ const directorioBase = path.resolve(process.cwd(), "data", "productos");
 
 function mimeDeExtension(p: string): string {
   const ext = p.split(".").pop()?.toLowerCase() ?? "";
+  // imágenes
   if (ext === "png") return "image/png";
   if (ext === "webp") return "image/webp";
   if (ext === "gif") return "image/gif";
-  return "image/jpeg";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  // videos
+  if (ext === "mp4" || ext === "m4v") return "video/mp4";
+  if (ext === "webm") return "video/webm";
+  if (ext === "mov") return "video/quicktime";
+  return "application/octet-stream";
 }
 
 export async function GET(_req: NextRequest, { params }: Contexto) {
