@@ -1,12 +1,61 @@
+import fs from "node:fs";
 import OpenAI from "openai";
 import { PROMPT_SISTEMA_DEFAULT } from "./promptSistema";
 import type { Mensaje } from "./baseDatos";
+import { rutaAbsolutaDeMedia } from "./baileys/medios";
 
 const cliente = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY ?? "",
 });
 
 const MODELO_DEFAULT = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+
+// ============================================================
+// Visión: convertir un mensaje del usuario con imagen a contenido
+// multimodal compatible con la Chat Completions API.
+// Si falla la lectura del archivo o no hay media_path, cae al texto.
+// ============================================================
+type ParteContenidoUsuario =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string; detail?: "low" | "high" | "auto" } };
+
+function mimeDeImagenPorExtension(mediaPath: string): string {
+  const ext = mediaPath.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  if (ext === "gif") return "image/gif";
+  return "image/jpeg";
+}
+
+function construirContenidoUsuario(
+  mensaje: Mensaje,
+): string | ParteContenidoUsuario[] {
+  if (mensaje.tipo === "imagen" && mensaje.media_path) {
+    try {
+      const buffer = fs.readFileSync(rutaAbsolutaDeMedia(mensaje.media_path));
+      const mime = mimeDeImagenPorExtension(mensaje.media_path);
+      const base64 = buffer.toString("base64");
+      const caption = mensaje.contenido?.trim() ?? "";
+      const textoAcompañante =
+        caption && caption !== "[imagen sin descripción]"
+          ? caption
+          : "[el cliente envió una imagen, mirala y respondé acorde]";
+      return [
+        { type: "text", text: textoAcompañante },
+        {
+          type: "image_url",
+          image_url: { url: `data:${mime};base64,${base64}`, detail: "auto" },
+        },
+      ];
+    } catch (err) {
+      console.error(
+        `[openai] no se pudo leer imagen para visión (${mensaje.media_path}):`,
+        err,
+      );
+    }
+  }
+  return mensaje.contenido;
+}
 
 /**
  * Una parte de la respuesta del LLM. El schema strict obliga a que ambos
@@ -95,7 +144,13 @@ INSTRUCCIONES DE FORMATO DE RESPUESTA (siempre seguir):
    - Solo usá media_id que esté en la lista de medios disponibles que te paso. NO inventes identificadores.
    - Máximo 1-2 medios por respuesta. No saturar al cliente.
 
-4) "transferir_a_humano" indica si necesitás que un humano del equipo continúe la conversación:
+4) Recibís imágenes del cliente: cuando un mensaje del usuario incluye una imagen,
+   la vas a ver directamente. Mirala con atención y respondé acorde a lo que muestra
+   (ej: si manda foto de un producto preguntando por precio, identificá el producto;
+   si manda screenshot de un error, ayudalo a resolverlo; si manda comprobante de
+   pago, agradecé y confirmá). Mencioná lo que ves de forma natural en tu respuesta.
+
+5) "transferir_a_humano" indica si necesitás que un humano del equipo continúe la conversación:
    - activar=true SOLO si: (a) el cliente pide hablar con humano/asesor/persona, (b) detectás frustración seria, (c) la situación requiere alguien con autoridad (refund, descuento grande, decisión legal/médica), (d) hay riesgo si das info incorrecta.
    - razon: resumí en 1-2 líneas para el operador.
    - Si activar=true, igual respondé al cliente con partes diciendo educadamente que un humano continuará.
@@ -119,13 +174,19 @@ export async function generarRespuesta(
 
   const mensajesParaLLM = historial
     .filter((m) => m.rol !== "sistema")
-    .map((m) => ({
-      role:
-        m.rol === "usuario"
-          ? ("user" as const)
-          : ("assistant" as const),
-      content: m.contenido,
-    }));
+    .map((m) => {
+      if (m.rol === "usuario") {
+        return {
+          role: "user" as const,
+          content: construirContenidoUsuario(m),
+        };
+      }
+      // El asistente y los humanos del panel se mandan como texto plano.
+      return {
+        role: "assistant" as const,
+        content: m.contenido,
+      };
+    });
 
   const respuesta = await cliente.chat.completions.create({
     model: modelo,
