@@ -11,6 +11,8 @@ import type {
   RespuestaRapida,
 } from "@/lib/baseDatos";
 import { InterruptorTema } from "@/components/InterruptorTema";
+import { BotonReproducirVoz } from "@/components/BotonReproducirVoz";
+import { ClonadorVoz } from "@/components/ClonadorVoz";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -943,38 +945,49 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
       <form onSubmit={guardar} className="flex flex-col gap-3">
         <div>
           <Etiqueta>Voice ID de ElevenLabs</Etiqueta>
-          <input
-            type="text"
-            value={voz}
-            onChange={(e) => setVoz(e.target.value)}
-            placeholder="Ej: 21m00Tcm4TlvDq8ikWAM (o vacío para texto)"
-            className={`${inputClases()} font-mono text-xs`}
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={voz}
+              onChange={(e) => setVoz(e.target.value)}
+              placeholder="Ej: 21m00Tcm4TlvDq8ikWAM (o vacío para texto)"
+              className={`${inputClases()} font-mono text-xs flex-1`}
+            />
+            <BotonReproducirVoz vozId={voz} variante="icon" />
+          </div>
 
           <div className="mt-2 flex flex-col gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/5 p-2.5">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-800 dark:text-amber-300">
               Voces default (gratis con plan free)
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {VOCES_DEFAULT.map((v) => (
-                <button
-                  key={v.id}
-                  type="button"
-                  onClick={() => setVoz(v.id)}
-                  className={`rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors ${
-                    voz.trim() === v.id
-                      ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
-                      : "border-zinc-300 bg-white text-zinc-700 hover:border-emerald-500/40 hover:bg-emerald-500/5 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-                  }`}
-                >
-                  {v.nombre}
-                </button>
-              ))}
+              {VOCES_DEFAULT.map((v) => {
+                const seleccionada = voz.trim() === v.id;
+                return (
+                  <div
+                    key={v.id}
+                    className={`flex items-center gap-1 rounded-full border pl-2.5 pr-1 py-0.5 transition-colors ${
+                      seleccionada
+                        ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
+                        : "border-zinc-300 bg-white text-zinc-700 hover:border-emerald-500/40 hover:bg-emerald-500/5 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setVoz(v.id)}
+                      className="font-mono text-[11px]"
+                    >
+                      {v.nombre}
+                    </button>
+                    <BotonReproducirVoz vozId={v.id} variante="pill" />
+                  </div>
+                );
+              })}
             </div>
             <p className="text-[11px] leading-relaxed text-amber-800/80 dark:text-amber-300/80">
-              Las voces de tu <em>biblioteca personal</em> requieren plan
-              pago. Si pegás una y ves error 402 al probar, usá una de
-              estas.
+              Tip: tocá ▶ al lado de cada nombre para escuchar la voz antes
+              de elegirla. Las voces de tu <em>biblioteca personal</em>{" "}
+              requieren plan pago.
             </p>
           </div>
 
@@ -1045,6 +1058,8 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
             )}
           </div>
         )}
+
+        <ClonadorVoz idCuenta={cuenta.id} onClonada={onActualizada} />
       </form>
     </Tarjeta>
   );

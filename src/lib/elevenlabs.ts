@@ -85,3 +85,95 @@ export async function generarAudioTTS(
   const buffer = Buffer.from(arrayBuffer);
   return { buffer, extension: "mp3", mime: "audio/mpeg" };
 }
+
+// ============================================================
+// Metadata de una voz: nombre + URL de preview público
+// ============================================================
+export interface InfoVoz {
+  voice_id: string;
+  name: string;
+  category: string;
+  preview_url: string | null;
+}
+
+export async function obtenerInfoVoz(vozId: string): Promise<InfoVoz> {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) throw new Error("ELEVENLABS_API_KEY no está definida.");
+  if (!vozId.trim()) throw new Error("voz_id vacío.");
+
+  const url = `https://api.elevenlabs.io/v1/voices/${encodeURIComponent(vozId.trim())}`;
+  const respuesta = await fetch(url, {
+    headers: { "xi-api-key": apiKey, Accept: "application/json" },
+  });
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    throw new Error(
+      `ElevenLabs error ${respuesta.status}: ${cuerpo.slice(0, 300)}`,
+    );
+  }
+  const data = (await respuesta.json()) as {
+    voice_id: string;
+    name?: string;
+    category?: string;
+    preview_url?: string;
+  };
+  return {
+    voice_id: data.voice_id,
+    name: data.name ?? "Sin nombre",
+    category: data.category ?? "unknown",
+    preview_url: data.preview_url ?? null,
+  };
+}
+
+// ============================================================
+// Clonado instantáneo (IVC). Requiere plan Starter+.
+// Doc: https://elevenlabs.io/docs/api-reference/voices/add
+// ============================================================
+export interface ResultadoClonado {
+  voice_id: string;
+}
+
+export async function clonarVoz(
+  nombre: string,
+  archivo: { buffer: Buffer; nombreArchivo: string; tipoMime: string },
+  descripcion?: string,
+): Promise<ResultadoClonado> {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) throw new Error("ELEVENLABS_API_KEY no está definida.");
+  if (!nombre.trim()) throw new Error("Nombre vacío.");
+
+  const fd = new FormData();
+  fd.append("name", nombre.trim());
+  if (descripcion?.trim()) fd.append("description", descripcion.trim());
+  // Web FormData necesita Blob/File para el binario.
+  const blob = new Blob([new Uint8Array(archivo.buffer)], {
+    type: archivo.tipoMime || "audio/mpeg",
+  });
+  fd.append("files", blob, archivo.nombreArchivo);
+
+  const respuesta = await fetch("https://api.elevenlabs.io/v1/voices/add", {
+    method: "POST",
+    headers: { "xi-api-key": apiKey },
+    body: fd,
+  });
+
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    if (respuesta.status === 401) {
+      throw new Error("API key inválida o sin permisos para clonar voces.");
+    }
+    if (respuesta.status === 402 || cuerpo.includes("paid_plan_required")) {
+      throw new Error(
+        "Tu plan de ElevenLabs no permite clonar voces. Necesitás Starter ($5/mes) o superior.",
+      );
+    }
+    throw new Error(
+      `ElevenLabs error ${respuesta.status}: ${cuerpo.slice(0, 300)}`,
+    );
+  }
+  const data = (await respuesta.json()) as { voice_id?: string };
+  if (!data.voice_id) {
+    throw new Error("ElevenLabs no devolvió voice_id.");
+  }
+  return { voice_id: data.voice_id };
+}
