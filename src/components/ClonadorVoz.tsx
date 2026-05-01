@@ -169,7 +169,7 @@ export function ClonadorVoz({ idCuenta, onClonada }: Props) {
         return;
       }
       setExito(
-        `✓ Voz clonada. ID: ${data.voice_id} — ya está asignada a la cuenta.`,
+        `✓ Voz clonada (ID: ${data.voice_id}) y asignada a la cuenta. Si el ▶ no suena al toque, esperá 1-3 minutos: ElevenLabs tarda un poco en generar el preview oficial. Mientras tanto, podés probarla mandando un audio desde WhatsApp — eso usa tu voz clonada en español directamente.`,
       );
       onClonada(data.cuenta);
       setBlobGrabado(null);

@@ -35,6 +35,27 @@ export function BotonReproducirVoz({ vozId, variante = "icon" }: Props) {
     setEstado("inicial");
   }, [vozId]);
 
+  async function resolverUrl(id: string): Promise<string | null> {
+    // 1) Intenta el preview_url oficial (gratis, MP3 estático en CDN
+    //    de ElevenLabs). Suele estar vacío para voces recién clonadas.
+    try {
+      const res = await fetch(
+        `/api/elevenlabs/voz/${encodeURIComponent(id)}/preview`,
+      );
+      if (res.ok) {
+        const data = (await res.json()) as { preview_url: string | null };
+        if (data.preview_url) return data.preview_url;
+      }
+    } catch {
+      // ignorar, vamos al fallback
+    }
+    // 2) Fallback: nuestro endpoint /muestra genera (o devuelve cacheado)
+    //    un MP3 en español con TTS. La primera vez gasta ~70 chars; las
+    //    siguientes son gratis (cache en disco). Devolvemos directamente
+    //    la URL para que <audio> la consuma.
+    return `/api/elevenlabs/voz/${encodeURIComponent(id)}/muestra`;
+  }
+
   async function reproducir() {
     if (!vozId.trim()) return;
     if (estado === "reproduciendo") {
@@ -46,21 +67,12 @@ export function BotonReproducirVoz({ vozId, variante = "icon" }: Props) {
     try {
       let url = refUrl.current;
       if (!url) {
-        const res = await fetch(
-          `/api/elevenlabs/voz/${encodeURIComponent(vozId.trim())}/preview`,
-        );
-        if (!res.ok) {
+        url = await resolverUrl(vozId.trim());
+        if (!url) {
           setEstado("error");
           setTimeout(() => setEstado("inicial"), 2500);
           return;
         }
-        const data = (await res.json()) as { preview_url: string | null };
-        if (!data.preview_url) {
-          setEstado("error");
-          setTimeout(() => setEstado("inicial"), 2500);
-          return;
-        }
-        url = data.preview_url;
         refUrl.current = url;
       }
       const audio = new Audio(url);
