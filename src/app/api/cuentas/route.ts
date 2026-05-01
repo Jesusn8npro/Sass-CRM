@@ -1,11 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 import QRCode from "qrcode";
 import { crearCuenta, listarCuentas } from "@/lib/baseDatos";
+import { arrancarBotEnProceso } from "@/lib/bot/cicloVida";
 import { calcularBotVivo } from "@/lib/latidoBot";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  // Fallback: si por algún motivo instrumentation no arrancó el bot,
+  // lo arrancamos en la primera request al panel. arrancarBotEnProceso
+  // es idempotente: llamadas repetidas no duplican intervals ni sockets.
+  if (process.env.BOT_EN_PROCESO !== "0") {
+    void arrancarBotEnProceso().catch((err) =>
+      console.error("[api/cuentas] fallback arrancar bot:", err),
+    );
+  }
   const cuentas = listarCuentas();
   const enriquecidas = await Promise.all(
     cuentas.map(async (c) => {
