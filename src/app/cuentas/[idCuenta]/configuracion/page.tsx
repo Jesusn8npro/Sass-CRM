@@ -866,19 +866,48 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState(false);
-  const [probando, setProbando] = useState(false);
-  const [testResultado, setTestResultado] = useState<
-    | { ok: true; voice_id: string; bytes: number; latencia_ms: number }
-    | { ok: false; error: string }
-    | null
-  >(null);
+  const [vocesClonadas, setVocesClonadas] = useState<
+    Array<{ voice_id: string; name: string }>
+  >([]);
+  const [cargandoVoces, setCargandoVoces] = useState(false);
+  const [errorVoces, setErrorVoces] = useState<string | null>(null);
+
+  const cargarVoces = useCallback(async () => {
+    setCargandoVoces(true);
+    setErrorVoces(null);
+    try {
+      const res = await fetch("/api/elevenlabs/voces", { cache: "no-store" });
+      const data = (await res.json().catch(() => ({}))) as
+        | {
+            voces: Array<{
+              voice_id: string;
+              name: string;
+              category: string;
+            }>;
+          }
+        | { error: string };
+      if (res.ok && "voces" in data) {
+        const clonadas = data.voces.filter((v) => v.category === "cloned");
+        setVocesClonadas(clonadas);
+      } else {
+        setErrorVoces(
+          ("error" in data && data.error) ||
+            `No se pudieron listar voces (HTTP ${res.status})`,
+        );
+      }
+    } catch (err) {
+      setErrorVoces(err instanceof Error ? err.message : "Error de red");
+    } finally {
+      setCargandoVoces(false);
+    }
+  }, []);
 
   useEffect(() => {
     setVoz(cuenta.voz_elevenlabs ?? "");
     setError(null);
     setExito(false);
-    setTestResultado(null);
-  }, [cuenta.id]);
+    cargarVoces();
+  }, [cuenta.id, cargarVoces]);
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
@@ -897,42 +926,6 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
       setTimeout(() => setExito(false), 2500);
     }
     setGuardando(false);
-  }
-
-  async function probarVoz() {
-    if (probando) return;
-    setProbando(true);
-    setTestResultado(null);
-    try {
-      const res = await fetch(`/api/cuentas/${cuenta.id}/voz/test`, {
-        method: "POST",
-      });
-      const data = (await res.json().catch(() => ({}))) as
-        | { ok: true; voice_id: string; bytes: number; latencia_ms: number }
-        | { error: string };
-      if (res.ok && "ok" in data) {
-        setTestResultado({
-          ok: true,
-          voice_id: data.voice_id,
-          bytes: data.bytes,
-          latencia_ms: data.latencia_ms,
-        });
-      } else {
-        setTestResultado({
-          ok: false,
-          error:
-            ("error" in data && data.error) ||
-            `Error HTTP ${res.status}`,
-        });
-      }
-    } catch (err) {
-      setTestResultado({
-        ok: false,
-        error: err instanceof Error ? err.message : "Error de red",
-      });
-    } finally {
-      setProbando(false);
-    }
   }
 
   const activado = !!cuenta.voz_elevenlabs?.trim();
@@ -955,6 +948,50 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
             />
             <BotonReproducirVoz vozId={voz} variante="icon" />
           </div>
+
+          {/* Voces clonadas (las que el usuario clonó por API) */}
+          {vocesClonadas.length > 0 && (
+            <div className="mt-2 flex flex-col gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                  Tus voces clonadas
+                </p>
+                <button
+                  type="button"
+                  onClick={cargarVoces}
+                  disabled={cargandoVoces}
+                  title="Recargar lista"
+                  className="text-[11px] text-emerald-700 underline disabled:opacity-50 dark:text-emerald-400"
+                >
+                  {cargandoVoces ? "..." : "Recargar"}
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {vocesClonadas.map((v) => {
+                  const seleccionada = voz.trim() === v.voice_id;
+                  return (
+                    <div
+                      key={v.voice_id}
+                      className={`flex items-center gap-1 rounded-full border pl-2.5 pr-1 py-0.5 transition-colors ${
+                        seleccionada
+                          ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300"
+                          : "border-emerald-500/40 bg-white text-emerald-800 hover:bg-emerald-500/5 dark:border-emerald-500/40 dark:bg-zinc-900 dark:text-emerald-300"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setVoz(v.voice_id)}
+                        className="text-[11px]"
+                      >
+                        {v.name}
+                      </button>
+                      <BotonReproducirVoz vozId={v.voice_id} variante="pill" />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="mt-2 flex flex-col gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/5 p-2.5">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-800 dark:text-amber-300">
@@ -990,6 +1027,12 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
               requieren plan pago.
             </p>
           </div>
+
+          {errorVoces && (
+            <p className="mt-2 text-[11px] text-red-700 dark:text-red-300">
+              No se pudieron listar tus voces clonadas: {errorVoces}
+            </p>
+          )}
 
           <p className="mt-2 text-xs leading-relaxed text-zinc-500">
             Cómo obtener otras voces:{" "}
@@ -1029,37 +1072,14 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
           </div>
         </div>
 
-        {activado && (
-          <div className="mt-1 flex flex-col gap-2 rounded-xl border border-dashed border-zinc-200 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                Probá la conexión a ElevenLabs sin tener que enviar un audio.
-              </p>
-              <button
-                type="button"
-                onClick={probarVoz}
-                disabled={probando}
-                className="shrink-0 rounded-xl bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-              >
-                {probando ? "Probando..." : "Probar voz"}
-              </button>
-            </div>
-            {testResultado && testResultado.ok && (
-              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300">
-                ✓ Audio generado OK ({testResultado.bytes} bytes,{" "}
-                {testResultado.latencia_ms}ms). Si tu cliente envía un audio,
-                el agente le va a responder con esta voz.
-              </div>
-            )}
-            {testResultado && !testResultado.ok && (
-              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
-                ✗ {testResultado.error}
-              </div>
-            )}
-          </div>
-        )}
-
-        <ClonadorVoz idCuenta={cuenta.id} onClonada={onActualizada} />
+        <ClonadorVoz
+          idCuenta={cuenta.id}
+          onClonada={(c) => {
+            onActualizada(c);
+            // Refresca la lista para que aparezca como pill al toque
+            cargarVoces();
+          }}
+        />
       </form>
     </Tarjeta>
   );

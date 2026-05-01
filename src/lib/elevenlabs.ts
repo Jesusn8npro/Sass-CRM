@@ -126,6 +126,59 @@ export async function obtenerInfoVoz(vozId: string): Promise<InfoVoz> {
 }
 
 // ============================================================
+// Listar todas las voces disponibles para esta API key
+// (premade default + cloned + professional).
+// Doc: https://elevenlabs.io/docs/api-reference/voices/get-all
+// ============================================================
+export async function listarVoces(): Promise<InfoVoz[]> {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) throw new Error("ELEVENLABS_API_KEY no está definida.");
+  const respuesta = await fetch("https://api.elevenlabs.io/v1/voices", {
+    headers: { "xi-api-key": apiKey, Accept: "application/json" },
+  });
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    throw new Error(
+      `ElevenLabs error ${respuesta.status}: ${cuerpo.slice(0, 300)}`,
+    );
+  }
+  const data = (await respuesta.json()) as {
+    voices?: Array<{
+      voice_id: string;
+      name?: string;
+      category?: string;
+      preview_url?: string;
+    }>;
+  };
+  return (data.voices ?? []).map((v) => ({
+    voice_id: v.voice_id,
+    name: v.name ?? "Sin nombre",
+    category: v.category ?? "unknown",
+    preview_url: v.preview_url ?? null,
+  }));
+}
+
+// ============================================================
+// Borrar una voz clonada
+// ============================================================
+export async function borrarVoz(vozId: string): Promise<void> {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) throw new Error("ELEVENLABS_API_KEY no está definida.");
+  if (!vozId.trim()) throw new Error("voz_id vacío.");
+  const url = `https://api.elevenlabs.io/v1/voices/${encodeURIComponent(vozId.trim())}`;
+  const respuesta = await fetch(url, {
+    method: "DELETE",
+    headers: { "xi-api-key": apiKey },
+  });
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    throw new Error(
+      `ElevenLabs error ${respuesta.status}: ${cuerpo.slice(0, 300)}`,
+    );
+  }
+}
+
+// ============================================================
 // Clonado instantáneo (IVC). Requiere plan Starter+.
 // Doc: https://elevenlabs.io/docs/api-reference/voices/add
 // ============================================================
