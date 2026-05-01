@@ -240,10 +240,14 @@ async function generarYEnviarRespuesta(
   const mensajesUsuario = historial.filter((m) => m.rol === "usuario");
   const ultimosDos = mensajesUsuario.slice(-2);
   const huboAudioReciente = ultimosDos.some((m) => m.tipo === "audio");
-  const debeResponderConVoz =
-    !!cuenta.voz_elevenlabs &&
-    cuenta.voz_elevenlabs.trim().length > 0 &&
-    huboAudioReciente;
+  const tieneVoz =
+    !!cuenta.voz_elevenlabs && cuenta.voz_elevenlabs.trim().length > 0;
+  const tieneApiKey = !!process.env.ELEVENLABS_API_KEY;
+  const debeResponderConVoz = tieneVoz && tieneApiKey && huboAudioReciente;
+
+  console.log(
+    `${prefijo} 🔍 espejo check: voz_elevenlabs=${tieneVoz ? `"${cuenta.voz_elevenlabs!.trim().slice(0, 12)}..."` : "VACÍO"}, ELEVENLABS_API_KEY=${tieneApiKey ? "OK" : "FALTA"}, últimos 2 user=[${ultimosDos.map((m) => m.tipo).join(",") || "vacío"}], audio reciente=${huboAudioReciente} → ${debeResponderConVoz ? "RESPONDE CON VOZ" : "responde con texto"}`,
+  );
 
   if (debeResponderConVoz) {
     console.log(
@@ -328,10 +332,22 @@ async function generarYEnviarRespuesta(
         }
         return;
       } catch (err) {
+        const detalle = err instanceof Error ? err.message : String(err);
         console.error(
           `${prefijo} error con ElevenLabs, caigo a texto:`,
-          err,
+          detalle,
         );
+        // Insertamos un mensaje sistema visible en el panel para que el
+        // usuario sepa exactamente por qué no llegó el audio.
+        try {
+          insertarMensaje(
+            cuenta.id,
+            conversacion.id,
+            "sistema",
+            `[ElevenLabs falló: ${detalle.slice(0, 200)}] — respondo con texto.`,
+            { tipo: "sistema" },
+          );
+        } catch {}
         // Fallback: continuar con multi-parte de texto abajo
       }
     }

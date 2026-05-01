@@ -854,11 +854,18 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState(false);
+  const [probando, setProbando] = useState(false);
+  const [testResultado, setTestResultado] = useState<
+    | { ok: true; voice_id: string; bytes: number; latencia_ms: number }
+    | { ok: false; error: string }
+    | null
+  >(null);
 
   useEffect(() => {
     setVoz(cuenta.voz_elevenlabs ?? "");
     setError(null);
     setExito(false);
+    setTestResultado(null);
   }, [cuenta.id]);
 
   async function guardar(e: React.FormEvent) {
@@ -878,6 +885,42 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
       setTimeout(() => setExito(false), 2500);
     }
     setGuardando(false);
+  }
+
+  async function probarVoz() {
+    if (probando) return;
+    setProbando(true);
+    setTestResultado(null);
+    try {
+      const res = await fetch(`/api/cuentas/${cuenta.id}/voz/test`, {
+        method: "POST",
+      });
+      const data = (await res.json().catch(() => ({}))) as
+        | { ok: true; voice_id: string; bytes: number; latencia_ms: number }
+        | { error: string };
+      if (res.ok && "ok" in data) {
+        setTestResultado({
+          ok: true,
+          voice_id: data.voice_id,
+          bytes: data.bytes,
+          latencia_ms: data.latencia_ms,
+        });
+      } else {
+        setTestResultado({
+          ok: false,
+          error:
+            ("error" in data && data.error) ||
+            `Error HTTP ${res.status}`,
+        });
+      }
+    } catch (err) {
+      setTestResultado({
+        ok: false,
+        error: err instanceof Error ? err.message : "Error de red",
+      });
+    } finally {
+      setProbando(false);
+    }
   }
 
   const activado = !!cuenta.voz_elevenlabs?.trim();
@@ -934,6 +977,36 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
             {botonGuardar({ guardando })}
           </div>
         </div>
+
+        {activado && (
+          <div className="mt-1 flex flex-col gap-2 rounded-xl border border-dashed border-zinc-200 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                Probá la conexión a ElevenLabs sin tener que enviar un audio.
+              </p>
+              <button
+                type="button"
+                onClick={probarVoz}
+                disabled={probando}
+                className="shrink-0 rounded-xl bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              >
+                {probando ? "Probando..." : "Probar voz"}
+              </button>
+            </div>
+            {testResultado && testResultado.ok && (
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300">
+                ✓ Audio generado OK ({testResultado.bytes} bytes,{" "}
+                {testResultado.latencia_ms}ms). Si tu cliente envía un audio,
+                el agente le va a responder con esta voz.
+              </div>
+            )}
+            {testResultado && !testResultado.ok && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+                ✗ {testResultado.error}
+              </div>
+            )}
+          </div>
+        )}
       </form>
     </Tarjeta>
   );
