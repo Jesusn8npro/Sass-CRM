@@ -48,7 +48,7 @@ export function EncabezadoCuenta({
   const conectado = cuenta.estado === "conectado";
 
   return (
-    <header className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 bg-white/80 px-3 py-3 backdrop-blur-md md:px-6 md:py-4 dark:border-zinc-800 dark:bg-zinc-950/80">
+    <header className="relative z-40 flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 bg-white/80 px-3 py-3 backdrop-blur-md md:px-6 md:py-4 dark:border-zinc-800 dark:bg-zinc-950/80">
       <div className="flex items-center gap-2.5 min-w-0 md:gap-3">
         {/* Hamburger — solo móvil */}
         {onAbrirCuentas && (
@@ -130,7 +130,7 @@ export function EncabezadoCuenta({
             <span className="hidden md:inline">Más</span>
           </button>
           {menuAbierto && (
-            <div className="absolute right-0 top-full z-30 mt-1 w-48 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="absolute right-0 top-full z-[60] mt-1 w-48 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
               <ItemMenu
                 href={`/cuentas/${cuenta.id}/pipeline`}
                 onClick={() => setMenuAbierto(false)}
