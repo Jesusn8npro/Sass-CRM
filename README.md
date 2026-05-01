@@ -21,7 +21,7 @@ Baileys se guardan por cuenta en `auth/{idCuenta}/`.
 - **ElevenLabs** — TTS para notas de voz salientes
 - **OpenAI Whisper** — transcripción de audios entrantes
 - **ffmpeg-static** — conversión a OGG/Opus para WhatsApp
-- **tsx** + **concurrently** — bot y panel en paralelo
+- **tsx** — entrypoint legacy del bot suelto (opcional)
 
 ---
 
@@ -71,19 +71,21 @@ Baileys se guardan por cuenta en `auth/{idCuenta}/`.
 
 ## Uso
 
-Necesitás dos procesos: el bot (sockets de Baileys) y el panel
-(Next.js). En desarrollo abrí dos terminales:
+Un solo proceso. El bot de Baileys arranca dentro del propio proceso
+de Next.js vía `instrumentation.ts`, así que no hay que abrir una
+segunda terminal.
 
-**Terminal 1 — bot:**
-
-```bash
-npm run start:bot
-```
-
-**Terminal 2 — panel:**
+**Desarrollo:**
 
 ```bash
 npm run dev
+```
+
+**Producción:**
+
+```bash
+npm run build
+npm run start
 ```
 
 Abrí `http://localhost:3000`:
@@ -96,27 +98,27 @@ Abrí `http://localhost:3000`:
 4. La pantalla pasa al panel cuando la conexión se establece.
 5. Repetí para cada número adicional.
 
-Para producción (un solo proceso con `concurrently`):
-
-```bash
-npm run build
-npm run start:all
-```
+Si por algún motivo querés correr el bot como proceso suelto (debug),
+seteá `BOT_EN_PROCESO=0` y usá `npm run start:bot` en otra terminal.
 
 ---
 
 ## Cómo funciona
 
-### Arquitectura de dos procesos
+### Arquitectura de un solo proceso
 
-- **Bot** (`scripts/iniciar-bot.ts`): mantiene los sockets de Baileys,
-  procesa mensajes entrantes, llama a OpenAI/ElevenLabs/Whisper, envía
-  respuestas, drena la bandeja de salida y emite heartbeats.
-- **Panel** (`next dev`/`next start`): API routes y UI. No tiene
-  acceso directo a los sockets.
-
-Ambos procesos se comunican **solo por SQLite** (`data/`) y archivos
-locales (`data/media/`, `data/biblioteca/`, `auth/`).
+- `src/instrumentation.ts` es el hook `register()` de Next.js que
+  corre una vez al arrancar el server. Llama a
+  `arrancarBotEnProceso()` (en `src/lib/bot/cicloVida.ts`) que levanta
+  los sockets de Baileys, los intervals de bandeja de salida (2s),
+  heartbeat (5s) y sincronización de cuentas (3s).
+- El estado del ciclo de vida vive en `globalThis` para sobrevivir al
+  HMR de dev y ser idempotente: llamar a `arrancarBotEnProceso()` dos
+  veces no duplica nada.
+- API routes y UI comparten memoria con el bot — pero igual usamos
+  SQLite (`data/`) como fuente de verdad y bandeja de salida para que
+  el patrón sea simple y `scripts/iniciar-bot.ts` siga funcionando si
+  alguien quiere correrlo aparte (modo legacy).
 
 ### Flujo de mensaje entrante
 
@@ -341,7 +343,7 @@ Sin nada antes. Es side-effect-only para garantizar que
 
 **Procesos zombies en Windows**
 
-`Ctrl+C` en `start:all` no siempre mata los hijos en Windows:
+Si `Ctrl+C` no termina de matar Node:
 
 ```powershell
 tasklist | findstr node

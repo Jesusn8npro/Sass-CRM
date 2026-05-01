@@ -51,13 +51,13 @@ export function BannerBotInactivo({ visible }: Props) {
       {expandido && (
         <div className="border-t border-red-500/20 px-4 py-3 md:px-6">
           <p className="text-xs leading-relaxed text-red-700/80 dark:text-red-300/80">
-            La conexión figura como activa pero el proceso del bot no está
-            corriendo. Los mensajes entrantes no se reciben y los mensajes
-            humanos quedan en cola. Reiniciá el proceso ejecutando{" "}
+            El proceso del bot no está latiendo. Los mensajes entrantes no
+            se reciben y los humanos quedan en cola. Recargá la página; si
+            persiste, reiniciá el panel (Ctrl+C y volver a correr{" "}
             <code className="rounded bg-red-500/15 px-1.5 py-0.5 font-mono text-[11px]">
-              npm run start:bot
-            </code>{" "}
-            en una terminal.
+              npm run dev
+            </code>
+            ).
           </p>
         </div>
       )}
