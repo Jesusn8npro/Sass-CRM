@@ -255,16 +255,16 @@ export function PanelConversacion({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between gap-4 border-b border-zinc-200 bg-white/70 px-6 py-4 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/60">
+      <header className="flex shrink-0 flex-col gap-2 border-b border-zinc-200 bg-white/70 px-3 py-3 backdrop-blur-md md:flex-row md:items-center md:justify-between md:gap-4 md:px-6 md:py-4 dark:border-zinc-800 dark:bg-zinc-950/60">
         <div className="min-w-0">
-          <h2 className="truncate text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+          <h2 className="truncate text-sm font-semibold tracking-tight text-zinc-900 md:text-base dark:text-zinc-100">
             {conversacion.nombre ?? `+${conversacion.telefono}`}
           </h2>
-          <p className="mt-0.5 font-mono text-xs text-zinc-500 dark:text-zinc-500">
+          <p className="mt-0.5 truncate font-mono text-[11px] text-zinc-500 dark:text-zinc-500">
             +{conversacion.telefono}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
           <SelectorEtiquetas
             idCuenta={idCuenta}
             idConversacion={conversacion.id}
@@ -277,30 +277,30 @@ export function PanelConversacion({
           />
           {confirmandoBorrado ? (
             <div className="flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 p-1">
-              <span className="px-3 text-xs text-red-700 dark:text-red-300">
+              <span className="px-2 text-[11px] text-red-700 dark:text-red-300">
                 ¿Seguro?
               </span>
               <button
                 type="button"
                 onClick={() => setConfirmandoBorrado(false)}
-                className="rounded-full px-3 py-1 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                className="rounded-full px-2 py-1 text-[11px] text-zinc-500"
               >
-                Cancelar
+                No
               </button>
               <button
                 type="button"
                 onClick={borrar}
                 disabled={borrando}
-                className="rounded-full bg-red-500/15 px-3 py-1 text-xs font-semibold text-red-700 transition-colors hover:bg-red-500/25 disabled:opacity-50 dark:text-red-300"
+                className="rounded-full bg-red-500/20 px-2 py-1 text-[11px] font-semibold text-red-700 disabled:opacity-50 dark:text-red-300"
               >
-                {borrando ? "Borrando..." : "Borrar"}
+                {borrando ? "..." : "Sí"}
               </button>
             </div>
           ) : (
             <button
               type="button"
               onClick={() => setConfirmandoBorrado(true)}
-              className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-500 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-700 dark:border-zinc-800 dark:text-zinc-400 dark:hover:text-red-300"
+              className="rounded-full border border-zinc-200 px-3 py-1.5 text-[11px] font-medium text-zinc-500 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-700 md:text-xs dark:border-zinc-800 dark:text-zinc-400 dark:hover:text-red-300"
             >
               Borrar
             </button>
@@ -308,7 +308,7 @@ export function PanelConversacion({
         </div>
       </header>
 
-      <div ref={refScroll} className="flex-1 overflow-y-auto px-6 py-6">
+      <div ref={refScroll} className="flex-1 overflow-y-auto px-3 py-4 md:px-6 md:py-6">
         {mensajes.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <p className="text-sm text-zinc-400 dark:text-zinc-600">
@@ -324,7 +324,7 @@ export function PanelConversacion({
         )}
       </div>
 
-      <footer className="border-t border-zinc-200 bg-white/70 px-6 py-4 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/60">
+      <footer className="shrink-0 border-t border-zinc-200 bg-white/70 px-3 py-3 backdrop-blur-md md:px-6 md:py-4 dark:border-zinc-800 dark:bg-zinc-950/60">
         {errorMedia && (
           <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
             {errorMedia}

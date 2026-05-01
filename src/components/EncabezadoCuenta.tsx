@@ -7,11 +7,14 @@ import type { Cuenta } from "@/lib/baseDatos";
 interface Props {
   cuenta: Cuenta;
   onDesconectar: () => void;
+  /** Solo en mobile: callback para abrir el drawer de cuentas */
+  onAbrirCuentas?: () => void;
 }
 
 export function EncabezadoCuenta({
   cuenta,
   onDesconectar,
+  onAbrirCuentas,
 }: Props) {
   const [confirmando, setConfirmando] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -33,8 +36,32 @@ export function EncabezadoCuenta({
   const conectado = cuenta.estado === "conectado";
 
   return (
-    <header className="flex items-center justify-between gap-4 border-b border-zinc-200 bg-white/80 px-6 py-4 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/80">
-      <div className="flex items-center gap-3 min-w-0">
+    <header className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 bg-white/80 px-3 py-3 backdrop-blur-md md:px-6 md:py-4 dark:border-zinc-800 dark:bg-zinc-950/80">
+      <div className="flex items-center gap-2.5 min-w-0 md:gap-3">
+        {/* Hamburger — solo móvil */}
+        {onAbrirCuentas && (
+          <button
+            type="button"
+            onClick={onAbrirCuentas}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 transition-colors hover:bg-zinc-50 md:hidden dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
+            aria-label="Cambiar de cuenta"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+            >
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+        )}
+
         <div
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
             conectado
@@ -54,16 +81,16 @@ export function EncabezadoCuenta({
           <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
             {cuenta.etiqueta}
           </p>
-          <p className="mt-0.5 truncate font-mono text-xs text-zinc-500">
+          <p className="mt-0.5 truncate font-mono text-[11px] text-zinc-500">
             {cuenta.telefono ? `+${cuenta.telefono}` : "sin conectar"}
           </p>
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5">
         <Link
           href={`/cuentas/${cuenta.id}/configuracion`}
-          className="flex h-9 items-center gap-2 rounded-full border border-zinc-200 px-4 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
+          className="flex h-9 items-center gap-2 rounded-full border border-zinc-200 px-3 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 md:px-4 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
         >
           <svg
             viewBox="0 0 24 24"
@@ -77,26 +104,26 @@ export function EncabezadoCuenta({
             <circle cx="12" cy="12" r="3" />
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
-          Ajustes
+          <span className="hidden sm:inline">Ajustes</span>
         </Link>
 
         {confirmando ? (
           <div className="flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 p-1">
-            <span className="px-3 text-xs text-red-700 dark:text-red-300">
+            <span className="px-2 text-[11px] text-red-700 dark:text-red-300">
               ¿Desconectar?
             </span>
             <button
               type="button"
               onClick={() => setConfirmando(false)}
-              className="rounded-full px-3 py-1 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+              className="rounded-full px-2 py-1 text-[11px] text-zinc-500"
             >
-              Cancelar
+              No
             </button>
             <button
               type="button"
               onClick={desconectar}
               disabled={enviando}
-              className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-700 transition-colors hover:bg-red-500/30 disabled:opacity-50 dark:text-red-300"
+              className="rounded-full bg-red-500/20 px-2 py-1 text-[11px] font-semibold text-red-700 dark:text-red-300"
             >
               {enviando ? "..." : "Sí"}
             </button>
@@ -105,9 +132,22 @@ export function EncabezadoCuenta({
           <button
             type="button"
             onClick={() => setConfirmando(true)}
-            className="rounded-full border border-zinc-200 px-4 py-2 text-xs font-medium text-zinc-500 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-700 dark:border-zinc-800 dark:text-zinc-400 dark:hover:text-red-300"
+            className="flex h-9 items-center gap-1.5 rounded-full border border-zinc-200 px-3 text-xs font-medium text-zinc-500 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-700 md:px-4 dark:border-zinc-800 dark:text-zinc-400 dark:hover:text-red-300"
           >
-            Desconectar
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-3.5 w-3.5 sm:hidden"
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span className="hidden sm:inline">Desconectar</span>
           </button>
         )}
       </div>

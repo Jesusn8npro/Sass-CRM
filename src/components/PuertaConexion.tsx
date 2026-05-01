@@ -185,33 +185,13 @@ export function PuertaConexion() {
       )}
 
       <section className="flex flex-1 min-w-0 flex-col">
-        {/* Botón burger arriba — solo en mobile */}
-        <button
-          type="button"
-          onClick={() => setDrawerCuentasAbierto(true)}
-          className="absolute left-3 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white/90 text-zinc-600 shadow-sm backdrop-blur-md transition-colors hover:bg-white md:hidden dark:border-zinc-800 dark:bg-zinc-900/90 dark:text-zinc-400"
-          aria-label="Abrir cuentas"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-4 w-4"
-          >
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
         {!cuentaActual ? (
           <EmptyStateSinCuenta onNueva={() => setModalNueva(true)} />
         ) : (
           <>
             <EncabezadoCuenta
               cuenta={cuentaActual}
+              onAbrirCuentas={() => setDrawerCuentasAbierto(true)}
               onDesconectar={() => {
                 // Optimista: marcar como desconectada localmente
                 setCuentas((prev) =>
