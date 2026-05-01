@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  Conversacion,
   ConversacionConPreview,
   Cuenta,
 } from "@/lib/baseDatos";
 import { BarraLateralCuentas, type CuentaConEstado } from "./BarraLateralCuentas";
 import { ModalNuevaCuenta } from "./ModalNuevaCuenta";
+import { ModalNuevaConversacion } from "./ModalNuevaConversacion";
 import { EncabezadoCuenta } from "./EncabezadoCuenta";
 import { BannerBotInactivo } from "./BannerBotInactivo";
 import { PantallaQR } from "./PantallaQR";
@@ -28,7 +30,12 @@ export function PuertaConexion() {
   const [conversaciones, setConversaciones] = useState<ConversacionConPreview[]>([]);
   const [idConvSeleccionada, setIdConvSeleccionada] = useState<number | null>(null);
   const [modalNueva, setModalNueva] = useState(false);
+  const [modalNuevaConv, setModalNuevaConv] = useState(false);
   const [drawerCuentasAbierto, setDrawerCuentasAbierto] = useState(false);
+  // Marca la última cuenta para la que ya hicimos auto-select de conversación.
+  // Sin esto, el botón "Volver" en móvil quedaba pisado: limpiabas idConv y
+  // el effect lo volvía a setear instantáneamente.
+  const refCuentaAutoSeleccionada = useRef<number | null>(null);
 
   // Función estable que SIEMPRE limpia conv + lista al cambiar cuenta.
   // Llamamos esto desde el handler del click en la sidebar Y también
@@ -113,12 +120,23 @@ export function PuertaConexion() {
     };
   }, [idCuentaSeleccionada, cuentaActual?.estado]);
 
-  // Auto-seleccionar primera conversación
+  // Auto-seleccionar primera conversación SOLO la primera vez por cuenta.
+  // En desktop: igual que antes (se ve la primera al entrar).
+  // En móvil: si el usuario clickeó "Volver", la cuenta no cambió, así
+  // que ref ya marca esa cuenta como auto-seleccionada y NO re-elegimos.
   useEffect(() => {
+    if (idCuentaSeleccionada === null) return;
     if (idConvSeleccionada !== null) return;
     if (conversaciones.length === 0) return;
+    if (refCuentaAutoSeleccionada.current === idCuentaSeleccionada) return;
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      // En móvil no auto-seleccionamos: el usuario elige desde la lista.
+      refCuentaAutoSeleccionada.current = idCuentaSeleccionada;
+      return;
+    }
+    refCuentaAutoSeleccionada.current = idCuentaSeleccionada;
     setIdConvSeleccionada(conversaciones[0]!.id);
-  }, [conversaciones, idConvSeleccionada]);
+  }, [conversaciones, idConvSeleccionada, idCuentaSeleccionada]);
 
   const conversacionBorrada = useCallback((id: number) => {
     setConversaciones((prev) => prev.filter((c) => c.id !== id));
@@ -130,6 +148,25 @@ export function PuertaConexion() {
     setIdCuentaSeleccionada(nueva.id);
     setModalNueva(false);
   }
+
+  const alIniciarConversacion = useCallback(
+    (conv: Conversacion) => {
+      setConversaciones((prev) => {
+        if (prev.some((c) => c.id === conv.id)) return prev;
+        return [
+          {
+            ...conv,
+            vista_previa_ultimo_mensaje: null,
+            etiquetas: [],
+          },
+          ...prev,
+        ];
+      });
+      setIdConvSeleccionada(conv.id);
+      setModalNuevaConv(false);
+    },
+    [],
+  );
 
   if (cargandoCuentas) {
     return (
@@ -223,16 +260,37 @@ export function PuertaConexion() {
                       : "flex"
                   }`}
                 >
-                  <div className="sticky top-0 z-10 border-b border-zinc-200 bg-white/80 px-4 py-3 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/80">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                      Conversaciones
-                    </p>
-                    <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-600">
-                      {conversaciones.length}{" "}
-                      {conversaciones.length === 1
-                        ? "chat activo"
-                        : "chats activos"}
-                    </p>
+                  <div className="sticky top-0 z-10 flex items-start justify-between gap-2 border-b border-zinc-200 bg-white/80 px-4 py-3 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/80">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        Conversaciones
+                      </p>
+                      <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-600">
+                        {conversaciones.length}{" "}
+                        {conversaciones.length === 1
+                          ? "chat activo"
+                          : "chats activos"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setModalNuevaConv(true)}
+                      title="Iniciar conversación"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white transition-all hover:bg-emerald-400"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-4 w-4"
+                      >
+                        <path d="M12 5v14" />
+                        <path d="M5 12h14" />
+                      </svg>
+                    </button>
                   </div>
                   <ListaConversaciones
                     conversaciones={conversaciones}
@@ -305,6 +363,15 @@ export function PuertaConexion() {
         onCerrar={() => setModalNueva(false)}
         onCreada={alCrearCuenta}
       />
+
+      {cuentaActual && (
+        <ModalNuevaConversacion
+          abierto={modalNuevaConv}
+          idCuenta={cuentaActual.id}
+          onCerrar={() => setModalNuevaConv(false)}
+          onCreada={alIniciarConversacion}
+        />
+      )}
     </main>
   );
 }
