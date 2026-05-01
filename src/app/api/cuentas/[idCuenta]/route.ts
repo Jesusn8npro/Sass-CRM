@@ -44,6 +44,10 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     vapi_api_key?: unknown;
     vapi_assistant_id?: unknown;
     vapi_phone_id?: unknown;
+    vapi_prompt_extra?: unknown;
+    vapi_primer_mensaje?: unknown;
+    vapi_max_segundos?: unknown;
+    vapi_grabar?: unknown;
   };
   try {
     payload = await req.json();
@@ -95,6 +99,35 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
       : payload.vapi_phone_id === null
       ? null
       : undefined;
+  const vapiPromptExtra =
+    typeof payload.vapi_prompt_extra === "string"
+      ? payload.vapi_prompt_extra
+      : payload.vapi_prompt_extra === null
+      ? null
+      : undefined;
+  const vapiPrimerMsg =
+    typeof payload.vapi_primer_mensaje === "string"
+      ? payload.vapi_primer_mensaje
+      : payload.vapi_primer_mensaje === null
+      ? null
+      : undefined;
+  const vapiMaxSeg =
+    typeof payload.vapi_max_segundos === "number"
+      ? Math.max(30, Math.min(3600, Math.floor(payload.vapi_max_segundos)))
+      : payload.vapi_max_segundos === null
+      ? null
+      : undefined;
+  const vapiGrabarRaw = payload.vapi_grabar;
+  const vapiGrabar: 0 | 1 | undefined =
+    typeof vapiGrabarRaw === "boolean"
+      ? vapiGrabarRaw
+        ? 1
+        : 0
+      : typeof vapiGrabarRaw === "number"
+      ? vapiGrabarRaw
+        ? 1
+        : 0
+      : undefined;
 
   const actualizada = actualizarCuenta(id, {
     etiqueta,
@@ -106,6 +139,10 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     vapi_api_key: vapiKey,
     vapi_assistant_id: vapiAssistant,
     vapi_phone_id: vapiPhone,
+    vapi_prompt_extra: vapiPromptExtra,
+    vapi_primer_mensaje: vapiPrimerMsg,
+    vapi_max_segundos: vapiMaxSeg,
+    vapi_grabar: vapiGrabar,
   });
   if (!actualizada) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });

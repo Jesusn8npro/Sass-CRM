@@ -7,7 +7,9 @@ import {
 } from "@whiskeysockets/baileys";
 import {
   extraerEmailsDelTexto,
+  extraerTelefonosDelTexto,
   guardarContactosEmail,
+  guardarContactosTelefono,
   insertarMensaje,
   listarBiblioteca,
   marcarConversacionNecesitaHumano,
@@ -695,6 +697,27 @@ export function registrarManejadores(
           }
         } catch (err) {
           console.error(`${prefijo} error extrayendo emails:`, err);
+        }
+
+        // Extracción de teléfonos: capturamos números mencionados en
+        // el mensaje (excluyendo el propio número del cliente).
+        try {
+          const tels = extraerTelefonosDelTexto(contenido);
+          if (tels.length > 0) {
+            const nuevos = guardarContactosTelefono(
+              cuentaId,
+              conversacion.id,
+              tels,
+              telefonoMostrable,
+            );
+            if (nuevos > 0) {
+              console.log(
+                `${prefijo} 📱 ${nuevos} tel(s) nuevo(s) capturados: [${tels.join(", ")}]`,
+              );
+            }
+          }
+        } catch (err) {
+          console.error(`${prefijo} error extrayendo teléfonos:`, err);
         }
 
         const fresca = obtenerConversacionPorId(conversacion.id);

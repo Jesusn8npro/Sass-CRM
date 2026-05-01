@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import type {
   ContactoEmail,
+  ContactoTelefono,
   Cuenta,
   MetricasCuenta,
 } from "@/lib/baseDatos";
@@ -19,6 +20,15 @@ interface RespuestaContactos {
     ContactoEmail & {
       nombre_contacto: string | null;
       telefono: string | null;
+    }
+  >;
+}
+
+interface RespuestaTelefonos {
+  contactos: Array<
+    ContactoTelefono & {
+      nombre_contacto: string | null;
+      telefono_conv: string | null;
     }
   >;
 }
@@ -57,17 +67,26 @@ export default function PaginaDashboard() {
   const [contactos, setContactos] = useState<
     RespuestaContactos["contactos"]
   >([]);
+  const [telefonos, setTelefonos] = useState<
+    RespuestaTelefonos["contactos"]
+  >([]);
+  const [llamandoId, setLlamandoId] = useState<number | null>(null);
 
   const cargarTodo = useCallback(async () => {
     if (!Number.isFinite(idCuenta)) return;
     try {
-      const [resCuenta, resMetricas, resContactos] = await Promise.all([
-        fetch(`/api/cuentas/${idCuenta}`, { cache: "no-store" }),
-        fetch(`/api/cuentas/${idCuenta}/metricas`, { cache: "no-store" }),
-        fetch(`/api/cuentas/${idCuenta}/contactos-email`, {
-          cache: "no-store",
-        }),
-      ]);
+      const [resCuenta, resMetricas, resContactos, resTels] = await Promise.all(
+        [
+          fetch(`/api/cuentas/${idCuenta}`, { cache: "no-store" }),
+          fetch(`/api/cuentas/${idCuenta}/metricas`, { cache: "no-store" }),
+          fetch(`/api/cuentas/${idCuenta}/contactos-email`, {
+            cache: "no-store",
+          }),
+          fetch(`/api/cuentas/${idCuenta}/contactos-telefono`, {
+            cache: "no-store",
+          }),
+        ],
+      );
       if (resCuenta.ok) {
         const d = (await resCuenta.json()) as RespuestaCuenta;
         setCuenta(d.cuenta);
@@ -80,10 +99,45 @@ export default function PaginaDashboard() {
         const d = (await resContactos.json()) as RespuestaContactos;
         setContactos(d.contactos);
       }
+      if (resTels.ok) {
+        const d = (await resTels.json()) as RespuestaTelefonos;
+        setTelefonos(d.contactos);
+      }
     } catch (err) {
       console.error("[dashboard] error cargando:", err);
     }
   }, [idCuenta]);
+
+  async function llamarTelefono(idContacto: number, tel: string) {
+    if (llamandoId !== null) return;
+    if (!confirm(`¿Llamar a +${tel}?`)) return;
+    setLlamandoId(idContacto);
+    try {
+      const res = await fetch(`/api/cuentas/${idCuenta}/llamadas`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ telefono: tel }),
+      });
+      const data = (await res.json().catch(() => ({}))) as
+        | { llamada: { vapi_call_id: string } }
+        | { error: string };
+      if (res.ok && "llamada" in data) {
+        alert(`Llamada disparada (${data.llamada.vapi_call_id.slice(0, 10)}…)`);
+      } else {
+        alert(
+          "Error: " +
+            (("error" in data && data.error) || `HTTP ${res.status}`),
+        );
+      }
+    } catch (err) {
+      alert(
+        "Error de red: " +
+          (err instanceof Error ? err.message : "desconocido"),
+      );
+    } finally {
+      setLlamandoId(null);
+    }
+  }
 
   useEffect(() => {
     cargarTodo();
@@ -377,6 +431,90 @@ export default function PaginaDashboard() {
                   {contactos.length > 50 && (
                     <p className="mt-2 text-center text-[11px] text-zinc-500">
                       Mostrando 50 de {contactos.length}. Exportá CSV para
+                      ver todos.
+                    </p>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {/* Teléfonos capturados */}
+            <section className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="mb-3 flex items-baseline justify-between">
+                <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  Teléfonos capturados ({telefonos.length})
+                </h2>
+                {telefonos.length > 0 && (
+                  <a
+                    href={`/api/cuentas/${idCuenta}/contactos-telefono?formato=csv`}
+                    className="rounded-full bg-emerald-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-400"
+                  >
+                    Exportar CSV
+                  </a>
+                )}
+              </div>
+              {telefonos.length === 0 ? (
+                <p className="text-xs text-zinc-500">
+                  Cuando un cliente mencione otro número en una conversación
+                  (ej: &quot;llamame al ...&quot;) lo capturamos acá. Excluimos
+                  el propio teléfono del cliente.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-zinc-100 text-left text-[11px] uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+                        <th className="px-2 py-2 font-semibold">Teléfono</th>
+                        <th className="px-2 py-2 font-semibold">Contexto</th>
+                        <th className="px-2 py-2 font-semibold">Capturado</th>
+                        <th className="px-2 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {telefonos.slice(0, 50).map((c) => (
+                        <tr
+                          key={c.id}
+                          className="border-b border-zinc-50 dark:border-zinc-800/60"
+                        >
+                          <td className="px-2 py-2 font-mono text-xs text-zinc-900 dark:text-zinc-100">
+                            +{c.telefono}
+                          </td>
+                          <td className="px-2 py-2 text-xs text-zinc-600 dark:text-zinc-400">
+                            {c.nombre_contacto ? (
+                              <>
+                                {c.nombre_contacto}
+                                <span className="ml-1 font-mono text-zinc-400">
+                                  (de +{c.telefono_conv})
+                                </span>
+                              </>
+                            ) : c.telefono_conv ? (
+                              <span className="font-mono text-zinc-400">
+                                +{c.telefono_conv}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td className="px-2 py-2 text-xs text-zinc-500">
+                            {formatearFecha(c.capturado_en)}
+                          </td>
+                          <td className="px-2 py-2 text-right">
+                            <button
+                              type="button"
+                              onClick={() => llamarTelefono(c.id, c.telefono)}
+                              disabled={llamandoId === c.id}
+                              className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-300"
+                            >
+                              {llamandoId === c.id ? "..." : "📞 Llamar"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {telefonos.length > 50 && (
+                    <p className="mt-2 text-center text-[11px] text-zinc-500">
+                      Mostrando 50 de {telefonos.length}. Exportá CSV para
                       ver todos.
                     </p>
                   )}

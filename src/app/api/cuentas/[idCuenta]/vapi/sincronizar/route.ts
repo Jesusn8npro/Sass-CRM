@@ -81,9 +81,12 @@ export async function POST(req: NextRequest, { params }: Contexto) {
 
   const conocimiento = listarConocimientoDeCuenta(id);
   const biblioteca = listarBiblioteca(id);
-  const promptCompleto =
-    construirPromptSistema(cuenta, conocimiento, biblioteca) +
-    PROMPT_LLAMADA_EXTRA;
+  const promptBase = construirPromptSistema(cuenta, conocimiento, biblioteca);
+  // Append: instrucciones genéricas de llamada + las custom de la cuenta.
+  const promptExtra = cuenta.vapi_prompt_extra?.trim()
+    ? `\n\nINSTRUCCIONES ESPECÍFICAS DE ESTE NEGOCIO PARA LLAMADAS:\n${cuenta.vapi_prompt_extra.trim()}`
+    : "";
+  const promptCompleto = promptBase + PROMPT_LLAMADA_EXTRA + promptExtra;
 
   // Generar/recuperar webhook secret
   let secret = cuenta.vapi_webhook_secret;
@@ -94,14 +97,21 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   const baseUrl = urlPublica(req);
   const webhookUrl = `${baseUrl}/api/vapi/webhook`;
 
+  // Primer mensaje custom o default.
+  const primerMensajeBase = cuenta.vapi_primer_mensaje?.trim()
+    ? cuenta.vapi_primer_mensaje.trim()
+    : `Hola, te llamo de ${cuenta.etiqueta}. ¿Tenés un momento?`;
+
   const opciones = {
     nombre: `${cuenta.etiqueta} (cuenta ${id})`,
     systemPrompt: promptCompleto,
-    primerMensaje: `Hola, te llamo de ${cuenta.etiqueta}. ¿Tenés un momento?`,
+    primerMensaje: primerMensajeBase,
     modelo: cuenta.modelo?.trim() || "gpt-4o-mini",
     vozId: cuenta.voz_elevenlabs.trim(),
     serverUrl: webhookUrl,
     serverUrlSecret: secret,
+    maxSegundos: cuenta.vapi_max_segundos ?? 600,
+    grabar: cuenta.vapi_grabar !== 0,
   };
 
   try {
@@ -130,7 +140,10 @@ export async function POST(req: NextRequest, { params }: Contexto) {
       creado = true;
     }
 
-    actualizarCuenta(id, { vapi_assistant_id: assistantId });
+    actualizarCuenta(id, {
+      vapi_assistant_id: assistantId,
+      vapi_sincronizado_en: Math.floor(Date.now() / 1000),
+    });
 
     return NextResponse.json({
       ok: true,

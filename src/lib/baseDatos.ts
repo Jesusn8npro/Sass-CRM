@@ -37,6 +37,11 @@ export interface Cuenta {
   vapi_assistant_id: string | null;
   vapi_phone_id: string | null;
   vapi_webhook_secret: string | null;
+  vapi_prompt_extra: string | null;
+  vapi_primer_mensaje: string | null;
+  vapi_max_segundos: number | null;
+  vapi_grabar: 0 | 1;
+  vapi_sincronizado_en: number | null;
   esta_activa: 0 | 1;
   esta_archivada: 0 | 1;
   actualizada_en: number;
@@ -141,6 +146,14 @@ export interface ContactoEmail {
   conversacion_id: number | null;
   email: string;
   validez: ValidezEmail;
+  capturado_en: number;
+}
+
+export interface ContactoTelefono {
+  id: number;
+  cuenta_id: number;
+  conversacion_id: number | null;
+  telefono: string;
   capturado_en: number;
 }
 
@@ -323,6 +336,18 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_contactos_email_cuenta
     ON contactos_email(cuenta_id, capturado_en DESC);
 
+  CREATE TABLE IF NOT EXISTS contactos_telefono (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cuenta_id INTEGER NOT NULL,
+    conversacion_id INTEGER,
+    telefono TEXT NOT NULL,
+    capturado_en INTEGER NOT NULL DEFAULT (unixepoch()),
+    UNIQUE(cuenta_id, telefono)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_contactos_telefono_cuenta
+    ON contactos_telefono(cuenta_id, capturado_en DESC);
+
   CREATE TABLE IF NOT EXISTS llamadas_vapi (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cuenta_id INTEGER NOT NULL,
@@ -431,6 +456,11 @@ asegurarColumna("cuentas", "vapi_api_key", "TEXT");
 asegurarColumna("cuentas", "vapi_assistant_id", "TEXT");
 asegurarColumna("cuentas", "vapi_phone_id", "TEXT");
 asegurarColumna("cuentas", "vapi_webhook_secret", "TEXT");
+asegurarColumna("cuentas", "vapi_prompt_extra", "TEXT");
+asegurarColumna("cuentas", "vapi_primer_mensaje", "TEXT");
+asegurarColumna("cuentas", "vapi_max_segundos", "INTEGER");
+asegurarColumna("cuentas", "vapi_grabar", "INTEGER NOT NULL DEFAULT 1");
+asegurarColumna("cuentas", "vapi_sincronizado_en", "INTEGER");
 asegurarColumna("contactos_email", "validez", "TEXT NOT NULL DEFAULT 'valido'");
 
 // ============================================================
@@ -482,6 +512,11 @@ const stmtActualizarCuentaCampos = db.prepare(
      vapi_assistant_id = ?,
      vapi_phone_id = ?,
      vapi_webhook_secret = ?,
+     vapi_prompt_extra = ?,
+     vapi_primer_mensaje = ?,
+     vapi_max_segundos = ?,
+     vapi_grabar = ?,
+     vapi_sincronizado_en = ?,
      actualizada_en = unixepoch()
    WHERE id = ?`,
 );
@@ -621,6 +656,11 @@ export function actualizarCuenta(
     vapi_assistant_id?: string | null;
     vapi_phone_id?: string | null;
     vapi_webhook_secret?: string | null;
+    vapi_prompt_extra?: string | null;
+    vapi_primer_mensaje?: string | null;
+    vapi_max_segundos?: number | null;
+    vapi_grabar?: 0 | 1;
+    vapi_sincronizado_en?: number | null;
   },
 ): Cuenta | null {
   const actual = obtenerCuenta(id);
@@ -660,6 +700,26 @@ export function actualizarCuenta(
     parametros.vapi_webhook_secret === undefined
       ? actual.vapi_webhook_secret
       : parametros.vapi_webhook_secret;
+  const vapiPromptExtra =
+    parametros.vapi_prompt_extra === undefined
+      ? actual.vapi_prompt_extra
+      : parametros.vapi_prompt_extra;
+  const vapiPrimerMensaje =
+    parametros.vapi_primer_mensaje === undefined
+      ? actual.vapi_primer_mensaje
+      : parametros.vapi_primer_mensaje;
+  const vapiMaxSeg =
+    parametros.vapi_max_segundos === undefined
+      ? actual.vapi_max_segundos
+      : parametros.vapi_max_segundos;
+  const vapiGrabar =
+    parametros.vapi_grabar === undefined
+      ? actual.vapi_grabar
+      : parametros.vapi_grabar;
+  const vapiSincronizadoEn =
+    parametros.vapi_sincronizado_en === undefined
+      ? actual.vapi_sincronizado_en
+      : parametros.vapi_sincronizado_en;
   stmtActualizarCuentaCampos.run(
     etiqueta,
     prompt,
@@ -671,6 +731,11 @@ export function actualizarCuenta(
     vapiAssistant,
     vapiPhone,
     vapiSecret,
+    vapiPromptExtra,
+    vapiPrimerMensaje,
+    vapiMaxSeg,
+    vapiGrabar,
+    vapiSincronizadoEn,
     id,
   );
   return obtenerCuenta(id);
@@ -1497,6 +1562,95 @@ export function clasificarValidezEmail(email: string): ValidezEmail {
     }
   }
   return "valido";
+}
+
+// ============================================================
+// API pública: contactos_telefono
+// (números mencionados en mensajes, distintos del de la conversación)
+// ============================================================
+const stmtInsertarContactoTelefono = db.prepare(
+  `INSERT OR IGNORE INTO contactos_telefono (cuenta_id, conversacion_id, telefono)
+   VALUES (?, ?, ?)`,
+);
+const stmtListarContactosTelefono = db.prepare(
+  `SELECT ct.*, c.nombre AS nombre_contacto, c.telefono AS telefono_conv
+   FROM contactos_telefono ct
+   LEFT JOIN conversaciones c ON c.id = ct.conversacion_id
+   WHERE ct.cuenta_id = ?
+   ORDER BY ct.capturado_en DESC, ct.id DESC`,
+);
+const stmtBorrarContactoTelefono = db.prepare(
+  `DELETE FROM contactos_telefono WHERE id = ?`,
+);
+const stmtContarContactosTelefono = db.prepare(
+  `SELECT COUNT(*) AS n FROM contactos_telefono WHERE cuenta_id = ?`,
+);
+
+export interface ContactoTelefonoConContexto extends ContactoTelefono {
+  nombre_contacto: string | null;
+  telefono_conv: string | null;
+}
+
+// Captura "+5491123456789", "549 11 2345-6789", "(011) 1234-5678", etc.
+// Después filtramos por largo de dígitos (8-15) en E.164.
+const REGEX_TELEFONO = /\+?\d[\d\s().-]{7,18}\d/g;
+
+export function extraerTelefonosDelTexto(texto: string): string[] {
+  if (!texto) return [];
+  const matches = texto.match(REGEX_TELEFONO) ?? [];
+  const limpios: string[] = [];
+  for (const m of matches) {
+    const digitos = m.replace(/[^\d]/g, "");
+    if (digitos.length >= 8 && digitos.length <= 15) {
+      limpios.push(digitos);
+    }
+  }
+  return Array.from(new Set(limpios));
+}
+
+export function guardarContactosTelefono(
+  cuentaId: number,
+  conversacionId: number,
+  telefonos: string[],
+  telefonoPropio?: string | null,
+): number {
+  if (telefonos.length === 0) return 0;
+  let nuevos = 0;
+  // Filtramos el propio teléfono del cliente (es redundante guardarlo).
+  const propio = telefonoPropio?.replace(/[^\d]/g, "") ?? "";
+  const tx = db.transaction(() => {
+    for (const tel of telefonos) {
+      // Saltar si coincide o es el sufijo del número propio
+      if (
+        propio &&
+        (tel === propio ||
+          (propio.length > tel.length && propio.endsWith(tel)) ||
+          (tel.length > propio.length && tel.endsWith(propio)))
+      ) {
+        continue;
+      }
+      const r = stmtInsertarContactoTelefono.run(cuentaId, conversacionId, tel);
+      if (r.changes > 0) nuevos++;
+    }
+  });
+  tx();
+  return nuevos;
+}
+
+export function listarContactosTelefono(
+  cuentaId: number,
+): ContactoTelefonoConContexto[] {
+  return stmtListarContactosTelefono.all(
+    cuentaId,
+  ) as ContactoTelefonoConContexto[];
+}
+
+export function borrarContactoTelefono(id: number): void {
+  stmtBorrarContactoTelefono.run(id);
+}
+
+export function contarContactosTelefono(cuentaId: number): number {
+  return (stmtContarContactosTelefono.get(cuentaId) as { n: number }).n;
 }
 
 // ============================================================

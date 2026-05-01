@@ -76,6 +76,10 @@ interface OpcionesAssistant {
   serverUrl?: string;
   /** Secret que Vapi enviará en cada webhook para verificación. */
   serverUrlSecret?: string;
+  /** Duración máxima en segundos. Default 600 (10 min). */
+  maxSegundos?: number;
+  /** Si true, Vapi graba la llamada y manda recordingUrl en el webhook. */
+  grabar?: boolean;
 }
 
 function construirPayloadAssistant(opciones: OpcionesAssistant) {
@@ -104,9 +108,14 @@ function construirPayloadAssistant(opciones: OpcionesAssistant) {
     transcriber: { provider: "deepgram", model: "nova-2", language: "es" },
     serverUrl: opciones.serverUrl,
     serverUrlSecret: opciones.serverUrlSecret,
-    // Reportes de fin de llamada activados.
+    // Configuración de duración y grabación.
     silenceTimeoutSeconds: 30,
-    maxDurationSeconds: 600,
+    maxDurationSeconds:
+      typeof opciones.maxSegundos === "number" && opciones.maxSegundos > 0
+        ? Math.min(3600, Math.floor(opciones.maxSegundos))
+        : 600,
+    // recordingEnabled controla si Vapi guarda el audio (recording_url).
+    recordingEnabled: opciones.grabar !== false,
   };
 }
 
