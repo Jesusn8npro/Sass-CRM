@@ -356,76 +356,19 @@ export function PanelConversacion({
                 if (f) subirArchivo(f);
               }}
             />
-            <button
-              type="button"
-              onClick={() => refInputArchivo.current?.click()}
-              disabled={subiendoMedia}
-              title="Adjuntar imagen, video, audio o PDF"
-              className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-xl border border-zinc-200 text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100"
-            >
-              {subiendoMedia ? (
-                <span className="h-2 w-2 animate-pulso-suave rounded-full bg-amber-500" />
-              ) : (
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-4 w-4"
-                >
-                  <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.57 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                </svg>
-              )}
-            </button>
 
-            {/* Botón emoji + popover */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setEmojiAbierto((v) => !v);
-                  setRespuestasAbiertas(false);
-                }}
-                title="Insertar emoji"
-                className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-xl border border-zinc-200 text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-4 w-4"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                  <line x1="9" y1="9" x2="9.01" y2="9" />
-                  <line x1="15" y1="9" x2="15.01" y2="9" />
-                </svg>
-              </button>
-              <SelectorEmoji
-                abierto={emojiAbierto}
-                onCerrar={() => setEmojiAbierto(false)}
-                onSeleccionar={(e) => {
-                  insertarEnTextarea(e);
-                }}
-              />
-            </div>
-
-            {/* Botón respuestas rápidas + popover */}
-            {respuestas.length > 0 && (
+            {/* Píldora estilo WhatsApp: emoji + textarea + clip + respuestas */}
+            <div className="flex flex-1 items-end gap-1 rounded-3xl border border-zinc-200 bg-white px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+              {/* Emoji a la izquierda dentro de la píldora */}
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => {
-                    setRespuestasAbiertas((v) => !v);
-                    setEmojiAbierto(false);
+                    setEmojiAbierto((v) => !v);
+                    setRespuestasAbiertas(false);
                   }}
-                  title="Respuestas rápidas"
-                  className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-xl border border-zinc-200 text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100"
+                  title="Insertar emoji"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                 >
                   <svg
                     viewBox="0 0 24 24"
@@ -434,52 +377,124 @@ export function PanelConversacion({
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="h-4 w-4"
+                    className="h-5 w-5"
                   >
-                    <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                    <line x1="9" y1="9" x2="9.01" y2="9" />
+                    <line x1="15" y1="9" x2="15.01" y2="9" />
                   </svg>
                 </button>
-                {respuestasAbiertas && (
-                  <DropdownRespuestas
-                    respuestas={respuestas}
-                    onSeleccionar={(texto) => {
-                      setBorrador(texto);
-                      setRespuestasAbiertas(false);
-                      setTimeout(() => refTextarea.current?.focus(), 0);
-                    }}
-                    onCerrar={() => setRespuestasAbiertas(false)}
-                  />
-                )}
+                <SelectorEmoji
+                  abierto={emojiAbierto}
+                  onCerrar={() => setEmojiAbierto(false)}
+                  onSeleccionar={(e) => {
+                    insertarEnTextarea(e);
+                  }}
+                />
               </div>
+
+              <textarea
+                ref={refTextarea}
+                value={borrador}
+                onChange={(e) => setBorrador(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    enviarMensajeHumano();
+                  }
+                }}
+                rows={1}
+                placeholder="Mensaje"
+                className="max-h-32 min-h-[36px] flex-1 resize-none border-0 bg-transparent px-1 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-0 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+              />
+
+              {/* Respuestas rápidas dentro de la píldora */}
+              {respuestas.length > 0 && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRespuestasAbiertas((v) => !v);
+                      setEmojiAbierto(false);
+                    }}
+                    title="Respuestas rápidas"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-5 w-5"
+                    >
+                      <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+                    </svg>
+                  </button>
+                  {respuestasAbiertas && (
+                    <DropdownRespuestas
+                      respuestas={respuestas}
+                      onSeleccionar={(texto) => {
+                        setBorrador(texto);
+                        setRespuestasAbiertas(false);
+                        setTimeout(() => refTextarea.current?.focus(), 0);
+                      }}
+                      onCerrar={() => setRespuestasAbiertas(false)}
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Adjuntar archivo dentro de la píldora */}
+              <button
+                type="button"
+                onClick={() => refInputArchivo.current?.click()}
+                disabled={subiendoMedia}
+                title="Adjuntar imagen, video, audio o PDF"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              >
+                {subiendoMedia ? (
+                  <span className="h-2 w-2 animate-pulso-suave rounded-full bg-amber-500" />
+                ) : (
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-5 w-5"
+                  >
+                    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.57 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                  </svg>
+                )}
+              </button>
+            </div>
+
+            {/* Botón circular: micrófono cuando está vacío, enviar cuando hay texto */}
+            {borrador.trim() ? (
+              <button
+                type="submit"
+                disabled={enviando}
+                aria-label="Enviar mensaje"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-500 text-zinc-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="h-5 w-5"
+                >
+                  <path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z" />
+                </svg>
+              </button>
+            ) : (
+              <GrabadoraAudio
+                onGrabacionLista={subirAudioVoz}
+                deshabilitado={subiendoMedia}
+              />
             )}
-
-            {/* Grabadora de audio */}
-            <GrabadoraAudio
-              onGrabacionLista={subirAudioVoz}
-              deshabilitado={subiendoMedia}
-            />
-
-            <textarea
-              ref={refTextarea}
-              value={borrador}
-              onChange={(e) => setBorrador(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  enviarMensajeHumano();
-                }
-              }}
-              rows={1}
-              placeholder="Escribe un mensaje..."
-              className="max-h-32 min-h-[44px] flex-1 resize-none rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-amber-500/50 focus:outline-none focus:ring-2 focus:ring-amber-500/20 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-100 dark:placeholder:text-zinc-600"
-            />
-            <button
-              type="submit"
-              disabled={enviando || !borrador.trim()}
-              className="h-[44px] shrink-0 rounded-xl bg-amber-500 px-5 text-sm font-semibold tracking-tight text-zinc-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {enviando ? "Enviando..." : "Enviar"}
-            </button>
           </form>
         )}
       </footer>

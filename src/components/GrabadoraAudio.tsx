@@ -161,10 +161,10 @@ export function GrabadoraAudio({ onGrabacionLista, deshabilitado }: Props) {
         onClick={iniciar}
         disabled={deshabilitado || procesando}
         title="Grabar nota de voz"
-        className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-xl border border-zinc-200 text-zinc-500 transition-colors hover:border-red-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-500 text-zinc-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {procesando ? (
-          <span className="h-2 w-2 animate-pulso-suave rounded-full bg-red-500" />
+          <span className="h-2 w-2 animate-pulso-suave rounded-full bg-zinc-950" />
         ) : (
           <svg
             viewBox="0 0 24 24"
@@ -173,7 +173,7 @@ export function GrabadoraAudio({ onGrabacionLista, deshabilitado }: Props) {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="h-4 w-4"
+            className="h-5 w-5"
           >
             <rect x="9" y="2" width="6" height="12" rx="3" />
             <path d="M19 10a7 7 0 0 1-14 0" />
