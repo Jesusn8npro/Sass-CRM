@@ -4,6 +4,7 @@ import {
   actualizarCuenta,
   listarBiblioteca,
   listarConocimientoDeCuenta,
+  listarProductosActivos,
   obtenerCuenta,
 } from "@/lib/baseDatos";
 import {
@@ -81,7 +82,13 @@ export async function POST(req: NextRequest, { params }: Contexto) {
 
   const conocimiento = listarConocimientoDeCuenta(id);
   const biblioteca = listarBiblioteca(id);
-  const promptBase = construirPromptSistema(cuenta, conocimiento, biblioteca);
+  const productos = listarProductosActivos(id);
+  const promptBase = construirPromptSistema(
+    cuenta,
+    conocimiento,
+    biblioteca,
+    productos,
+  );
   // Append: instrucciones genéricas de llamada + las custom de la cuenta.
   const promptExtra = cuenta.vapi_prompt_extra?.trim()
     ? `\n\nINSTRUCCIONES ESPECÍFICAS DE ESTE NEGOCIO PARA LLAMADAS:\n${cuenta.vapi_prompt_extra.trim()}`

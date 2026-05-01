@@ -94,6 +94,9 @@ export interface RespuestaIA {
     activar: boolean;
     razon: string;
   };
+  /** IDs (strings) de los productos del catálogo por los que el cliente
+   *  preguntó o mostró interés en este turno. Vacío si no aplica. */
+  productos_de_interes: string[];
 }
 
 const ESQUEMA_RESPUESTA = {
@@ -155,8 +158,19 @@ const ESQUEMA_RESPUESTA = {
       required: ["activar", "razon"],
       additionalProperties: false,
     },
+    productos_de_interes: {
+      type: "array",
+      description:
+        "IDs (en string) de los productos del catálogo por los que el cliente preguntó o mostró interés en su mensaje (precio, info, foto, comprar). Vacío si no aplica.",
+      items: { type: "string" },
+    },
   },
-  required: ["partes", "transferir_a_humano", "iniciar_llamada"],
+  required: [
+    "partes",
+    "transferir_a_humano",
+    "iniciar_llamada",
+    "productos_de_interes",
+  ],
   additionalProperties: false,
 } as const;
 
@@ -210,7 +224,13 @@ INSTRUCCIONES DE FORMATO DE RESPUESTA (siempre seguir):
    - Si activar=true, igual respondé al cliente con partes diciendo educadamente que un humano continuará.
    - En caso normal: activar=false, razon="".
 
-6) "iniciar_llamada" dispara una LLAMADA TELEFÓNICA real al cliente usando Vapi.
+6) "productos_de_interes" — array de IDs (en string) de productos del catálogo
+   por los que el cliente preguntó o mostró interés en este turno (precio, info,
+   foto, comprar, comparar). Si tu negocio te pasó productos, los vas a ver en
+   la sección "Catálogo de productos" arriba con su id. Vacío si no aplica o
+   si tu cuenta no tiene catálogo.
+
+7) "iniciar_llamada" dispara una LLAMADA TELEFÓNICA real al cliente usando Vapi.
    - activar=true SOLO cuando: (a) el cliente acepta explícitamente que lo llames ("dale, llamame", "sí, prefiero hablar"), (b) la situación amerita conversación de voz (cierre de venta, demo, agendamiento, dudas complejas), (c) ya intercambiaron suficientes mensajes y la conversación está madura.
    - NO uses iniciar_llamada como saludo, ni en los primeros mensajes, ni si el cliente solo pidió info por escrito.
    - Antes de activarlo, AVISÁ al cliente en una parte de texto: "Listo, te llamo en unos segundos por WhatsApp Calling".
@@ -295,6 +315,9 @@ export async function generarRespuesta(
   }
   if (!parsed.iniciar_llamada) {
     parsed.iniciar_llamada = { activar: false, razon: "" };
+  }
+  if (!Array.isArray(parsed.productos_de_interes)) {
+    parsed.productos_de_interes = [];
   }
   return parsed;
 }

@@ -12,6 +12,7 @@ import {
   guardarContactosTelefono,
   insertarMensaje,
   listarBiblioteca,
+  listarProductosActivos,
   marcarConversacionNecesitaHumano,
   obtenerOCrearConversacion,
   obtenerConversacionPorId,
@@ -19,8 +20,10 @@ import {
   obtenerMedioPorIdentificador,
   obtenerPendientesBandejaDeCuenta,
   obtenerCuenta,
+  obtenerProducto,
   listarConocimientoDeCuenta,
   marcarBandejaEnviado,
+  registrarInteresEnProducto,
   type Conversacion,
   type Cuenta,
   type FilaBandejaSalida,
@@ -211,10 +214,12 @@ async function generarYEnviarRespuesta(
 
   const conocimiento = listarConocimientoDeCuenta(cuenta.id);
   const biblioteca = listarBiblioteca(cuenta.id);
+  const productos = listarProductosActivos(cuenta.id);
   const promptCompleto = construirPromptSistema(
     cuenta,
     conocimiento,
     biblioteca,
+    productos,
   );
 
   const inicio = Date.now();
@@ -321,6 +326,28 @@ async function generarYEnviarRespuesta(
       try {
         await sock.sendPresenceUpdate("paused", jidParaEnviar);
       } catch {}
+    }
+  }
+
+  // Si el LLM detectó que el cliente preguntó por productos, registrar
+  // interés (cliente_360 lo lista, dashboard lo agrega a "productos top").
+  if (
+    Array.isArray(respuesta.productos_de_interes) &&
+    respuesta.productos_de_interes.length > 0
+  ) {
+    for (const idRaw of respuesta.productos_de_interes) {
+      const id = Number(idRaw);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      const prod = obtenerProducto(id);
+      if (!prod || prod.cuenta_id !== cuenta.id) continue;
+      try {
+        registrarInteresEnProducto(conversacion.id, prod.id, cuenta.id);
+        console.log(
+          `${prefijo} 🛍 interés registrado: producto "${prod.nombre}" (id ${prod.id})`,
+        );
+      } catch (err) {
+        console.error(`${prefijo} error registrando interés:`, err);
+      }
     }
   }
 

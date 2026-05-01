@@ -157,6 +157,44 @@ export interface ContactoTelefono {
   capturado_en: number;
 }
 
+export interface Producto {
+  id: number;
+  cuenta_id: number;
+  nombre: string;
+  descripcion: string;
+  precio: number | null;
+  moneda: string;
+  costo: number | null;
+  stock: number | null;
+  sku: string | null;
+  categoria: string | null;
+  imagen_path: string | null;
+  esta_activo: 0 | 1;
+  orden: number;
+  creada_en: number;
+  actualizada_en: number;
+}
+
+export interface InteresProducto {
+  conversacion_id: number;
+  producto_id: number;
+  cuenta_id: number;
+  ultimo_interes_en: number;
+  veces: number;
+}
+
+export interface Inversion {
+  id: number;
+  cuenta_id: number;
+  concepto: string;
+  monto: number;
+  moneda: string;
+  categoria: string | null;
+  fecha: number;
+  notas: string | null;
+  creada_en: number;
+}
+
 export interface EtiquetaResumen {
   id: number;
   nombre: string;
@@ -347,6 +385,54 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_contactos_telefono_cuenta
     ON contactos_telefono(cuenta_id, capturado_en DESC);
+
+  CREATE TABLE IF NOT EXISTS productos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cuenta_id INTEGER NOT NULL,
+    nombre TEXT NOT NULL,
+    descripcion TEXT NOT NULL DEFAULT '',
+    precio REAL,
+    moneda TEXT NOT NULL DEFAULT 'COP',
+    costo REAL,
+    stock INTEGER,
+    sku TEXT,
+    categoria TEXT,
+    imagen_path TEXT,
+    esta_activo INTEGER NOT NULL DEFAULT 1,
+    orden INTEGER NOT NULL DEFAULT 0,
+    creada_en INTEGER NOT NULL DEFAULT (unixepoch()),
+    actualizada_en INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_productos_cuenta
+    ON productos(cuenta_id, esta_activo, orden);
+
+  CREATE TABLE IF NOT EXISTS conversacion_productos_interes (
+    conversacion_id INTEGER NOT NULL,
+    producto_id INTEGER NOT NULL,
+    cuenta_id INTEGER NOT NULL,
+    ultimo_interes_en INTEGER NOT NULL DEFAULT (unixepoch()),
+    veces INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (conversacion_id, producto_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_interes_cuenta_producto
+    ON conversacion_productos_interes(cuenta_id, producto_id, ultimo_interes_en DESC);
+
+  CREATE TABLE IF NOT EXISTS inversiones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cuenta_id INTEGER NOT NULL,
+    concepto TEXT NOT NULL,
+    monto REAL NOT NULL,
+    moneda TEXT NOT NULL DEFAULT 'COP',
+    categoria TEXT,
+    fecha INTEGER NOT NULL DEFAULT (unixepoch()),
+    notas TEXT,
+    creada_en INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_inversiones_cuenta
+    ON inversiones(cuenta_id, fecha DESC);
 
   CREATE TABLE IF NOT EXISTS llamadas_vapi (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1565,6 +1651,354 @@ export function clasificarValidezEmail(email: string): ValidezEmail {
 }
 
 // ============================================================
+// API pública: productos
+// ============================================================
+const stmtListarProductos = db.prepare(
+  `SELECT * FROM productos
+   WHERE cuenta_id = ?
+   ORDER BY esta_activo DESC, orden ASC, id ASC`,
+);
+const stmtListarProductosActivos = db.prepare(
+  `SELECT * FROM productos
+   WHERE cuenta_id = ? AND esta_activo = 1
+   ORDER BY orden ASC, id ASC`,
+);
+const stmtObtenerProducto = db.prepare(
+  `SELECT * FROM productos WHERE id = ?`,
+);
+const stmtMaxOrdenProductos = db.prepare(
+  `SELECT COALESCE(MAX(orden), 0) AS m FROM productos WHERE cuenta_id = ?`,
+);
+const stmtInsertarProducto = db.prepare(
+  `INSERT INTO productos
+    (cuenta_id, nombre, descripcion, precio, moneda, costo, stock, sku, categoria, imagen_path, orden)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+);
+const stmtActualizarProducto = db.prepare(
+  `UPDATE productos SET
+     nombre = ?,
+     descripcion = ?,
+     precio = ?,
+     moneda = ?,
+     costo = ?,
+     stock = ?,
+     sku = ?,
+     categoria = ?,
+     imagen_path = ?,
+     esta_activo = ?,
+     orden = ?,
+     actualizada_en = unixepoch()
+   WHERE id = ?`,
+);
+const stmtBorrarProducto = db.prepare(`DELETE FROM productos WHERE id = ?`);
+
+export function listarProductos(cuentaId: number): Producto[] {
+  return stmtListarProductos.all(cuentaId) as Producto[];
+}
+
+export function listarProductosActivos(cuentaId: number): Producto[] {
+  return stmtListarProductosActivos.all(cuentaId) as Producto[];
+}
+
+export function obtenerProducto(id: number): Producto | null {
+  return (stmtObtenerProducto.get(id) as Producto | undefined) ?? null;
+}
+
+export function crearProducto(
+  cuentaId: number,
+  datos: {
+    nombre: string;
+    descripcion?: string;
+    precio?: number | null;
+    moneda?: string;
+    costo?: number | null;
+    stock?: number | null;
+    sku?: string | null;
+    categoria?: string | null;
+    imagen_path?: string | null;
+  },
+): Producto {
+  const max = (stmtMaxOrdenProductos.get(cuentaId) as { m: number }).m;
+  const info = stmtInsertarProducto.run(
+    cuentaId,
+    datos.nombre,
+    datos.descripcion ?? "",
+    datos.precio ?? null,
+    datos.moneda ?? "COP",
+    datos.costo ?? null,
+    datos.stock ?? null,
+    datos.sku ?? null,
+    datos.categoria ?? null,
+    datos.imagen_path ?? null,
+    max + 1,
+  );
+  return obtenerProducto(Number(info.lastInsertRowid)) as Producto;
+}
+
+export function actualizarProducto(
+  id: number,
+  datos: Partial<{
+    nombre: string;
+    descripcion: string;
+    precio: number | null;
+    moneda: string;
+    costo: number | null;
+    stock: number | null;
+    sku: string | null;
+    categoria: string | null;
+    imagen_path: string | null;
+    esta_activo: 0 | 1;
+    orden: number;
+  }>,
+): Producto | null {
+  const actual = obtenerProducto(id);
+  if (!actual) return null;
+  stmtActualizarProducto.run(
+    datos.nombre ?? actual.nombre,
+    datos.descripcion ?? actual.descripcion,
+    datos.precio === undefined ? actual.precio : datos.precio,
+    datos.moneda ?? actual.moneda,
+    datos.costo === undefined ? actual.costo : datos.costo,
+    datos.stock === undefined ? actual.stock : datos.stock,
+    datos.sku === undefined ? actual.sku : datos.sku,
+    datos.categoria === undefined ? actual.categoria : datos.categoria,
+    datos.imagen_path === undefined
+      ? actual.imagen_path
+      : datos.imagen_path,
+    datos.esta_activo === undefined ? actual.esta_activo : datos.esta_activo,
+    datos.orden === undefined ? actual.orden : datos.orden,
+    id,
+  );
+  return obtenerProducto(id);
+}
+
+export function borrarProducto(id: number): void {
+  stmtBorrarProducto.run(id);
+}
+
+// ============================================================
+// API pública: interés en productos por conversación
+// ============================================================
+const stmtRegistrarInteres = db.prepare(
+  `INSERT INTO conversacion_productos_interes
+    (conversacion_id, producto_id, cuenta_id, ultimo_interes_en, veces)
+   VALUES (?, ?, ?, unixepoch(), 1)
+   ON CONFLICT(conversacion_id, producto_id) DO UPDATE SET
+     ultimo_interes_en = unixepoch(),
+     veces = veces + 1`,
+);
+const stmtListarInteresDeConversacion = db.prepare(
+  `SELECT i.*, p.nombre, p.precio, p.moneda, p.imagen_path, p.stock
+   FROM conversacion_productos_interes i
+   JOIN productos p ON p.id = i.producto_id
+   WHERE i.conversacion_id = ?
+   ORDER BY i.ultimo_interes_en DESC`,
+);
+const stmtListarInteresadosEn = db.prepare(
+  `SELECT i.*, c.nombre AS nombre_contacto, c.telefono, c.modo, c.necesita_humano
+   FROM conversacion_productos_interes i
+   JOIN conversaciones c ON c.id = i.conversacion_id
+   WHERE i.producto_id = ?
+   ORDER BY i.ultimo_interes_en DESC`,
+);
+const stmtTopProductos = db.prepare(
+  `SELECT p.id, p.nombre, p.precio, p.moneda, p.stock,
+     COUNT(DISTINCT i.conversacion_id) AS conversaciones_interesadas,
+     SUM(i.veces) AS total_menciones
+   FROM productos p
+   LEFT JOIN conversacion_productos_interes i ON i.producto_id = p.id
+   WHERE p.cuenta_id = ?
+   GROUP BY p.id, p.nombre, p.precio, p.moneda, p.stock
+   ORDER BY conversaciones_interesadas DESC, total_menciones DESC, p.orden ASC
+   LIMIT ?`,
+);
+
+export interface InteresConProducto extends InteresProducto {
+  nombre: string;
+  precio: number | null;
+  moneda: string;
+  imagen_path: string | null;
+  stock: number | null;
+}
+
+export interface InteresadoEnProducto extends InteresProducto {
+  nombre_contacto: string | null;
+  telefono: string;
+  modo: ModoConversacion;
+  necesita_humano: 0 | 1;
+}
+
+export interface ProductoTop {
+  id: number;
+  nombre: string;
+  precio: number | null;
+  moneda: string;
+  stock: number | null;
+  conversaciones_interesadas: number;
+  total_menciones: number;
+}
+
+export function registrarInteresEnProducto(
+  conversacionId: number,
+  productoId: number,
+  cuentaId: number,
+): void {
+  stmtRegistrarInteres.run(conversacionId, productoId, cuentaId);
+}
+
+export function listarInteresDeConversacion(
+  conversacionId: number,
+): InteresConProducto[] {
+  return stmtListarInteresDeConversacion.all(
+    conversacionId,
+  ) as InteresConProducto[];
+}
+
+export function listarInteresadosEnProducto(
+  productoId: number,
+): InteresadoEnProducto[] {
+  return stmtListarInteresadosEn.all(productoId) as InteresadoEnProducto[];
+}
+
+export function listarTopProductos(
+  cuentaId: number,
+  limite = 10,
+): ProductoTop[] {
+  return stmtTopProductos.all(cuentaId, limite) as ProductoTop[];
+}
+
+// ============================================================
+// API pública: inversiones (gastos del negocio)
+// ============================================================
+const stmtListarInversiones = db.prepare(
+  `SELECT * FROM inversiones WHERE cuenta_id = ?
+   ORDER BY fecha DESC, id DESC LIMIT ?`,
+);
+const stmtObtenerInversion = db.prepare(
+  `SELECT * FROM inversiones WHERE id = ?`,
+);
+const stmtInsertarInversion = db.prepare(
+  `INSERT INTO inversiones
+     (cuenta_id, concepto, monto, moneda, categoria, fecha, notas)
+   VALUES (?, ?, ?, ?, ?, ?, ?)`,
+);
+const stmtActualizarInversion = db.prepare(
+  `UPDATE inversiones SET
+     concepto = ?,
+     monto = ?,
+     moneda = ?,
+     categoria = ?,
+     fecha = ?,
+     notas = ?
+   WHERE id = ?`,
+);
+const stmtBorrarInversion = db.prepare(
+  `DELETE FROM inversiones WHERE id = ?`,
+);
+const stmtTotalInversiones = db.prepare(
+  `SELECT moneda, SUM(monto) AS total, COUNT(*) AS n
+   FROM inversiones WHERE cuenta_id = ?
+   GROUP BY moneda`,
+);
+const stmtInversionesPorCategoria = db.prepare(
+  `SELECT COALESCE(categoria, 'Sin categoría') AS categoria,
+     moneda, SUM(monto) AS total, COUNT(*) AS n
+   FROM inversiones WHERE cuenta_id = ?
+   GROUP BY categoria, moneda
+   ORDER BY total DESC`,
+);
+
+export function listarInversiones(
+  cuentaId: number,
+  limite = 200,
+): Inversion[] {
+  return stmtListarInversiones.all(cuentaId, limite) as Inversion[];
+}
+
+export function obtenerInversion(id: number): Inversion | null {
+  return (stmtObtenerInversion.get(id) as Inversion | undefined) ?? null;
+}
+
+export function crearInversion(
+  cuentaId: number,
+  datos: {
+    concepto: string;
+    monto: number;
+    moneda?: string;
+    categoria?: string | null;
+    fecha?: number;
+    notas?: string | null;
+  },
+): Inversion {
+  const info = stmtInsertarInversion.run(
+    cuentaId,
+    datos.concepto,
+    datos.monto,
+    datos.moneda ?? "COP",
+    datos.categoria ?? null,
+    datos.fecha ?? Math.floor(Date.now() / 1000),
+    datos.notas ?? null,
+  );
+  return obtenerInversion(Number(info.lastInsertRowid)) as Inversion;
+}
+
+export function actualizarInversion(
+  id: number,
+  datos: Partial<{
+    concepto: string;
+    monto: number;
+    moneda: string;
+    categoria: string | null;
+    fecha: number;
+    notas: string | null;
+  }>,
+): Inversion | null {
+  const actual = obtenerInversion(id);
+  if (!actual) return null;
+  stmtActualizarInversion.run(
+    datos.concepto ?? actual.concepto,
+    datos.monto ?? actual.monto,
+    datos.moneda ?? actual.moneda,
+    datos.categoria === undefined ? actual.categoria : datos.categoria,
+    datos.fecha ?? actual.fecha,
+    datos.notas === undefined ? actual.notas : datos.notas,
+    id,
+  );
+  return obtenerInversion(id);
+}
+
+export function borrarInversion(id: number): void {
+  stmtBorrarInversion.run(id);
+}
+
+export interface ResumenInversiones {
+  por_moneda: Array<{ moneda: string; total: number; n: number }>;
+  por_categoria: Array<{
+    categoria: string;
+    moneda: string;
+    total: number;
+    n: number;
+  }>;
+}
+
+export function obtenerResumenInversiones(
+  cuentaId: number,
+): ResumenInversiones {
+  const por_moneda = stmtTotalInversiones.all(cuentaId) as Array<{
+    moneda: string;
+    total: number;
+    n: number;
+  }>;
+  const por_categoria = stmtInversionesPorCategoria.all(cuentaId) as Array<{
+    categoria: string;
+    moneda: string;
+    total: number;
+    n: number;
+  }>;
+  return { por_moneda, por_categoria };
+}
+
+// ============================================================
 // API pública: contactos_telefono
 // (números mencionados en mensajes, distintos del de la conversación)
 // ============================================================
@@ -1779,6 +2213,11 @@ export interface MetricasCuenta {
   mensajes_hoy: number;
   mensajes_ultimos_7d: number;
   emails_capturados: number;
+  telefonos_capturados: number;
+  productos_total: number;
+  productos_sin_stock: number;
+  inversiones_por_moneda: Array<{ moneda: string; total: number; n: number }>;
+  productos_top: ProductoTop[];
   por_etapa: Array<{
     etapa_id: number | null;
     nombre: string;
@@ -1890,6 +2329,25 @@ export function obtenerMetricas(cuentaId: number): MetricasCuenta {
     mensajes_hoy: msg.hoy ?? 0,
     mensajes_ultimos_7d: msg.ult7d ?? 0,
     emails_capturados: contarContactosEmail(cuentaId),
+    telefonos_capturados: contarContactosTelefono(cuentaId),
+    productos_total: (
+      db
+        .prepare(`SELECT COUNT(*) AS n FROM productos WHERE cuenta_id = ?`)
+        .get(cuentaId) as { n: number }
+    ).n,
+    productos_sin_stock: (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM productos WHERE cuenta_id = ? AND esta_activo = 1 AND stock IS NOT NULL AND stock <= 0`,
+        )
+        .get(cuentaId) as { n: number }
+    ).n,
+    inversiones_por_moneda: stmtTotalInversiones.all(cuentaId) as Array<{
+      moneda: string;
+      total: number;
+      n: number;
+    }>,
+    productos_top: listarTopProductos(cuentaId, 5),
     por_etapa: [
       ...(sinEtapa > 0
         ? [

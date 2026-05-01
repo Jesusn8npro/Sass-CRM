@@ -8,6 +8,7 @@ import type {
   ModoConversacion,
   RespuestaRapida,
 } from "@/lib/baseDatos";
+import Link from "next/link";
 import { BurbujaMensaje } from "./BurbujaMensaje";
 import { InterruptorModo } from "./InterruptorModo";
 import { SelectorEmoji } from "./SelectorEmoji";
@@ -269,6 +270,17 @@ export function PanelConversacion({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
+          <Link
+            href={`/cuentas/${idCuenta}/contactos/${conversacion.id}`}
+            title="Ver perfil del contacto (Cliente 360)"
+            className="flex h-9 items-center gap-1.5 rounded-full border border-zinc-200 px-3 text-xs font-medium text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+            <span className="hidden sm:inline">Perfil</span>
+          </Link>
           <BotonLlamar
             cuenta={cuenta}
             telefono={conversacion.telefono}

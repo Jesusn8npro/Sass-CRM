@@ -226,13 +226,73 @@ export default function PaginaDashboard() {
                 detalle={`${metricas.mensajes_ultimos_7d} en últimos 7 días`}
               />
               <Kpi
+                titulo="Productos activos"
+                valor={metricas.productos_total}
+                detalle={
+                  metricas.productos_sin_stock > 0
+                    ? `${metricas.productos_sin_stock} sin stock`
+                    : "Catálogo configurado"
+                }
+                acento={
+                  metricas.productos_sin_stock > 0 ? "rojo" : undefined
+                }
+              />
+            </section>
+
+            {/* KPIs de captura + dinero */}
+            <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
+              <Kpi
                 titulo="Emails capturados"
                 valor={metricas.emails_capturados}
-                detalle="Detectados en mensajes entrantes"
+                detalle="Detectados en mensajes"
                 acento={
                   metricas.emails_capturados > 0 ? "esmeralda" : undefined
                 }
               />
+              <Kpi
+                titulo="Teléfonos capturados"
+                valor={metricas.telefonos_capturados}
+                detalle="Mencionados en chats"
+              />
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                  Inversión total
+                </p>
+                {metricas.inversiones_por_moneda.length === 0 ? (
+                  <>
+                    <p className="mt-1 text-3xl font-bold text-zinc-400">
+                      —
+                    </p>
+                    <p className="mt-1 text-[11px] text-zinc-500">
+                      Sin gastos registrados
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <ul className="mt-1 flex flex-col gap-0.5">
+                      {metricas.inversiones_por_moneda.map((m) => (
+                        <li
+                          key={m.moneda}
+                          className="text-lg font-bold text-zinc-900 dark:text-zinc-100"
+                        >
+                          {m.total.toLocaleString("es-CO", {
+                            maximumFractionDigits: 0,
+                          })}{" "}
+                          <span className="text-xs font-normal text-zinc-500">
+                            {m.moneda}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <Link
+                      href={`/cuentas/${idCuenta}/inversiones`}
+                      className="mt-1 inline-block text-[11px] text-emerald-700 underline dark:text-emerald-400"
+                    >
+                      Ver detalle →
+                    </Link>
+                  </>
+                )}
+              </div>
             </section>
 
             {/* Volumen por día */}
@@ -275,6 +335,58 @@ export default function PaginaDashboard() {
                 </div>
               )}
             </section>
+
+            {/* Productos top: los más preguntados por clientes */}
+            {metricas.productos_top.length > 0 && (
+              <section className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="mb-3 flex items-baseline justify-between">
+                  <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                    Productos más preguntados
+                  </h2>
+                  <Link
+                    href={`/cuentas/${idCuenta}/productos`}
+                    className="text-[11px] text-emerald-700 underline dark:text-emerald-400"
+                  >
+                    Ver todos →
+                  </Link>
+                </div>
+                <ul className="flex flex-col gap-2">
+                  {metricas.productos_top.map((p) => (
+                    <li
+                      key={p.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-zinc-100 px-3 py-2 dark:border-zinc-800"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/cuentas/${idCuenta}/productos/${p.id}/interesados`}
+                          className="truncate text-sm font-medium text-zinc-900 hover:underline dark:text-zinc-100"
+                        >
+                          {p.nombre}
+                        </Link>
+                        <p className="text-[11px] text-zinc-500">
+                          {p.precio != null
+                            ? `${p.precio.toLocaleString("es-CO")} ${p.moneda}`
+                            : "consultar"}
+                          {p.stock != null &&
+                            (p.stock > 0
+                              ? ` · stock ${p.stock}`
+                              : " · SIN STOCK")}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
+                          {p.conversaciones_interesadas}
+                        </p>
+                        <p className="text-[10px] text-zinc-500">
+                          interesado
+                          {p.conversaciones_interesadas === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             <div className="grid gap-6 lg:grid-cols-2">
               {/* Pipeline overview */}

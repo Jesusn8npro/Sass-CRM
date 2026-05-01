@@ -2,6 +2,7 @@ import type {
   Cuenta,
   EntradaConocimiento,
   MedioBiblioteca,
+  Producto,
 } from "./baseDatos";
 import { PROMPT_SISTEMA_DEFAULT } from "./promptSistema";
 
@@ -12,11 +13,13 @@ import { PROMPT_SISTEMA_DEFAULT } from "./promptSistema";
  * 2) Texto libre del negocio: cuenta.contexto_negocio
  * 3) Entradas estructuradas (productos, FAQs, etc): conocimiento[]
  * 4) Biblioteca de medios disponibles que el agente puede enviar
+ * 5) Catálogo de productos con precio y stock
  */
 export function construirPromptSistema(
   cuenta: Cuenta,
   conocimiento: EntradaConocimiento[],
   biblioteca: MedioBiblioteca[] = [],
+  productos: Producto[] = [],
 ): string {
   const partes: string[] = [];
 
@@ -49,6 +52,46 @@ export function construirPromptSistema(
       partes.push(
         `\n- **${m.identificador}** (${m.tipo}): ${m.descripcion.trim() || "(sin descripción)"}`,
       );
+    }
+    partes.push("\n");
+  }
+
+  const productosActivos = productos.filter((p) => p.esta_activo === 1);
+  if (productosActivos.length > 0) {
+    partes.push(
+      "\n\n# Catálogo de productos\n\n" +
+        "Estos son los productos que vende el negocio. Cuando el cliente " +
+        "pregunte por algo, usá esta info para responder con precio, " +
+        "stock y descripción reales. SI un cliente pregunta o muestra " +
+        "interés en alguno (precio, info, fotos, comprar), incluí su ID " +
+        "en el campo `productos_de_interes` de tu respuesta JSON. " +
+        "Si está SIN stock decílo claramente y ofrecé alternativas.\n",
+    );
+    // Agrupar por categoría si las hay
+    const porCategoria = new Map<string, Producto[]>();
+    for (const p of productosActivos) {
+      const cat = p.categoria?.trim() || "General";
+      if (!porCategoria.has(cat)) porCategoria.set(cat, []);
+      porCategoria.get(cat)!.push(p);
+    }
+    for (const [cat, items] of porCategoria) {
+      partes.push(`\n## ${cat}\n`);
+      for (const p of items) {
+        const linea: string[] = [`- **${p.nombre}** (id: ${p.id})`];
+        if (p.precio != null) {
+          linea.push(`precio: ${p.precio} ${p.moneda}`);
+        } else {
+          linea.push("precio: a consultar");
+        }
+        if (p.stock != null) {
+          linea.push(p.stock > 0 ? `stock: ${p.stock}` : "SIN STOCK");
+        }
+        if (p.sku) linea.push(`SKU: ${p.sku}`);
+        partes.push(linea.join(" — "));
+        if (p.descripcion?.trim()) {
+          partes.push(`  · ${p.descripcion.trim().slice(0, 200)}`);
+        }
+      }
     }
     partes.push("\n");
   }
