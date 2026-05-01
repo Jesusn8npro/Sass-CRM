@@ -30,6 +30,11 @@ function mimeDeImagenPorExtension(mediaPath: string): string {
 function construirContenidoUsuario(
   mensaje: Mensaje,
 ): string | ParteContenidoUsuario[] {
+  if (mensaje.tipo === "audio") {
+    // Marcamos que vino por voz para que la AI considere responder igual.
+    const t = mensaje.contenido?.trim() ?? "";
+    return `[mensaje de audio del cliente]: ${t || "(audio sin transcripción)"}`;
+  }
   if (mensaje.tipo === "imagen" && mensaje.media_path) {
     try {
       const ruta = rutaAbsolutaDeMedia(mensaje.media_path);
@@ -66,12 +71,15 @@ function construirContenidoUsuario(
 }
 
 /**
- * Una parte de la respuesta del LLM. El schema strict obliga a que ambos
- * campos estén presentes. Cuando tipo='texto', media_id viene vacío.
- * Cuando tipo='media', contenido viene vacío.
+ * Una parte de la respuesta del LLM. El schema strict obliga a que los
+ * tres campos estén presentes; según el tipo se usan distintos:
+ *   - tipo='texto': contenido = el texto plano. media_id = "".
+ *   - tipo='audio': contenido = el texto que se sintetiza con voz (ElevenLabs).
+ *                   media_id = "". Requiere voz_elevenlabs en la cuenta.
+ *   - tipo='media': media_id = identificador de la biblioteca. contenido = "".
  */
 export interface ParteRespuesta {
-  tipo: "texto" | "media";
+  tipo: "texto" | "audio" | "media";
   contenido: string;
   media_id: string;
 }
@@ -96,17 +104,17 @@ const ESQUEMA_RESPUESTA = {
         properties: {
           tipo: {
             type: "string",
-            enum: ["texto", "media"],
+            enum: ["texto", "audio", "media"],
           },
           contenido: {
             type: "string",
             description:
-              "Texto del mensaje (solo si tipo='texto'). Vacío si tipo='media'.",
+              "Para tipo='texto' o 'audio': el texto del mensaje (en audio se sintetiza con voz). Para tipo='media' debe ir vacío.",
           },
           media_id: {
             type: "string",
             description:
-              "Identificador del medio en la biblioteca (solo si tipo='media'). Vacío si tipo='texto'.",
+              "Identificador del medio en la biblioteca (solo si tipo='media'). Vacío si tipo='texto' o 'audio'.",
           },
         },
         required: ["tipo", "contenido", "media_id"],
@@ -139,18 +147,30 @@ INSTRUCCIONES DE FORMATO DE RESPUESTA (siempre seguir):
 1) Tu respuesta debe venir en JSON con la estructura indicada.
 
 2) "partes" es un array de mensajes ordenados. Cada parte tiene un "tipo":
-   - tipo="texto": "contenido" tiene el texto del mensaje, "media_id" debe ser "".
-   - tipo="media": "media_id" tiene el identificador del medio de la biblioteca a enviar, "contenido" debe ser "".
+   - tipo="texto": "contenido" tiene el texto. "media_id" debe ser "".
+   - tipo="audio": "contenido" tiene el texto que se SINTETIZA con voz y se envía como
+     nota de voz. "media_id" debe ser "". Solo usalo si la cuenta tiene voz configurada.
+   - tipo="media": "media_id" tiene el identificador del medio de la biblioteca a enviar.
+     "contenido" debe ser "".
 
-3) Reglas para dividir en partes:
-   - Si la respuesta es corta (1 frase), usá 1 sola parte.
-   - Si tiene saludo + contenido, separá saludo en su propia parte.
-   - Cada parte de texto: máximo 2-3 líneas, que se sienta natural en WhatsApp.
+3) Reglas para dividir en partes y mezclar formatos:
+   - Si la respuesta es corta (1 frase), 1 sola parte.
+   - Si hay saludo + contenido, separalos.
+   - Cada parte de texto: máximo 2-3 líneas, natural en WhatsApp.
    - NO uses emojis.
-   - Podés intercalar texto + media + texto (ej: "Te muestro el catálogo" → media:catalogo → "¿Cuál te gusta?").
-   - Solo usá media si tenés MUCHO sentido enviarlo (cliente pidió ver, o estás presentando algo visual).
-   - Solo usá media_id que esté en la lista de medios disponibles que te paso. NO inventes identificadores.
-   - Máximo 1-2 medios por respuesta. No saturar al cliente.
+   - VARIÁ formatos para que se sienta humano. Ejemplos válidos:
+       · solo texto (lo más común para datos rápidos, links, precios)
+       · texto + media (cuando mostrás algo visual)
+       · audio + texto (audio cálido cerrando con un texto con detalles puntuales)
+       · texto + audio (resumen corto y después "te explico mejor en audio")
+       · solo audio (respuestas largas o cálidas, especialmente si el cliente envió audio)
+   - Si el cliente envió un mensaje de audio (lo verás como
+     "[mensaje de audio del cliente]: <transcripción>"), CONSIDERÁ responder con al
+     menos una parte tipo="audio" para mantener el ritmo de la conversación.
+   - Para datos exactos (precios, números, links, direcciones, mails) usá tipo="texto"
+     aunque el resto sea audio — es más fácil de copiar.
+   - Solo usá media_id que esté en la lista de medios disponibles que te paso. NO inventes.
+   - Máximo 1-2 medios + 1-2 audios por respuesta. No saturar.
 
 4) VISIÓN — IMPORTANTE: tenés capacidad multimodal activa, podés VER las imágenes
    que te manda el cliente. Cuando un mensaje del usuario tiene una imagen adjunta:

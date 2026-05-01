@@ -232,143 +232,28 @@ async function generarYEnviarRespuesta(
     `${prefijo} LLM respondió en ${duracion}ms (${respuesta.partes.length} parte${respuesta.partes.length === 1 ? "" : "s"}${respuesta.transferir_a_humano.activar ? ", HANDOFF" : ""})`,
   );
 
-  // Modo espejo: respondemos con voz si la cuenta tiene voz_elevenlabs
-  // y CUALQUIERA de los últimos 2 mensajes del usuario fue audio. Esto
-  // evita el caso "el cliente mandó audio + un texto rápido aclaratorio
-  // → bot debería seguir en modo audio". Más robusto que mirar solo el
-  // último mensaje.
-  const mensajesUsuario = historial.filter((m) => m.rol === "usuario");
-  const ultimosDos = mensajesUsuario.slice(-2);
-  const huboAudioReciente = ultimosDos.some((m) => m.tipo === "audio");
+  // Despachar cada parte según su tipo. La AI eligió una mezcla de
+  // texto / audio / media (ver instrucciones en openai.ts). Ya no hay
+  // "modo espejo binario" que convierta toda la respuesta a voz.
   const tieneVoz =
     !!cuenta.voz_elevenlabs && cuenta.voz_elevenlabs.trim().length > 0;
-  const tieneApiKey = !!process.env.ELEVENLABS_API_KEY;
-  const debeResponderConVoz = tieneVoz && tieneApiKey && huboAudioReciente;
+  const tieneApiKeyEleven = !!process.env.ELEVENLABS_API_KEY;
+  const puedeUsarVoz = tieneVoz && tieneApiKeyEleven;
 
-  console.log(
-    `${prefijo} 🔍 espejo check: voz_elevenlabs=${tieneVoz ? `"${cuenta.voz_elevenlabs!.trim().slice(0, 12)}..."` : "VACÍO"}, ELEVENLABS_API_KEY=${tieneApiKey ? "OK" : "FALTA"}, últimos 2 user=[${ultimosDos.map((m) => m.tipo).join(",") || "vacío"}], audio reciente=${huboAudioReciente} → ${debeResponderConVoz ? "RESPONDE CON VOZ" : "responde con texto"}`,
-  );
-
-  if (debeResponderConVoz) {
-    console.log(
-      `${prefijo} 🪞 espejo: cliente envió audio → respondemos con voz`,
-    );
-    const textoCompleto = respuesta.partes
-      .map((p) => p.contenido.trim())
-      .filter((s) => s.length > 0)
-      .join("\n\n");
-    if (textoCompleto) {
-      try {
-        // "Grabando audio..."
-        try {
-          await sock.sendPresenceUpdate("recording", jidParaEnviar);
-        } catch {}
-        const ttsInicio = Date.now();
-        // En este branch debeResponderConVoz ya garantizó voz_elevenlabs no nulo
-        const tts = await generarAudioTTS(
-          textoCompleto,
-          cuenta.voz_elevenlabs!,
-        );
-        const ttsDur = Date.now() - ttsInicio;
-        console.log(
-          `${prefijo} 🔊 audio ElevenLabs generado (${tts.buffer.length} bytes, ${ttsDur}ms)`,
-        );
-        const guardado = guardarMediaSubido(
-          cuenta.id,
-          tts.buffer,
-          tts.extension,
-        );
-
-        // Convertir MP3 → OGG/Opus para que llegue como nota de voz, no como
-        // archivo de audio o documento. Sin esta conversión WhatsApp puede
-        // mostrarlo como "audio no disponible".
-        let rutaTTS = guardado.rutaAbsoluta;
-        let mediaPathTTS = guardado.rutaRelativa;
-        try {
-          const conv = await asegurarFormatoVoz(guardado.rutaAbsoluta);
-          if (conv.nombre !== guardado.nombreArchivo) {
-            rutaTTS = conv.rutaAbsoluta;
-            mediaPathTTS = `${cuenta.id}/${conv.nombre}`;
-            console.log(`${prefijo} 🔄 TTS convertido a OGG/Opus`);
-          }
-        } catch (errConv) {
-          console.warn(`${prefijo} no se pudo convertir TTS:`, errConv);
-        }
-
-        insertarMensaje(
-          cuenta.id,
-          conversacion.id,
-          "asistente",
-          textoCompleto,
-          { tipo: "audio", media_path: mediaPathTTS },
-        );
-
-        // Metadata para que WhatsApp lo acepte como nota de voz
-        const metaTTS = await obtenerMetadataAudio(rutaTTS);
-        const contenidoTTS = {
-          audio: { url: rutaTTS },
-          mimetype: "audio/ogg; codecs=opus",
-          ptt: true,
-          seconds: metaTTS.seconds,
-          waveform: metaTTS.waveform,
-        } as unknown as Parameters<typeof sock.sendMessage>[1];
-        try {
-          const enviadoTTS = await sock.sendMessage(jidParaEnviar, contenidoTTS);
-          recordarEnvioBot(cuenta.id, enviadoTTS?.key?.id);
-          console.log(`${prefijo} → audio enviado`);
-        } catch (errEnvio) {
-          console.error(`${prefijo} error enviando audio:`, errEnvio);
-        } finally {
-          try {
-            await sock.sendPresenceUpdate("paused", jidParaEnviar);
-          } catch {}
-        }
-
-        if (respuesta.transferir_a_humano.activar) {
-          const razon =
-            respuesta.transferir_a_humano.razon?.trim() || "Sin razón";
-          console.log(`${prefijo} 🤝 HANDOFF a humano: ${razon}`);
-          marcarConversacionNecesitaHumano(conversacion.id, razon);
-        }
-        return;
-      } catch (err) {
-        const detalle = err instanceof Error ? err.message : String(err);
-        console.error(
-          `${prefijo} error con ElevenLabs, caigo a texto:`,
-          detalle,
-        );
-        // Insertamos un mensaje sistema visible en el panel para que el
-        // usuario sepa exactamente por qué no llegó el audio.
-        try {
-          insertarMensaje(
-            cuenta.id,
-            conversacion.id,
-            "sistema",
-            `[ElevenLabs falló: ${detalle.slice(0, 200)}] — respondo con texto.`,
-            { tipo: "sistema" },
-          );
-        } catch {}
-        // Fallback: continuar con multi-parte de texto abajo
-      }
-    }
-  }
-
-  // Enviar cada parte con delays naturales. Cada parte puede ser texto
-  // (mensaje normal) o media (archivo de la biblioteca de la cuenta).
   for (let i = 0; i < respuesta.partes.length; i++) {
     const parte = respuesta.partes[i]!;
     const esUltima = i === respuesta.partes.length - 1;
+    const numParte = `${i + 1}/${respuesta.partes.length}`;
 
     if (parte.tipo === "media") {
-      // Resolver media_id contra la biblioteca de la cuenta
       const idRaw = parte.media_id?.trim() ?? "";
       if (!idRaw) {
-        console.warn(`${prefijo} parte media con id vacío, ignorada`);
+        console.warn(`${prefijo} parte ${numParte} media con id vacío, ignorada`);
       } else {
         const medio = obtenerMedioPorIdentificador(cuenta.id, idRaw);
         if (!medio) {
           console.warn(
-            `${prefijo} parte media id="${idRaw}" no existe en biblioteca, ignorada`,
+            `${prefijo} parte ${numParte} media id="${idRaw}" no existe en biblioteca, ignorada`,
           );
         } else {
           await dormir(1000);
@@ -382,32 +267,45 @@ async function generarYEnviarRespuesta(
           );
         }
       }
-    } else {
-      // Parte de texto
-      const charsPorSegundo = 35;
-      const delayMs = Math.min(
-        4000,
-        Math.max(800, (parte.contenido.length / charsPorSegundo) * 1000),
-      );
-      await dormir(delayMs);
-
-      insertarMensaje(
+    } else if (parte.tipo === "audio" && parte.contenido.trim()) {
+      // Si la cuenta no tiene voz configurada, caemos a texto.
+      const exito = puedeUsarVoz
+        ? await enviarParteAudio(
+            sock,
+            cuenta,
+            conversacion.id,
+            jidParaEnviar,
+            parte.contenido.trim(),
+            prefijo,
+            numParte,
+          )
+        : false;
+      if (!exito) {
+        if (!puedeUsarVoz) {
+          console.log(
+            `${prefijo} parte ${numParte} pedida como audio pero falta voz_elevenlabs/API key → texto`,
+          );
+        }
+        await enviarParteTexto(
+          sock,
+          cuenta.id,
+          conversacion.id,
+          jidParaEnviar,
+          parte.contenido,
+          prefijo,
+          numParte,
+        );
+      }
+    } else if (parte.contenido.trim()) {
+      await enviarParteTexto(
+        sock,
         cuenta.id,
         conversacion.id,
-        "asistente",
+        jidParaEnviar,
         parte.contenido,
+        prefijo,
+        numParte,
       );
-      try {
-        const enviado = await sock.sendMessage(jidParaEnviar, {
-          text: parte.contenido,
-        });
-        recordarEnvioBot(cuenta.id, enviado?.key?.id);
-        console.log(
-          `${prefijo} → parte ${i + 1}/${respuesta.partes.length} (texto) enviada`,
-        );
-      } catch (errEnvio) {
-        console.error(`${prefijo} error enviando parte:`, errEnvio);
-      }
     }
 
     if (!esUltima) {
@@ -432,6 +330,118 @@ async function generarYEnviarRespuesta(
 
 function dormir(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Envía una parte de texto del bot: calcula un delay natural según
+ * largo, guarda en DB y envía por Baileys. No emite presence updates
+ * (eso lo hace el caller entre partes).
+ */
+async function enviarParteTexto(
+  sock: WASocket,
+  cuentaId: number,
+  conversacionId: number,
+  jid: string,
+  contenido: string,
+  prefijo: string,
+  numParte: string,
+): Promise<void> {
+  const charsPorSegundo = 35;
+  const delayMs = Math.min(
+    4000,
+    Math.max(800, (contenido.length / charsPorSegundo) * 1000),
+  );
+  await dormir(delayMs);
+
+  insertarMensaje(cuentaId, conversacionId, "asistente", contenido);
+  try {
+    const enviado = await sock.sendMessage(jid, { text: contenido });
+    recordarEnvioBot(cuentaId, enviado?.key?.id);
+    console.log(`${prefijo} → parte ${numParte} (texto) enviada`);
+  } catch (err) {
+    console.error(`${prefijo} error enviando parte ${numParte} texto:`, err);
+  }
+}
+
+/**
+ * Envía una parte como nota de voz: pide TTS a ElevenLabs, convierte
+ * el MP3 a OGG/Opus, guarda en DB y manda por Baileys con metadata
+ * (seconds + waveform) para que WhatsApp lo muestre como nota de voz.
+ * Devuelve true si se envió OK, false si falló (caller hace fallback).
+ */
+async function enviarParteAudio(
+  sock: WASocket,
+  cuenta: Cuenta,
+  conversacionId: number,
+  jid: string,
+  texto: string,
+  prefijo: string,
+  numParte: string,
+): Promise<boolean> {
+  try {
+    try {
+      await sock.sendPresenceUpdate("recording", jid);
+    } catch {}
+    const ttsInicio = Date.now();
+    const tts = await generarAudioTTS(texto, cuenta.voz_elevenlabs!);
+    const ttsDur = Date.now() - ttsInicio;
+    console.log(
+      `${prefijo} 🔊 parte ${numParte} TTS (${tts.buffer.length}b, ${ttsDur}ms)`,
+    );
+    const guardado = guardarMediaSubido(
+      cuenta.id,
+      tts.buffer,
+      tts.extension,
+    );
+
+    let rutaTTS = guardado.rutaAbsoluta;
+    let mediaPathTTS = guardado.rutaRelativa;
+    try {
+      const conv = await asegurarFormatoVoz(guardado.rutaAbsoluta);
+      if (conv.nombre !== guardado.nombreArchivo) {
+        rutaTTS = conv.rutaAbsoluta;
+        mediaPathTTS = `${cuenta.id}/${conv.nombre}`;
+      }
+    } catch (errConv) {
+      console.warn(`${prefijo} no se pudo convertir TTS:`, errConv);
+    }
+
+    insertarMensaje(cuenta.id, conversacionId, "asistente", texto, {
+      tipo: "audio",
+      media_path: mediaPathTTS,
+    });
+
+    const meta = await obtenerMetadataAudio(rutaTTS);
+    const contenidoTTS = {
+      audio: { url: rutaTTS },
+      mimetype: "audio/ogg; codecs=opus",
+      ptt: true,
+      seconds: meta.seconds,
+      waveform: meta.waveform,
+    } as unknown as Parameters<typeof sock.sendMessage>[1];
+    const enviado = await sock.sendMessage(jid, contenidoTTS);
+    recordarEnvioBot(cuenta.id, enviado?.key?.id);
+    console.log(
+      `${prefijo} → parte ${numParte} (audio) enviada (${meta.seconds}s)`,
+    );
+    return true;
+  } catch (err) {
+    const detalle = err instanceof Error ? err.message : String(err);
+    console.error(
+      `${prefijo} error parte ${numParte} audio (ElevenLabs):`,
+      detalle,
+    );
+    try {
+      insertarMensaje(
+        cuenta.id,
+        conversacionId,
+        "sistema",
+        `[ElevenLabs falló: ${detalle.slice(0, 200)}] — fallback a texto.`,
+        { tipo: "sistema" },
+      );
+    } catch {}
+    return false;
+  }
 }
 
 /**
