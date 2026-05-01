@@ -27,6 +27,7 @@ import {
 } from "../baseDatos";
 import { generarRespuesta, type RespuestaIA } from "../openai";
 import { construirPromptSistema } from "../construirPrompt";
+import { iniciarLlamadaConContexto } from "../llamadas";
 import {
   descargarYGuardarMedia,
   desempacarMensaje,
@@ -327,6 +328,45 @@ async function generarYEnviarRespuesta(
       respuesta.transferir_a_humano.razon?.trim() || "Sin razón provista";
     console.log(`${prefijo} 🤝 HANDOFF a humano: ${razon}`);
     marcarConversacionNecesitaHumano(conversacion.id, razon);
+  }
+
+  // Si el LLM decidió iniciar una llamada Vapi, dispararla con el
+  // contexto de la conversación (cooldown 1h por conversación).
+  if (respuesta.iniciar_llamada?.activar) {
+    const razon = respuesta.iniciar_llamada.razon?.trim() || null;
+    console.log(`${prefijo} 📞 IA pide iniciar llamada: ${razon ?? "—"}`);
+    try {
+      const r = await iniciarLlamadaConContexto({
+        cuenta,
+        conversacion,
+        motivo: razon,
+        origen: "ia",
+      });
+      if (r.ok) {
+        console.log(
+          `${prefijo} ✓ llamada Vapi disparada por IA (call_id ${r.llamada?.vapi_call_id})`,
+        );
+      } else {
+        console.warn(
+          `${prefijo} ✗ no se inició llamada (${r.motivoBloqueo}): ${r.error}`,
+        );
+        // Si fue por cooldown, dejamos un mensaje sistema para que se
+        // entienda en el panel por qué la IA no llamó.
+        if (r.motivoBloqueo === "cooldown") {
+          try {
+            insertarMensaje(
+              cuenta.id,
+              conversacion.id,
+              "sistema",
+              `[IA quiso llamar pero hay otra llamada reciente, cooldown activo]`,
+              { tipo: "sistema" },
+            );
+          } catch {}
+        }
+      }
+    } catch (err) {
+      console.error(`${prefijo} error disparando llamada IA:`, err);
+    }
   }
 }
 

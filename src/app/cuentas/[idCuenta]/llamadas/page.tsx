@@ -175,7 +175,7 @@ export default function PaginaLlamadas() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-[1fr_2fr]">
+          <div className="grid gap-4 md:grid-cols-[minmax(220px,1fr)_2fr]">
             {/* Lista */}
             <div className="flex flex-col gap-2">
               {llamadas.map((l) => (

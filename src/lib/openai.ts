@@ -90,6 +90,10 @@ export interface RespuestaIA {
     activar: boolean;
     razon: string;
   };
+  iniciar_llamada: {
+    activar: boolean;
+    razon: string;
+  };
 }
 
 const ESQUEMA_RESPUESTA = {
@@ -136,8 +140,23 @@ const ESQUEMA_RESPUESTA = {
       required: ["activar", "razon"],
       additionalProperties: false,
     },
+    iniciar_llamada: {
+      type: "object",
+      description:
+        "Activar para disparar una LLAMADA TELEFÓNICA al cliente vía Vapi. Solo cuando la conversación está madura para una llamada de cierre, demo, agendamiento, o cuando el cliente acepta explícitamente que lo llames. La llamada usa el mismo número de WhatsApp del cliente.",
+      properties: {
+        activar: { type: "boolean" },
+        razon: {
+          type: "string",
+          description:
+            "Razón corta del por qué disparás la llamada (ej: 'cliente pidió que lo llamen para cerrar venta del plan premium').",
+        },
+      },
+      required: ["activar", "razon"],
+      additionalProperties: false,
+    },
   },
-  required: ["partes", "transferir_a_humano"],
+  required: ["partes", "transferir_a_humano", "iniciar_llamada"],
   additionalProperties: false,
 } as const;
 
@@ -189,6 +208,13 @@ INSTRUCCIONES DE FORMATO DE RESPUESTA (siempre seguir):
    - activar=true SOLO si: (a) el cliente pide hablar con humano/asesor/persona, (b) detectás frustración seria, (c) la situación requiere alguien con autoridad (refund, descuento grande, decisión legal/médica), (d) hay riesgo si das info incorrecta.
    - razon: resumí en 1-2 líneas para el operador.
    - Si activar=true, igual respondé al cliente con partes diciendo educadamente que un humano continuará.
+   - En caso normal: activar=false, razon="".
+
+6) "iniciar_llamada" dispara una LLAMADA TELEFÓNICA real al cliente usando Vapi.
+   - activar=true SOLO cuando: (a) el cliente acepta explícitamente que lo llames ("dale, llamame", "sí, prefiero hablar"), (b) la situación amerita conversación de voz (cierre de venta, demo, agendamiento, dudas complejas), (c) ya intercambiaron suficientes mensajes y la conversación está madura.
+   - NO uses iniciar_llamada como saludo, ni en los primeros mensajes, ni si el cliente solo pidió info por escrito.
+   - Antes de activarlo, AVISÁ al cliente en una parte de texto: "Listo, te llamo en unos segundos por WhatsApp Calling".
+   - Solo se puede usar 1 vez por hora por conversación (cooldown). Si lo activás de más, el sistema lo ignora silenciosamente.
    - En caso normal: activar=false, razon="".
 `.trim();
 
@@ -266,6 +292,9 @@ export async function generarRespuesta(
   }
   if (!parsed.transferir_a_humano) {
     parsed.transferir_a_humano = { activar: false, razon: "" };
+  }
+  if (!parsed.iniciar_llamada) {
+    parsed.iniciar_llamada = { activar: false, razon: "" };
   }
   return parsed;
 }

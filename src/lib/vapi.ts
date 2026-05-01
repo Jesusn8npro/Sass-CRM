@@ -203,13 +203,40 @@ export interface OpcionesIniciarLlamada {
   /** Metadata libre que vuelve en los webhooks. La usamos para
    *  vincular la llamada con la conversación local. */
   metadata?: Record<string, unknown>;
+  /** Override del firstMessage del assistant solo para esta llamada
+   *  (ej: "Hola Juan, te llamo de Lapeira como te dije por WhatsApp"). */
+  primerMensajeOverride?: string;
+  /** Contexto adicional que se inyecta como mensaje system extra,
+   *  por encima del prompt base del assistant. Sirve para pasarle a
+   *  Vapi el resumen de la conversación previa de WhatsApp. */
+  contextoAdicional?: string;
 }
 
 export async function iniciarLlamada(
   apiKey: string,
   opciones: OpcionesIniciarLlamada,
 ): Promise<VapiCall> {
-  return requestVapi<VapiCall>(apiKey, "POST", "/call", {
+  // Vapi acepta assistantOverrides para personalizar parte del assistant
+  // SOLO para esta llamada sin tocar el assistant compartido.
+  // Doc: https://docs.vapi.ai/api-reference/calls/create
+  const assistantOverrides: Record<string, unknown> = {};
+  if (opciones.primerMensajeOverride) {
+    assistantOverrides.firstMessage = opciones.primerMensajeOverride;
+  }
+  if (opciones.contextoAdicional) {
+    // Vapi acepta un array adicional de messages que se injecta al inicio
+    // del system. No reemplaza, agrega.
+    assistantOverrides.model = {
+      messages: [
+        {
+          role: "system" as const,
+          content: opciones.contextoAdicional,
+        },
+      ],
+    };
+  }
+
+  const cuerpo: Record<string, unknown> = {
     assistantId: opciones.assistantId,
     phoneNumberId: opciones.phoneNumberId,
     customer: {
@@ -217,7 +244,11 @@ export async function iniciarLlamada(
       name: opciones.nombreCliente,
     },
     metadata: opciones.metadata,
-  });
+  };
+  if (Object.keys(assistantOverrides).length > 0) {
+    cuerpo.assistantOverrides = assistantOverrides;
+  }
+  return requestVapi<VapiCall>(apiKey, "POST", "/call", cuerpo);
 }
 
 export async function obtenerLlamada(
