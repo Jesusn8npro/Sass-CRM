@@ -69,10 +69,34 @@ export function PanelConversacion({
     }
 
     cargar();
-    const intervalo = setInterval(cargar, 2000);
+    // Mensajes de la conv abierta: polling cada 4s (era 2s).
+    // Pausa cuando la pestaña no está visible — no tiene sentido
+    // refrescar mensajes si el usuario no está mirando.
+    let intervalo: NodeJS.Timeout | null = null;
+    const arrancar = () => {
+      if (intervalo) clearInterval(intervalo);
+      intervalo = setInterval(cargar, 4000);
+    };
+    const detener = () => {
+      if (intervalo) {
+        clearInterval(intervalo);
+        intervalo = null;
+      }
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        cargar();
+        arrancar();
+      } else {
+        detener();
+      }
+    };
+    if (document.visibilityState === "visible") arrancar();
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       cancelado = true;
-      clearInterval(intervalo);
+      detener();
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, [idCuenta, idConversacion]);
 

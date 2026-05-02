@@ -241,7 +241,22 @@ async function generarYEnviarRespuesta(
       cuenta.modelo,
     );
   } catch (err) {
-    console.error(`${prefijo} error llamando OpenAI:`, err);
+    const detalle =
+      err instanceof Error ? err.message : JSON.stringify(err);
+    console.error(`${prefijo} ✗ error llamando OpenAI: ${detalle}`);
+    if (detalle.includes("401") || detalle.includes("invalid_api_key")) {
+      console.error(
+        `${prefijo}   → OPENAI_API_KEY inválida o revocada. Verificá .env.local.`,
+      );
+    } else if (detalle.includes("429") || detalle.includes("quota")) {
+      console.error(
+        `${prefijo}   → Sin créditos en OpenAI o rate limit. Recargá saldo en https://platform.openai.com/account/billing`,
+      );
+    } else if (detalle.includes("model") && detalle.includes("not found")) {
+      console.error(
+        `${prefijo}   → Modelo "${cuenta.modelo ?? "default"}" no existe o tu cuenta no tiene acceso. Cambialo a 'gpt-4o-mini' en /configuracion → Comportamiento.`,
+      );
+    }
     try {
       await sock.sendPresenceUpdate("paused", jidParaEnviar);
     } catch {}
@@ -779,7 +794,18 @@ export function registrarManejadores(
         if (!telefonoMostrable) continue;
 
         const cuenta = await obtenerCuenta(cuentaId);
-        if (!cuenta || cuenta.esta_archivada) continue;
+        if (!cuenta) {
+          console.warn(
+            `${prefijo} ⚠ cuenta ${cuentaId} no existe en DB — mensaje ignorado`,
+          );
+          continue;
+        }
+        if (cuenta.esta_archivada) {
+          console.warn(
+            `${prefijo} ⚠ cuenta archivada — mensaje ignorado`,
+          );
+          continue;
+        }
 
         // ---- Procesar contenido del mensaje ----
         // Primero intentar texto plano, después media (audio/imagen/etc)
@@ -919,13 +945,30 @@ export function registrarManejadores(
         }
 
         const fresca = await obtenerConversacionPorId(conversacion.id);
-        if (!fresca || fresca.modo !== "IA") {
-          console.log(
-            `${prefijo} conversación ${conversacion.id} en modo HUMANO, no respondo automáticamente.`,
+        if (!fresca) {
+          console.warn(
+            `${prefijo} ⚠ conversación ${conversacion.id} no existe — no respondo`,
           );
           cancelarTimer(conversacion.id);
           continue;
         }
+        if (fresca.modo !== "IA") {
+          console.log(
+            `${prefijo} ⏸ conv en modo ${fresca.modo} (necesita_humano=${fresca.necesita_humano}) — no respondo. Cambialo a IA en el panel para que el bot retome.`,
+          );
+          cancelarTimer(conversacion.id);
+          continue;
+        }
+        // Pre-check OpenAI antes de armar la respuesta
+        if (!process.env.OPENAI_API_KEY) {
+          console.error(
+            `${prefijo} ✗ NO HAY OPENAI_API_KEY — el bot no puede generar respuesta. Agregala en .env.local y reiniciá.`,
+          );
+          continue;
+        }
+        console.log(
+          `${prefijo} ✓ generando respuesta IA para ${conversacion.nombre ?? telefonoMostrable}...`,
+        );
 
         // Buffering opcional
         if (cuenta.buffer_segundos > 0) {

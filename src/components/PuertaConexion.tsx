@@ -69,10 +69,34 @@ export function PuertaConexion() {
       }
     }
     chequear();
-    const intervalo = setInterval(chequear, 3000);
+    // Polling de cuentas cada 8s — antes era 3s, lo subimos para
+    // bajar drásticamente las requests. Pausa cuando la pestaña no
+    // está visible (visibilitychange).
+    let intervalo: NodeJS.Timeout | null = null;
+    const arrancar = () => {
+      if (intervalo) clearInterval(intervalo);
+      intervalo = setInterval(chequear, 8000);
+    };
+    const detener = () => {
+      if (intervalo) {
+        clearInterval(intervalo);
+        intervalo = null;
+      }
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        chequear();
+        arrancar();
+      } else {
+        detener();
+      }
+    };
+    if (document.visibilityState === "visible") arrancar();
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       cancelado = true;
-      clearInterval(intervalo);
+      detener();
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, []);
 
@@ -138,10 +162,32 @@ export function PuertaConexion() {
       }
     }
     cargar();
-    const intervalo = setInterval(cargar, 3000);
+    // Polling de conversaciones cada 6s con pausa por visibilidad.
+    let intervalo: NodeJS.Timeout | null = null;
+    const arrancar = () => {
+      if (intervalo) clearInterval(intervalo);
+      intervalo = setInterval(cargar, 6000);
+    };
+    const detener = () => {
+      if (intervalo) {
+        clearInterval(intervalo);
+        intervalo = null;
+      }
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        cargar();
+        arrancar();
+      } else {
+        detener();
+      }
+    };
+    if (document.visibilityState === "visible") arrancar();
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       cancelado = true;
-      clearInterval(intervalo);
+      detener();
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, [idCuentaSeleccionada, cuentaActual?.estado]);
 
