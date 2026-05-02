@@ -6,6 +6,8 @@ import {
   type WAMessage,
 } from "@whiskeysockets/baileys";
 import {
+  crearCita,
+  crearSeguimiento,
   extraerEmailsDelTexto,
   extraerTelefonosDelTexto,
   guardarContactosEmail,
@@ -397,6 +399,83 @@ async function generarYEnviarRespuesta(
       console.error(`${prefijo} error disparando llamada IA:`, err);
     }
   }
+
+  // Programar seguimiento futuro si la IA lo decidió
+  if (respuesta.programar_seguimiento?.activar) {
+    const ps = respuesta.programar_seguimiento;
+    const fecha = parseFechaIso(ps.fecha_iso);
+    if (fecha === null) {
+      console.warn(
+        `${prefijo} ⚠ programar_seguimiento con fecha_iso inválida: "${ps.fecha_iso}"`,
+      );
+    } else if (!ps.contenido?.trim()) {
+      console.warn(`${prefijo} ⚠ programar_seguimiento sin contenido, ignorado`);
+    } else {
+      try {
+        const s = crearSeguimiento(
+          cuenta.id,
+          conversacion.id,
+          ps.contenido.trim(),
+          fecha,
+          "ia",
+        );
+        console.log(
+          `${prefijo} ⏰ seguimiento ${s.id} programado para ${new Date(fecha * 1000).toISOString()}: ${ps.razon ?? ""}`,
+        );
+      } catch (err) {
+        console.error(`${prefijo} error programando seguimiento:`, err);
+      }
+    }
+  }
+
+  // Agendar cita si la IA lo decidió
+  if (respuesta.agendar_cita?.activar) {
+    const ac = respuesta.agendar_cita;
+    const fecha = parseFechaIso(ac.fecha_iso);
+    if (fecha === null) {
+      console.warn(
+        `${prefijo} ⚠ agendar_cita con fecha_iso inválida: "${ac.fecha_iso}"`,
+      );
+    } else {
+      try {
+        const c = crearCita(cuenta.id, {
+          conversacion_id: conversacion.id,
+          cliente_nombre: conversacion.nombre ?? `+${conversacion.telefono}`,
+          cliente_telefono: conversacion.telefono,
+          fecha_hora: fecha,
+          duracion_min: ac.duracion_min > 0 ? ac.duracion_min : 30,
+          tipo: ac.tipo?.trim() || null,
+          notas: ac.notas?.trim() || null,
+        });
+        console.log(
+          `${prefijo} 📅 cita ${c.id} agendada: ${new Date(fecha * 1000).toISOString()} (${ac.tipo})`,
+        );
+        // Mensaje sistema visible en el panel
+        try {
+          insertarMensaje(
+            cuenta.id,
+            conversacion.id,
+            "sistema",
+            `📅 Cita agendada: ${ac.tipo || "(sin tipo)"} el ${new Date(fecha * 1000).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}${ac.notas ? ` — ${ac.notas}` : ""}`,
+            { tipo: "sistema" },
+          );
+        } catch {}
+      } catch (err) {
+        console.error(`${prefijo} error agendando cita:`, err);
+      }
+    }
+  }
+}
+
+function parseFechaIso(iso: string | undefined): number | null {
+  if (!iso || typeof iso !== "string") return null;
+  const ms = new Date(iso).getTime();
+  if (!Number.isFinite(ms)) return null;
+  const ahora = Date.now();
+  // Solo aceptamos fechas futuras (entre 5 min y 1 año adelante)
+  if (ms < ahora + 5 * 60 * 1000) return null;
+  if (ms > ahora + 365 * 86400 * 1000) return null;
+  return Math.floor(ms / 1000);
 }
 
 function dormir(ms: number): Promise<void> {

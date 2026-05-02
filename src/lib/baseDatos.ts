@@ -196,6 +196,47 @@ export interface Inversion {
   creada_en: number;
 }
 
+export type EstadoSeguimiento =
+  | "pendiente"
+  | "enviado"
+  | "cancelado"
+  | "fallido";
+
+export interface SeguimientoProgramado {
+  id: number;
+  cuenta_id: number;
+  conversacion_id: number;
+  contenido: string;
+  programado_para: number;
+  estado: EstadoSeguimiento;
+  origen: "humano" | "ia";
+  razon_cancelacion: string | null;
+  enviado_en: number | null;
+  creado_en: number;
+}
+
+export type EstadoCita =
+  | "agendada"
+  | "confirmada"
+  | "realizada"
+  | "cancelada"
+  | "no_asistio";
+
+export interface Cita {
+  id: number;
+  cuenta_id: number;
+  conversacion_id: number | null;
+  cliente_nombre: string;
+  cliente_telefono: string | null;
+  fecha_hora: number;
+  duracion_min: number;
+  tipo: string | null;
+  estado: EstadoCita;
+  notas: string | null;
+  recordatorio_enviado: 0 | 1;
+  creada_en: number;
+}
+
 export interface EtiquetaResumen {
   id: number;
   nombre: string;
@@ -434,6 +475,47 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_inversiones_cuenta
     ON inversiones(cuenta_id, fecha DESC);
+
+  CREATE TABLE IF NOT EXISTS seguimientos_programados (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cuenta_id INTEGER NOT NULL,
+    conversacion_id INTEGER NOT NULL,
+    contenido TEXT NOT NULL,
+    programado_para INTEGER NOT NULL,
+    estado TEXT NOT NULL DEFAULT 'pendiente'
+      CHECK(estado IN ('pendiente','enviado','cancelado','fallido')),
+    origen TEXT NOT NULL DEFAULT 'humano'
+      CHECK(origen IN ('humano','ia')),
+    razon_cancelacion TEXT,
+    enviado_en INTEGER,
+    creado_en INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_seguimientos_cuenta_estado
+    ON seguimientos_programados(cuenta_id, estado, programado_para);
+  CREATE INDEX IF NOT EXISTS idx_seguimientos_conversacion
+    ON seguimientos_programados(conversacion_id, estado);
+
+  CREATE TABLE IF NOT EXISTS citas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cuenta_id INTEGER NOT NULL,
+    conversacion_id INTEGER,
+    cliente_nombre TEXT NOT NULL,
+    cliente_telefono TEXT,
+    fecha_hora INTEGER NOT NULL,
+    duracion_min INTEGER NOT NULL DEFAULT 30,
+    tipo TEXT,
+    estado TEXT NOT NULL DEFAULT 'agendada'
+      CHECK(estado IN ('agendada','confirmada','realizada','cancelada','no_asistio')),
+    notas TEXT,
+    recordatorio_enviado INTEGER NOT NULL DEFAULT 0,
+    creada_en INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_citas_cuenta_fecha
+    ON citas(cuenta_id, fecha_hora);
+  CREATE INDEX IF NOT EXISTS idx_citas_conversacion
+    ON citas(conversacion_id);
 
   CREATE TABLE IF NOT EXISTS llamadas_vapi (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2369,6 +2451,253 @@ export function obtenerMetricas(cuentaId: number): MetricasCuenta {
     por_etiqueta: porEtiqueta,
     mensajes_por_dia: mensajesDia,
   };
+}
+
+// ============================================================
+// API pública: seguimientos programados (anti-ban)
+// ============================================================
+const stmtInsertarSeguimiento = db.prepare(
+  `INSERT INTO seguimientos_programados
+     (cuenta_id, conversacion_id, contenido, programado_para, origen)
+   VALUES (?, ?, ?, ?, ?)`,
+);
+const stmtListarSeguimientosPendientesGlobal = db.prepare(
+  `SELECT * FROM seguimientos_programados
+   WHERE estado = 'pendiente' AND programado_para <= ?
+   ORDER BY programado_para ASC, id ASC`,
+);
+const stmtListarSeguimientosDeCuenta = db.prepare(
+  `SELECT s.*, c.nombre AS nombre_contacto, c.telefono
+   FROM seguimientos_programados s
+   LEFT JOIN conversaciones c ON c.id = s.conversacion_id
+   WHERE s.cuenta_id = ?
+   ORDER BY
+     CASE s.estado WHEN 'pendiente' THEN 0 WHEN 'enviado' THEN 1 ELSE 2 END,
+     s.programado_para ASC`,
+);
+const stmtMarcarSeguimientoEnviado = db.prepare(
+  `UPDATE seguimientos_programados
+   SET estado = 'enviado', enviado_en = unixepoch()
+   WHERE id = ?`,
+);
+const stmtCancelarSeguimiento = db.prepare(
+  `UPDATE seguimientos_programados
+   SET estado = 'cancelado', razon_cancelacion = ?
+   WHERE id = ? AND estado = 'pendiente'`,
+);
+const stmtMarcarSeguimientoFallido = db.prepare(
+  `UPDATE seguimientos_programados
+   SET estado = 'fallido', razon_cancelacion = ?
+   WHERE id = ?`,
+);
+const stmtMensajesPosterioresUsuario = db.prepare(
+  `SELECT COUNT(*) AS n FROM mensajes
+   WHERE conversacion_id = ? AND rol = 'usuario' AND creado_en > ?`,
+);
+const stmtMensajesEnviadosHoyCuenta = db.prepare(
+  `SELECT COUNT(*) AS n FROM mensajes
+   WHERE cuenta_id = ?
+     AND rol IN ('asistente','humano')
+     AND creado_en >= ?`,
+);
+
+export interface SeguimientoConContacto extends SeguimientoProgramado {
+  nombre_contacto: string | null;
+  telefono: string | null;
+}
+
+export function crearSeguimiento(
+  cuentaId: number,
+  conversacionId: number,
+  contenido: string,
+  programadoPara: number,
+  origen: "humano" | "ia" = "humano",
+): SeguimientoProgramado {
+  const info = stmtInsertarSeguimiento.run(
+    cuentaId,
+    conversacionId,
+    contenido,
+    programadoPara,
+    origen,
+  );
+  return obtenerSeguimiento(Number(info.lastInsertRowid)) as SeguimientoProgramado;
+}
+
+const stmtObtenerSeguimiento = db.prepare(
+  `SELECT * FROM seguimientos_programados WHERE id = ?`,
+);
+export function obtenerSeguimiento(id: number): SeguimientoProgramado | null {
+  return (
+    (stmtObtenerSeguimiento.get(id) as SeguimientoProgramado | undefined) ??
+    null
+  );
+}
+
+export function listarSeguimientosPendientesDue(
+  ahora: number = Math.floor(Date.now() / 1000),
+): SeguimientoProgramado[] {
+  return stmtListarSeguimientosPendientesGlobal.all(
+    ahora,
+  ) as SeguimientoProgramado[];
+}
+
+export function listarSeguimientosDeCuenta(
+  cuentaId: number,
+): SeguimientoConContacto[] {
+  return stmtListarSeguimientosDeCuenta.all(
+    cuentaId,
+  ) as SeguimientoConContacto[];
+}
+
+export function marcarSeguimientoEnviado(id: number): void {
+  stmtMarcarSeguimientoEnviado.run(id);
+}
+
+export function cancelarSeguimiento(id: number, razon: string): void {
+  stmtCancelarSeguimiento.run(razon, id);
+}
+
+export function marcarSeguimientoFallido(id: number, razon: string): void {
+  stmtMarcarSeguimientoFallido.run(razon, id);
+}
+
+export function contarMensajesUsuarioPosteriores(
+  conversacionId: number,
+  desde: number,
+): number {
+  return (
+    stmtMensajesPosterioresUsuario.get(conversacionId, desde) as { n: number }
+  ).n;
+}
+
+export function contarMensajesEnviadosHoyCuenta(cuentaId: number): number {
+  const ahora = Math.floor(Date.now() / 1000);
+  const inicioHoy = ahora - (ahora % 86400);
+  return (
+    stmtMensajesEnviadosHoyCuenta.get(cuentaId, inicioHoy) as { n: number }
+  ).n;
+}
+
+// ============================================================
+// API pública: citas (agenda)
+// ============================================================
+const stmtInsertarCita = db.prepare(
+  `INSERT INTO citas
+    (cuenta_id, conversacion_id, cliente_nombre, cliente_telefono,
+     fecha_hora, duracion_min, tipo, notas)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+);
+const stmtObtenerCita = db.prepare(`SELECT * FROM citas WHERE id = ?`);
+const stmtActualizarCita = db.prepare(
+  `UPDATE citas SET
+     cliente_nombre = ?,
+     cliente_telefono = ?,
+     fecha_hora = ?,
+     duracion_min = ?,
+     tipo = ?,
+     estado = ?,
+     notas = ?,
+     recordatorio_enviado = ?
+   WHERE id = ?`,
+);
+const stmtBorrarCita = db.prepare(`DELETE FROM citas WHERE id = ?`);
+const stmtListarCitasDeCuenta = db.prepare(
+  `SELECT * FROM citas WHERE cuenta_id = ?
+   ORDER BY fecha_hora ASC, id ASC`,
+);
+const stmtListarCitasFuturas = db.prepare(
+  `SELECT * FROM citas WHERE cuenta_id = ? AND fecha_hora >= ?
+     AND estado IN ('agendada','confirmada')
+   ORDER BY fecha_hora ASC LIMIT ?`,
+);
+const stmtCitasParaRecordar = db.prepare(
+  `SELECT * FROM citas
+   WHERE estado IN ('agendada','confirmada')
+     AND recordatorio_enviado = 0
+     AND fecha_hora BETWEEN ? AND ?`,
+);
+
+export function crearCita(
+  cuentaId: number,
+  datos: {
+    conversacion_id?: number | null;
+    cliente_nombre: string;
+    cliente_telefono?: string | null;
+    fecha_hora: number;
+    duracion_min?: number;
+    tipo?: string | null;
+    notas?: string | null;
+  },
+): Cita {
+  const info = stmtInsertarCita.run(
+    cuentaId,
+    datos.conversacion_id ?? null,
+    datos.cliente_nombre,
+    datos.cliente_telefono ?? null,
+    datos.fecha_hora,
+    datos.duracion_min ?? 30,
+    datos.tipo ?? null,
+    datos.notas ?? null,
+  );
+  return obtenerCita(Number(info.lastInsertRowid)) as Cita;
+}
+
+export function obtenerCita(id: number): Cita | null {
+  return (stmtObtenerCita.get(id) as Cita | undefined) ?? null;
+}
+
+export function listarCitasDeCuenta(cuentaId: number): Cita[] {
+  return stmtListarCitasDeCuenta.all(cuentaId) as Cita[];
+}
+
+export function listarCitasFuturasDeCuenta(
+  cuentaId: number,
+  limite = 50,
+): Cita[] {
+  const ahora = Math.floor(Date.now() / 1000);
+  return stmtListarCitasFuturas.all(cuentaId, ahora, limite) as Cita[];
+}
+
+export function listarCitasParaRecordar(
+  desde: number,
+  hasta: number,
+): Cita[] {
+  return stmtCitasParaRecordar.all(desde, hasta) as Cita[];
+}
+
+export function actualizarCita(
+  id: number,
+  cambios: Partial<{
+    cliente_nombre: string;
+    cliente_telefono: string | null;
+    fecha_hora: number;
+    duracion_min: number;
+    tipo: string | null;
+    estado: EstadoCita;
+    notas: string | null;
+    recordatorio_enviado: 0 | 1;
+  }>,
+): Cita | null {
+  const actual = obtenerCita(id);
+  if (!actual) return null;
+  stmtActualizarCita.run(
+    cambios.cliente_nombre ?? actual.cliente_nombre,
+    cambios.cliente_telefono === undefined
+      ? actual.cliente_telefono
+      : cambios.cliente_telefono,
+    cambios.fecha_hora ?? actual.fecha_hora,
+    cambios.duracion_min ?? actual.duracion_min,
+    cambios.tipo === undefined ? actual.tipo : cambios.tipo,
+    cambios.estado ?? actual.estado,
+    cambios.notas === undefined ? actual.notas : cambios.notas,
+    cambios.recordatorio_enviado ?? actual.recordatorio_enviado,
+    id,
+  );
+  return obtenerCita(id);
+}
+
+export function borrarCita(id: number): void {
+  stmtBorrarCita.run(id);
 }
 
 export default db;

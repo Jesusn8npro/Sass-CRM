@@ -155,6 +155,18 @@ export function EncabezadoCuenta({
                 texto="Inversiones"
                 icono="dinero"
               />
+              <ItemMenu
+                href={`/cuentas/${cuenta.id}/agenda`}
+                onClick={() => setMenuAbierto(false)}
+                texto="Agenda"
+                icono="agenda"
+              />
+              <ItemMenu
+                href={`/cuentas/${cuenta.id}/seguimientos`}
+                onClick={() => setMenuAbierto(false)}
+                texto="Seguimientos"
+                icono="reloj"
+              />
               <div className="border-t border-zinc-100 dark:border-zinc-800" />
               <ItemMenu
                 href={`/cuentas/${cuenta.id}/configuracion`}
@@ -223,7 +235,7 @@ function ItemMenu({
   href: string;
   onClick: () => void;
   texto: string;
-  icono: "pipeline" | "productos" | "telefono" | "dinero" | "ajustes";
+  icono: "pipeline" | "productos" | "telefono" | "dinero" | "ajustes" | "agenda" | "reloj";
 }) {
   return (
     <Link
@@ -272,6 +284,24 @@ function IconoMenu({ nombre }: { nombre: string }) {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={cls}>
         <line x1="12" y1="1" x2="12" y2="23" />
         <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+      </svg>
+    );
+  }
+  if (nombre === "agenda") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={cls}>
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+      </svg>
+    );
+  }
+  if (nombre === "reloj") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={cls}>
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
       </svg>
     );
   }

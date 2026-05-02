@@ -97,6 +97,21 @@ export interface RespuestaIA {
   /** IDs (strings) de los productos del catálogo por los que el cliente
    *  preguntó o mostró interés en este turno. Vacío si no aplica. */
   productos_de_interes: string[];
+  /** Programar un mensaje futuro para re-enganchar al cliente. */
+  programar_seguimiento: {
+    activar: boolean;
+    fecha_iso: string;
+    contenido: string;
+    razon: string;
+  };
+  /** Agendar una cita / reunión / demo para una fecha futura. */
+  agendar_cita: {
+    activar: boolean;
+    fecha_iso: string;
+    duracion_min: number;
+    tipo: string;
+    notas: string;
+  };
 }
 
 const ESQUEMA_RESPUESTA = {
@@ -164,12 +179,69 @@ const ESQUEMA_RESPUESTA = {
         "IDs (en string) de los productos del catálogo por los que el cliente preguntó o mostró interés en su mensaje (precio, info, foto, comprar). Vacío si no aplica.",
       items: { type: "string" },
     },
+    programar_seguimiento: {
+      type: "object",
+      description:
+        "Programar un MENSAJE futuro de re-engagement (ej: el cliente dijo 'lo pienso y te aviso', programá un follow-up en 24-48h). Solo activar si tiene sentido — no programar mensajes que el cliente no espera.",
+      properties: {
+        activar: { type: "boolean" },
+        fecha_iso: {
+          type: "string",
+          description:
+            "Fecha y hora ISO 8601 (ej: '2026-05-03T14:00:00'). En zona local del cliente. Si activar=false, poné string vacío.",
+        },
+        contenido: {
+          type: "string",
+          description:
+            "El texto exacto que se enviará al cliente. Puede mencionar el contexto de la conversación. Vacío si activar=false.",
+        },
+        razon: {
+          type: "string",
+          description:
+            "Por qué programaste este seguimiento (ej: 'cliente prometió decidir el viernes'). Vacío si activar=false.",
+        },
+      },
+      required: ["activar", "fecha_iso", "contenido", "razon"],
+      additionalProperties: false,
+    },
+    agendar_cita: {
+      type: "object",
+      description:
+        "Agendar una CITA / reunión / demo / asesoría / clase. Solo si el cliente CONFIRMÓ una fecha y hora específica. Genera entrada en la agenda del negocio + recordatorio automático 1h antes.",
+      properties: {
+        activar: { type: "boolean" },
+        fecha_iso: {
+          type: "string",
+          description:
+            "Fecha y hora ISO 8601 (ej: '2026-05-03T14:00:00'). Vacío si activar=false.",
+        },
+        duracion_min: {
+          type: "number",
+          description:
+            "Duración en minutos (default 30). Usá 0 si activar=false.",
+        },
+        tipo: {
+          type: "string",
+          description:
+            "Tipo de cita (ej: 'demo', 'asesoría', 'clase', 'consulta'). Vacío si activar=false.",
+        },
+        notas: {
+          type: "string",
+          description:
+            "Detalles relevantes para el operador (ej: 'cliente quiere ver acordeón Hohner Corona III'). Vacío si activar=false.",
+        },
+      },
+      required: ["activar", "fecha_iso", "duracion_min", "tipo", "notas"],
+      additionalProperties: false,
+    },
   },
   required: [
     "partes",
     "transferir_a_humano",
     "iniciar_llamada",
     "productos_de_interes",
+    "programar_seguimiento",
+    "agendar_cita",
   ],
   additionalProperties: false,
 } as const;
@@ -230,7 +302,26 @@ INSTRUCCIONES DE FORMATO DE RESPUESTA (siempre seguir):
    la sección "Catálogo de productos" arriba con su id. Vacío si no aplica o
    si tu cuenta no tiene catálogo.
 
-7) "iniciar_llamada" dispara una LLAMADA TELEFÓNICA real al cliente usando Vapi.
+7) "programar_seguimiento" — usalo para agendar un MENSAJE futuro de re-engagement.
+   - Casos: cliente dijo "lo pienso y te aviso", "el viernes te confirmo", "déjame ver mi
+     agenda". En esos casos programá un follow-up suave para esa fecha.
+   - NO uses para spam. Si el cliente no pidió tiempo o no mostró interés, dejalo vacío.
+   - El sistema NO va a enviar el seguimiento si el cliente respondió antes (se cancela
+     automáticamente). Tampoco si supera el rate limit del día (anti-ban WhatsApp).
+   - Cuando activar=true, escribí en "contenido" el texto EXACTO que se va a enviar
+     al cliente (ej: "Hola Juan, paso a saludarte como dijiste el lunes. ¿Decidiste
+     algo sobre el plan premium?").
+   - Si no aplica: activar=false, todos los demás campos vacíos.
+
+8) "agendar_cita" — usalo cuando el cliente CONFIRME una fecha y hora específica para
+   una cita (demo, asesoría, clase, reunión, consulta). El sistema:
+   - Crea la cita en la agenda del negocio.
+   - Manda recordatorio automático al cliente 1h antes.
+   - El operador la ve en /agenda.
+   - NO inventes citas si el cliente no las confirmó.
+   - Si no aplica: activar=false, fecha_iso="", duracion_min=0, tipo="", notas="".
+
+9) "iniciar_llamada" dispara una LLAMADA TELEFÓNICA real al cliente usando Vapi.
    - activar=true SOLO cuando: (a) el cliente acepta explícitamente que lo llames ("dale, llamame", "sí, prefiero hablar"), (b) la situación amerita conversación de voz (cierre de venta, demo, agendamiento, dudas complejas), (c) ya intercambiaron suficientes mensajes y la conversación está madura.
    - NO uses iniciar_llamada como saludo, ni en los primeros mensajes, ni si el cliente solo pidió info por escrito.
    - Antes de activarlo, AVISÁ al cliente en una parte de texto: "Listo, te llamo en unos segundos por WhatsApp Calling".
@@ -318,6 +409,23 @@ export async function generarRespuesta(
   }
   if (!Array.isArray(parsed.productos_de_interes)) {
     parsed.productos_de_interes = [];
+  }
+  if (!parsed.programar_seguimiento) {
+    parsed.programar_seguimiento = {
+      activar: false,
+      fecha_iso: "",
+      contenido: "",
+      razon: "",
+    };
+  }
+  if (!parsed.agendar_cita) {
+    parsed.agendar_cita = {
+      activar: false,
+      fecha_iso: "",
+      duracion_min: 0,
+      tipo: "",
+      notas: "",
+    };
   }
   return parsed;
 }

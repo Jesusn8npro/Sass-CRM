@@ -1,6 +1,18 @@
 import {
+  actualizarCita,
   actualizarHeartbeatCuenta,
+  cancelarSeguimiento,
+  contarMensajesEnviadosHoyCuenta,
+  contarMensajesUsuarioPosteriores,
+  encolarBandejaSalida,
+  insertarMensaje,
+  listarCitasParaRecordar,
   listarCuentas,
+  listarSeguimientosPendientesDue,
+  marcarSeguimientoEnviado,
+  marcarSeguimientoFallido,
+  obtenerConversacionPorId,
+  obtenerCuenta,
 } from "@/lib/baseDatos";
 import { obtenerGestor } from "@/lib/baileys/gestor";
 
@@ -10,6 +22,8 @@ interface EstadoCicloVida {
   intervaloBandeja: NodeJS.Timeout | null;
   intervaloHeartbeat: NodeJS.Timeout | null;
   intervaloSincronizacion: NodeJS.Timeout | null;
+  intervaloSeguimientos: NodeJS.Timeout | null;
+  intervaloRecordatoriosCitas: NodeJS.Timeout | null;
   apagado: boolean;
   guardiasInstalados: boolean;
 }
@@ -28,11 +42,181 @@ if (!g[claveGlobal]) {
     intervaloBandeja: null,
     intervaloHeartbeat: null,
     intervaloSincronizacion: null,
+    intervaloSeguimientos: null,
+    intervaloRecordatoriosCitas: null,
     apagado: false,
     guardiasInstalados: false,
   };
 }
 const estado: EstadoCicloVida = g[claveGlobal]!;
+
+// Reglas anti-ban WhatsApp:
+//  - Solo a clientes que escribieron antes (al menos 1 msg user en la conv)
+//  - Si los últimos 2 msgs son del bot/humano sin respuesta del cliente → no enviar
+//  - Max N mensajes por cuenta por día (configurable, default 80)
+//  - Solo enviar entre 8am y 10pm (zona del server, no del cliente — simplificación)
+const LIMITE_DIARIO_POR_CUENTA = 80;
+const HORA_INICIO = 8;
+const HORA_FIN = 22;
+
+function dentroHorarioHumano(): boolean {
+  const h = new Date().getHours();
+  return h >= HORA_INICIO && h < HORA_FIN;
+}
+
+/**
+ * Procesa los seguimientos cuya fecha programada ya pasó.
+ * Aplica reglas anti-ban antes de poner el mensaje en bandeja_salida.
+ * Llamado cada 30s desde el scheduler.
+ */
+function procesarSeguimientosPendientes(): void {
+  if (!dentroHorarioHumano()) return;
+
+  let pendientes;
+  try {
+    pendientes = listarSeguimientosPendientesDue();
+  } catch (err) {
+    console.error("[bot] error listando seguimientos:", err);
+    return;
+  }
+  if (pendientes.length === 0) return;
+
+  // Cache rápido por cuenta para no consultar mil veces el mismo conteo
+  const cuentaActiva = new Map<number, boolean>();
+  const enviadosHoyPorCuenta = new Map<number, number>();
+
+  for (const s of pendientes) {
+    try {
+      // 1. Cuenta activa (no archivada, conectada)
+      if (!cuentaActiva.has(s.cuenta_id)) {
+        const c = obtenerCuenta(s.cuenta_id);
+        cuentaActiva.set(
+          s.cuenta_id,
+          !!c && c.esta_archivada === 0 && c.estado === "conectado",
+        );
+      }
+      if (!cuentaActiva.get(s.cuenta_id)) {
+        marcarSeguimientoFallido(s.id, "cuenta inactiva o desconectada");
+        continue;
+      }
+
+      // 2. Si el cliente respondió desde que se programó → cancelar
+      const respuestasNuevas = contarMensajesUsuarioPosteriores(
+        s.conversacion_id,
+        s.creado_en,
+      );
+      if (respuestasNuevas > 0) {
+        cancelarSeguimiento(
+          s.id,
+          "el cliente respondió, no necesita seguimiento",
+        );
+        console.log(
+          `[bot] ⏭ seguimiento ${s.id} cancelado (cliente respondió)`,
+        );
+        continue;
+      }
+
+      // 3. Conversación válida + cliente que ya escribió antes
+      const conv = obtenerConversacionPorId(s.conversacion_id);
+      if (!conv) {
+        marcarSeguimientoFallido(s.id, "conversación borrada");
+        continue;
+      }
+
+      // 4. Rate limit diario por cuenta
+      if (!enviadosHoyPorCuenta.has(s.cuenta_id)) {
+        enviadosHoyPorCuenta.set(
+          s.cuenta_id,
+          contarMensajesEnviadosHoyCuenta(s.cuenta_id),
+        );
+      }
+      const enviadosHoy = enviadosHoyPorCuenta.get(s.cuenta_id)!;
+      if (enviadosHoy >= LIMITE_DIARIO_POR_CUENTA) {
+        // No marcamos fallido — lo dejamos pendiente para mañana
+        continue;
+      }
+      enviadosHoyPorCuenta.set(s.cuenta_id, enviadosHoy + 1);
+
+      // 5. Encolar en bandeja_salida (la encoladora ya tiene jitter implícito
+      //    por el procesamiento cada 2s — para varios seguimientos
+      //    consecutivos el efecto es escalonado).
+      try {
+        encolarBandejaSalida(
+          s.cuenta_id,
+          s.conversacion_id,
+          conv.telefono,
+          s.contenido,
+        );
+        // Insertar como mensaje rol=humano (asistente) para que aparezca
+        // en el panel inmediatamente. La bandeja la enviará por Baileys.
+        insertarMensaje(
+          s.cuenta_id,
+          s.conversacion_id,
+          "asistente",
+          s.contenido,
+        );
+        marcarSeguimientoEnviado(s.id);
+        console.log(
+          `[bot] ⏰→ seguimiento ${s.id} enviado a +${conv.telefono} (origen ${s.origen})`,
+        );
+      } catch (err) {
+        console.error(`[bot] error encolando seguimiento ${s.id}:`, err);
+        marcarSeguimientoFallido(s.id, "error al encolar");
+      }
+    } catch (err) {
+      console.error(`[bot] error procesando seguimiento ${s.id}:`, err);
+    }
+  }
+}
+
+/**
+ * Manda recordatorios automáticos 1h antes de cada cita.
+ * Marca recordatorio_enviado=1 para no duplicar.
+ */
+function procesarRecordatoriosCitas(): void {
+  const ahora = Math.floor(Date.now() / 1000);
+  const en1h = ahora + 60 * 60;
+  let citas;
+  try {
+    citas = listarCitasParaRecordar(ahora, en1h);
+  } catch (err) {
+    console.error("[bot] error listando citas a recordar:", err);
+    return;
+  }
+  if (citas.length === 0) return;
+
+  for (const cita of citas) {
+    try {
+      const cuenta = obtenerCuenta(cita.cuenta_id);
+      if (!cuenta || cuenta.esta_archivada === 1 || cuenta.estado !== "conectado") {
+        continue;
+      }
+      const tel = cita.cliente_telefono || cita.conversacion_id
+        ? cita.cliente_telefono ?? null
+        : null;
+      if (!tel) continue;
+
+      const fechaStr = new Date(cita.fecha_hora * 1000).toLocaleString(
+        "es-ES",
+        { hour: "2-digit", minute: "2-digit" },
+      );
+      const tipoStr = cita.tipo ? ` para tu ${cita.tipo}` : "";
+      const contenido = `Hola ${cita.cliente_nombre.split(" ")[0]}, te recuerdo que tu cita${tipoStr} es hoy a las ${fechaStr}. ¿Confirmás?`;
+
+      const idConv = cita.conversacion_id;
+      if (idConv) {
+        encolarBandejaSalida(cita.cuenta_id, idConv, tel, contenido);
+        insertarMensaje(cita.cuenta_id, idConv, "asistente", contenido);
+      }
+      actualizarCita(cita.id, { recordatorio_enviado: 1 });
+      console.log(
+        `[bot] 📅 recordatorio enviado para cita ${cita.id} (${cita.cliente_nombre}) a las ${fechaStr}`,
+      );
+    } catch (err) {
+      console.error(`[bot] error recordatorio cita ${cita.id}:`, err);
+    }
+  }
+}
 
 function emitirHeartbeats(): void {
   // Salud del bot ≠ salud del socket. Mientras el proceso esté vivo,
@@ -70,6 +254,10 @@ function instalarGuardias(): void {
     if (estado.intervaloHeartbeat) clearInterval(estado.intervaloHeartbeat);
     if (estado.intervaloSincronizacion)
       clearInterval(estado.intervaloSincronizacion);
+    if (estado.intervaloSeguimientos)
+      clearInterval(estado.intervaloSeguimientos);
+    if (estado.intervaloRecordatoriosCitas)
+      clearInterval(estado.intervaloRecordatoriosCitas);
     try {
       await obtenerGestor().apagarTodo();
     } catch {
@@ -139,6 +327,24 @@ export async function arrancarBotEnProceso(): Promise<void> {
         console.error("[bot] error en sincronización:", err);
       }
     }, 3000);
+
+    // Seguimientos programados: cada 30s revisa los que ya están due
+    estado.intervaloSeguimientos = setInterval(() => {
+      try {
+        procesarSeguimientosPendientes();
+      } catch (err) {
+        console.error("[bot] error procesando seguimientos:", err);
+      }
+    }, 30_000);
+
+    // Recordatorios de citas: cada 60s revisa citas en la próxima hora
+    estado.intervaloRecordatoriosCitas = setInterval(() => {
+      try {
+        procesarRecordatoriosCitas();
+      } catch (err) {
+        console.error("[bot] error recordatorios citas:", err);
+      }
+    }, 60_000);
 
     estado.arrancado = true;
   } finally {
