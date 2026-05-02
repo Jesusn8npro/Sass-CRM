@@ -75,6 +75,7 @@ export interface Cuenta {
   modelo: string | null;
   voz_elevenlabs: string | null;
   vapi_api_key: string | null;
+  vapi_public_key: string | null;
   vapi_assistant_id: string | null;
   vapi_phone_id: string | null;
   vapi_webhook_secret: string | null;
@@ -341,6 +342,53 @@ export interface LlamadaVapi {
   terminada_en: string | null;
 }
 
+export interface AssistantVapi {
+  id: string;
+  cuenta_id: string;
+  nombre: string;
+  vapi_assistant_id: string | null;
+  prompt_extra: string;
+  primer_mensaje: string;
+  voz_elevenlabs: string | null;
+  modelo: string;
+  max_segundos: number;
+  grabar: boolean;
+  es_default: boolean;
+  esta_activo: boolean;
+  sincronizado_en: string | null;
+  creado_en: string;
+  actualizado_en: string;
+}
+
+export type EstadoLlamadaProgramada =
+  | "pendiente"
+  | "ejecutada"
+  | "cancelada"
+  | "fallida";
+
+export interface LlamadaProgramada {
+  id: string;
+  cuenta_id: string;
+  conversacion_id: string | null;
+  assistant_id: string | null;
+  telefono_destino: string | null;
+  motivo: string | null;
+  origen: "humano" | "ia";
+  programada_para: string;
+  estado: EstadoLlamadaProgramada;
+  llamada_vapi_id: string | null;
+  razon_cancelacion: string | null;
+  ejecutada_en: string | null;
+  creada_en: string;
+  actualizada_en: string;
+}
+
+export interface LlamadaProgramadaConContexto extends LlamadaProgramada {
+  nombre_contacto: string | null;
+  telefono_conv: string | null;
+  assistant_nombre: string | null;
+}
+
 export interface MetricasCuenta {
   conversaciones_total: number;
   conversaciones_necesitan_humano: number;
@@ -504,6 +552,7 @@ export async function actualizarCuenta(
     modelo: string | null;
     voz_elevenlabs: string | null;
     vapi_api_key: string | null;
+    vapi_public_key: string | null;
     vapi_assistant_id: string | null;
     vapi_phone_id: string | null;
     vapi_webhook_secret: string | null;
@@ -2432,4 +2481,255 @@ export async function obtenerMetricas(
     por_etiqueta,
     mensajes_por_dia,
   };
+}
+
+// ============================================================
+// ASSISTANTS VAPI (multi-assistant por cuenta)
+// ============================================================
+
+export async function listarAssistantsDeCuenta(
+  cuentaId: string,
+): Promise<AssistantVapi[]> {
+  const { data, error } = await db()
+    .from("assistants_vapi")
+    .select("*")
+    .eq("cuenta_id", cuentaId)
+    .order("es_default", { ascending: false })
+    .order("creado_en", { ascending: true });
+  if (error) lanzar(error, "listarAssistantsDeCuenta");
+  return (data ?? []) as AssistantVapi[];
+}
+
+export async function obtenerAssistantLocal(
+  id: string,
+): Promise<AssistantVapi | null> {
+  const { data, error } = await db()
+    .from("assistants_vapi")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) lanzar(error, "obtenerAssistantLocal");
+  return (data as AssistantVapi) ?? null;
+}
+
+export async function obtenerAssistantDefault(
+  cuentaId: string,
+): Promise<AssistantVapi | null> {
+  const { data, error } = await db()
+    .from("assistants_vapi")
+    .select("*")
+    .eq("cuenta_id", cuentaId)
+    .eq("es_default", true)
+    .maybeSingle();
+  if (error) lanzar(error, "obtenerAssistantDefault");
+  return (data as AssistantVapi) ?? null;
+}
+
+export async function crearAssistantLocal(
+  cuentaId: string,
+  datos: {
+    nombre: string;
+    prompt_extra?: string;
+    primer_mensaje?: string;
+    voz_elevenlabs?: string | null;
+    modelo?: string;
+    max_segundos?: number;
+    grabar?: boolean;
+    es_default?: boolean;
+  },
+): Promise<AssistantVapi> {
+  // Si se marca como default, primero quitamos default de los demás
+  // (el índice único parcial nos protege pero hacemos limpio).
+  if (datos.es_default) {
+    await db()
+      .from("assistants_vapi")
+      .update({ es_default: false })
+      .eq("cuenta_id", cuentaId)
+      .eq("es_default", true);
+  }
+  const { data, error } = await db()
+    .from("assistants_vapi")
+    .insert({
+      cuenta_id: cuentaId,
+      nombre: datos.nombre.trim(),
+      prompt_extra: datos.prompt_extra ?? "",
+      primer_mensaje: datos.primer_mensaje ?? "",
+      voz_elevenlabs: datos.voz_elevenlabs ?? null,
+      modelo: datos.modelo ?? "gpt-4o-mini",
+      max_segundos: datos.max_segundos ?? 600,
+      grabar: datos.grabar ?? true,
+      es_default: datos.es_default ?? false,
+    })
+    .select()
+    .single();
+  if (error) lanzar(error, "crearAssistantLocal");
+  return data as AssistantVapi;
+}
+
+export async function actualizarAssistantLocal(
+  id: string,
+  cambios: Partial<{
+    nombre: string;
+    vapi_assistant_id: string | null;
+    prompt_extra: string;
+    primer_mensaje: string;
+    voz_elevenlabs: string | null;
+    modelo: string;
+    max_segundos: number;
+    grabar: boolean;
+    es_default: boolean;
+    esta_activo: boolean;
+    sincronizado_en: string | null;
+  }>,
+): Promise<AssistantVapi | null> {
+  // Si se está marcando como default, quitamos default a los hermanos.
+  if (cambios.es_default === true) {
+    const { data: actual } = await db()
+      .from("assistants_vapi")
+      .select("cuenta_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (actual) {
+      await db()
+        .from("assistants_vapi")
+        .update({ es_default: false })
+        .eq("cuenta_id", (actual as { cuenta_id: string }).cuenta_id)
+        .neq("id", id);
+    }
+  }
+  const { data, error } = await db()
+    .from("assistants_vapi")
+    .update(cambios)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) lanzar(error, "actualizarAssistantLocal");
+  return data as AssistantVapi;
+}
+
+export async function borrarAssistantLocal(id: string): Promise<void> {
+  const { error } = await db()
+    .from("assistants_vapi")
+    .delete()
+    .eq("id", id);
+  if (error) lanzar(error, "borrarAssistantLocal");
+}
+
+// ============================================================
+// LLAMADAS PROGRAMADAS
+// ============================================================
+
+export async function crearLlamadaProgramada(
+  cuentaId: string,
+  datos: {
+    conversacion_id?: string | null;
+    assistant_id?: string | null;
+    telefono_destino?: string | null;
+    motivo?: string | null;
+    origen?: "humano" | "ia";
+    programada_para: string; // ISO
+  },
+): Promise<LlamadaProgramada> {
+  const { data, error } = await db()
+    .from("llamadas_programadas")
+    .insert({
+      cuenta_id: cuentaId,
+      conversacion_id: datos.conversacion_id ?? null,
+      assistant_id: datos.assistant_id ?? null,
+      telefono_destino: datos.telefono_destino ?? null,
+      motivo: datos.motivo ?? null,
+      origen: datos.origen ?? "humano",
+      programada_para: datos.programada_para,
+    })
+    .select()
+    .single();
+  if (error) lanzar(error, "crearLlamadaProgramada");
+  return data as LlamadaProgramada;
+}
+
+export async function listarLlamadasProgramadasDeCuenta(
+  cuentaId: string,
+): Promise<LlamadaProgramadaConContexto[]> {
+  const { data, error } = await db()
+    .from("llamadas_programadas")
+    .select(
+      `*,
+       conversaciones (nombre, telefono),
+       assistants_vapi (nombre)`,
+    )
+    .eq("cuenta_id", cuentaId)
+    .order("programada_para", { ascending: true });
+  if (error) lanzar(error, "listarLlamadasProgramadasDeCuenta");
+  type Fila = LlamadaProgramada & {
+    conversaciones: { nombre: string | null; telefono: string } | null;
+    assistants_vapi: { nombre: string } | null;
+  };
+  return ((data ?? []) as Fila[]).map((f) => ({
+    ...f,
+    nombre_contacto: f.conversaciones?.nombre ?? null,
+    telefono_conv: f.conversaciones?.telefono ?? null,
+    assistant_nombre: f.assistants_vapi?.nombre ?? null,
+  }));
+}
+
+/**
+ * Llamadas pendientes cuya hora ya pasó. El scheduler las procesa
+ * cada 30s y dispara el outbound a Vapi.
+ */
+export async function listarLlamadasProgramadasDue(): Promise<
+  LlamadaProgramada[]
+> {
+  const ahora = new Date().toISOString();
+  const { data, error } = await db()
+    .from("llamadas_programadas")
+    .select("*")
+    .eq("estado", "pendiente")
+    .lte("programada_para", ahora)
+    .order("programada_para", { ascending: true })
+    .limit(50);
+  if (error) lanzar(error, "listarLlamadasProgramadasDue");
+  return (data ?? []) as LlamadaProgramada[];
+}
+
+export async function marcarLlamadaProgramadaEjecutada(
+  id: string,
+  llamadaVapiId: string,
+): Promise<void> {
+  const { error } = await db()
+    .from("llamadas_programadas")
+    .update({
+      estado: "ejecutada",
+      llamada_vapi_id: llamadaVapiId,
+      ejecutada_en: new Date().toISOString(),
+    })
+    .eq("id", id);
+  if (error) lanzar(error, "marcarLlamadaProgramadaEjecutada");
+}
+
+export async function marcarLlamadaProgramadaFallida(
+  id: string,
+  razon: string,
+): Promise<void> {
+  const { error } = await db()
+    .from("llamadas_programadas")
+    .update({
+      estado: "fallida",
+      razon_cancelacion: razon.slice(0, 500),
+    })
+    .eq("id", id);
+  if (error) lanzar(error, "marcarLlamadaProgramadaFallida");
+}
+
+export async function cancelarLlamadaProgramada(
+  id: string,
+  razon: string,
+): Promise<void> {
+  const { error } = await db()
+    .from("llamadas_programadas")
+    .update({
+      estado: "cancelada",
+      razon_cancelacion: razon.slice(0, 500),
+    })
+    .eq("id", id);
+  if (error) lanzar(error, "cancelarLlamadaProgramada");
 }

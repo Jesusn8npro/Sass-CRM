@@ -15,6 +15,7 @@ import {
   crearLlamadaVapi,
   insertarMensaje,
   listarLlamadasDeConversacion,
+  obtenerAssistantDefault,
   obtenerHistorialReciente,
   type Conversacion,
   type Cuenta,
@@ -136,6 +137,12 @@ interface OpcionesIniciar {
   motivo?: string | null;
   /** True si la llamada fue disparada por la IA (loggin distinto). */
   origen: "ia" | "humano";
+  /** Si viene, override el assistant default de la cuenta. Útil
+   *  cuando el operador (o la IA) elige "vendedor" / "soporte" /
+   *  "cobranza" para esta llamada específica. */
+  assistantIdOverride?: string | null;
+  /** Override del firstMessage del assistant solo para esta llamada. */
+  primerMensajeOverride?: string | null;
 }
 
 export async function iniciarLlamadaConContexto(
@@ -150,17 +157,31 @@ export async function iniciarLlamadaConContexto(
       motivoBloqueo: "vapi_no_configurado",
     };
   }
-  if (!cuenta.vapi_assistant_id?.trim()) {
-    return {
-      ok: false,
-      error: "Falta sincronizar el assistant en Vapi (Ajustes → Llamadas).",
-      motivoBloqueo: "vapi_no_configurado",
-    };
-  }
   if (!cuenta.vapi_phone_id?.trim()) {
     return {
       ok: false,
       error: "Falta Phone Number ID de Vapi.",
+      motivoBloqueo: "vapi_no_configurado",
+    };
+  }
+  // Resolver assistant a usar: override > default de la cuenta (vapi_assistant_id legacy
+  // o assistants_vapi.es_default=true) > error.
+  let assistantIdAUsar = opciones.assistantIdOverride?.trim() || null;
+  if (!assistantIdAUsar) {
+    // 1) Intentar assistant default de la nueva tabla
+    const def = await obtenerAssistantDefault(cuenta.id);
+    if (def?.vapi_assistant_id?.trim()) {
+      assistantIdAUsar = def.vapi_assistant_id.trim();
+    } else if (cuenta.vapi_assistant_id?.trim()) {
+      // 2) Fallback al campo legacy en cuentas
+      assistantIdAUsar = cuenta.vapi_assistant_id.trim();
+    }
+  }
+  if (!assistantIdAUsar) {
+    return {
+      ok: false,
+      error:
+        "No hay assistant Vapi configurado. Creá uno en Configuración → Assistants Vapi.",
       motivoBloqueo: "vapi_no_configurado",
     };
   }
@@ -193,7 +214,7 @@ export async function iniciarLlamadaConContexto(
 
   try {
     const respuesta = await iniciarLlamada(cuenta.vapi_api_key, {
-      assistantId: cuenta.vapi_assistant_id,
+      assistantId: assistantIdAUsar,
       phoneNumberId: cuenta.vapi_phone_id,
       numeroCliente: telefonoE164,
       nombreCliente: conversacion.nombre ?? undefined,
@@ -203,7 +224,8 @@ export async function iniciarLlamadaConContexto(
         origen,
       },
       contextoAdicional: contexto,
-      primerMensajeOverride: primerMensaje,
+      primerMensajeOverride:
+        opciones.primerMensajeOverride?.trim() || primerMensaje,
     });
 
     if (!respuesta.id) {

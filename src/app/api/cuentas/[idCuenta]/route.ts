@@ -51,6 +51,7 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     modelo?: unknown;
     voz_elevenlabs?: unknown;
     vapi_api_key?: unknown;
+    vapi_public_key?: unknown;
     vapi_assistant_id?: unknown;
     vapi_phone_id?: unknown;
     vapi_prompt_extra?: unknown;
@@ -96,6 +97,12 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
       : payload.vapi_api_key === null
       ? null
       : undefined;
+  const vapiPublicKey =
+    typeof payload.vapi_public_key === "string"
+      ? payload.vapi_public_key
+      : payload.vapi_public_key === null
+      ? null
+      : undefined;
   const vapiAssistant =
     typeof payload.vapi_assistant_id === "string"
       ? payload.vapi_assistant_id
@@ -137,6 +144,7 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     modelo,
     voz_elevenlabs: voz,
     vapi_api_key: vapiKey,
+    vapi_public_key: vapiPublicKey,
     vapi_assistant_id: vapiAssistant,
     vapi_phone_id: vapiPhone,
     vapi_prompt_extra: vapiPromptExtra,

@@ -13,6 +13,7 @@ import type {
 import { InterruptorTema } from "@/components/InterruptorTema";
 import { BotonReproducirVoz } from "@/components/BotonReproducirVoz";
 import { ClonadorVoz } from "@/components/ClonadorVoz";
+import { AdminAssistantsVapi } from "@/components/AdminAssistantsVapi";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -189,6 +190,10 @@ export default function PaginaConfiguracion() {
         <SeccionComportamiento cuenta={cuenta} onActualizada={setCuenta} />
         <SeccionVoz cuenta={cuenta} onActualizada={setCuenta} />
         <SeccionVapi cuenta={cuenta} onActualizada={setCuenta} />
+        <AdminAssistantsVapi
+          idCuenta={cuenta.id}
+          vapiPublicKey={cuenta.vapi_public_key}
+        />
         <SeccionRespuestasRapidas
           idCuenta={cuenta.id}
           respuestas={respuestas}
@@ -1115,6 +1120,7 @@ function SeccionVoz({ cuenta, onActualizada }: PropsSeccionBase) {
 // ============================================================
 function SeccionVapi({ cuenta, onActualizada }: PropsSeccionBase) {
   const [apiKey, setApiKey] = useState(cuenta.vapi_api_key ?? "");
+  const [publicKey, setPublicKey] = useState(cuenta.vapi_public_key ?? "");
   const [phoneId, setPhoneId] = useState(cuenta.vapi_phone_id ?? "");
   const [promptExtra, setPromptExtra] = useState(
     cuenta.vapi_prompt_extra ?? "",
@@ -1147,6 +1153,7 @@ function SeccionVapi({ cuenta, onActualizada }: PropsSeccionBase) {
 
   useEffect(() => {
     setApiKey(cuenta.vapi_api_key ?? "");
+    setPublicKey(cuenta.vapi_public_key ?? "");
     setPhoneId(cuenta.vapi_phone_id ?? "");
     setPromptExtra(cuenta.vapi_prompt_extra ?? "");
     setPrimerMensaje(cuenta.vapi_primer_mensaje ?? "");
@@ -1167,6 +1174,7 @@ function SeccionVapi({ cuenta, onActualizada }: PropsSeccionBase) {
     setExito(false);
     const r = await patchCuenta(cuenta.id, {
       vapi_api_key: apiKey.trim() || null,
+      vapi_public_key: publicKey.trim() || null,
       vapi_phone_id: phoneId.trim() || null,
       vapi_prompt_extra: promptExtra.trim() || null,
       vapi_primer_mensaje: primerMensaje.trim() || null,
@@ -1297,7 +1305,7 @@ function SeccionVapi({ cuenta, onActualizada }: PropsSeccionBase) {
     >
       <form onSubmit={guardar} className="flex flex-col gap-4">
         <div>
-          <Etiqueta>Vapi API Key</Etiqueta>
+          <Etiqueta>Vapi API Key (private/secret)</Etiqueta>
           <input
             type="password"
             value={apiKey}
@@ -1306,7 +1314,8 @@ function SeccionVapi({ cuenta, onActualizada }: PropsSeccionBase) {
             className={`${inputClases()} font-mono text-xs`}
           />
           <p className="mt-1.5 text-[11px] text-zinc-500">
-            La obtenés en{" "}
+            Server-side, solo se usa desde el servidor para crear assistants
+            y disparar llamadas. La obtenés en{" "}
             <a
               href="https://dashboard.vapi.ai/account"
               target="_blank"
@@ -1315,7 +1324,23 @@ function SeccionVapi({ cuenta, onActualizada }: PropsSeccionBase) {
             >
               dashboard.vapi.ai/account
             </a>
-            . Solo se guarda en tu base de datos local.
+            .
+          </p>
+        </div>
+
+        <div>
+          <Etiqueta>Vapi Public Key (opcional)</Etiqueta>
+          <input
+            type="text"
+            value={publicKey}
+            onChange={(e) => setPublicKey(e.target.value)}
+            placeholder="sb_pub_... o UUID"
+            className={`${inputClases()} font-mono text-xs`}
+          />
+          <p className="mt-1.5 text-[11px] text-zinc-500">
+            Opcional — necesaria para probar tus assistants con el
+            micrófono desde el navegador (sin gastar minutos de outbound).
+            Es safe-to-expose por diseño de Vapi.
           </p>
         </div>
 

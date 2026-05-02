@@ -8,6 +8,7 @@ import {
 import {
   contarMensajesDeConversacion,
   crearCita,
+  crearLlamadaProgramada,
   crearSeguimiento,
   extraerEmailsDelTexto,
   extraerTelefonosDelTexto,
@@ -469,6 +470,50 @@ async function generarYEnviarRespuesta(
         } catch {}
       } catch (err) {
         console.error(`${prefijo} error agendando cita:`, err);
+      }
+    }
+  }
+
+  // Agendar llamada Vapi a futuro si la IA lo decidió.
+  // (distinto de iniciar_llamada que dispara YA — agendar_llamada
+  //  programa para una fecha futura. El scheduler la dispara.)
+  if (respuesta.agendar_llamada?.activar) {
+    const al = respuesta.agendar_llamada;
+    const fecha = parseFechaIso(al.fecha_iso);
+    if (fecha === null) {
+      console.warn(
+        `${prefijo} ⚠ agendar_llamada con fecha_iso inválida: "${al.fecha_iso}"`,
+      );
+    } else {
+      try {
+        const lp = await crearLlamadaProgramada(cuenta.id, {
+          conversacion_id: conversacion.id,
+          motivo: al.motivo?.trim() || null,
+          origen: "ia",
+          programada_para: fecha,
+        });
+        console.log(
+          `${prefijo} 📞⏰ llamada agendada ${lp.id} para ${new Date(fecha).toISOString()}: ${al.motivo}`,
+        );
+        try {
+          await insertarMensaje(
+            cuenta.id,
+            conversacion.id,
+            "sistema",
+            `📞⏰ Llamada agendada para ${new Date(fecha).toLocaleString(
+              "es-ES",
+              {
+                day: "2-digit",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              },
+            )}${al.motivo ? ` — ${al.motivo}` : ""}`,
+            { tipo: "sistema" },
+          );
+        } catch {}
+      } catch (err) {
+        console.error(`${prefijo} error agendando llamada:`, err);
       }
     }
   }

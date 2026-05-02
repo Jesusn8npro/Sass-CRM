@@ -14,6 +14,7 @@ Este documento cubre **qué se hizo en la sub-fase 6.A.1**, **cómo probarlo**, 
 | **6.A.4 — Landing PRO** | ✅ Completada | Landing nueva con hero, métricas, mockup, 9 funciones, casos de uso, 3 planes de precios, FAQ y CTA final. |
 | **6.A.5 — Historial bajo demanda** | ✅ Completada | Auto-fetch del historial al primer mensaje de un contacto + botón "cargar más antiguos" en el panel. Sin import masivo. |
 | **6.B.1 — Planes + Mi Cuenta** | ✅ Completada | Free/Pro/Business con límites enforced en POST /api/cuentas (402). Página /app/mi-cuenta con perfil + plan + uso. Badge en sidebar con uso vs límite. |
+| **6.C.1 — Vapi pro: multi-assistants + llamadas programadas + Web SDK** | ✅ Completada | N assistants Vapi por cuenta (vendedor/soporte/cobranza). Llamadas programadas a futuro con scheduler. IA puede agendar llamadas con `agendar_llamada`. Test desde browser con `@vapi-ai/web`. |
 
 > **6.A.2 logrado**: cada usuario nuevo arranca de cero (0 cuentas, 0 conversaciones). Las APIs verifican `cuenta.usuario_id === auth.uid()` antes de devolver/mutar nada, y RLS por relación protege a nivel DB como segunda capa.
 
@@ -310,6 +311,46 @@ Buckets creados con migración SQL `11_storage_buckets_y_policies`:
 ### Cleanup local pendiente
 - Detener Next con Ctrl+C y borrar `data/messages.db*` (lockeados mientras corre).
 - Borrar `auth/<id-numerico>/` (legacy) — los nuevos son UUIDs.
+
+## 📋 Resumen 6.C.1 — Vapi pro
+
+Vapi ya estaba conectado de antes (cliente HTTP, llamadas con contexto WhatsApp, webhook con secret, cooldown 1h, integración con bot IA). Esta fase agrega 4 capacidades nuevas en simultáneo:
+
+### 1. Multi-assistants por cuenta
+- Tabla nueva `assistants_vapi` con N assistants (vendedor/soporte/cobranza). Uno marcado como **default** (índice único parcial).
+- Migración de datos: por cada cuenta con `vapi_assistant_id` legacy → primer row de `assistants_vapi` con `es_default=true`.
+- API CRUD: `GET/POST /api/cuentas/[idCuenta]/assistants`, `GET/PATCH/DELETE /api/cuentas/[idCuenta]/assistants/[idAssistant]`, y `POST .../sincronizar` (push a Vapi — crea o actualiza).
+- `iniciarLlamadaConContexto` ahora acepta `assistantIdOverride`. Resuelve: override > default de la nueva tabla > campo legacy `vapi_assistant_id` en cuentas. Compat 100%.
+- UI: componente `AdminAssistantsVapi` con lista, edición inline, sync, marcar default, borrar. Insertado en /configuracion debajo de Vapi.
+
+### 2. Llamadas programadas a futuro
+- Tabla nueva `llamadas_programadas` con `programada_para`, `estado` (pendiente/ejecutada/cancelada/fallida), `assistant_id` opcional, `motivo`, `origen` (humano/ia).
+- Scheduler `procesarLlamadasProgramadas` en `cicloVida.ts` corre cada 30s, respeta horario humano (8-22h del server), delega en `iniciarLlamadaConContexto` (que aplica cooldown, normalización, contexto WhatsApp).
+- API: `GET/POST /api/cuentas/[idCuenta]/llamadas-programadas`, `DELETE .../[idLlamada]` (soft = marca como cancelada).
+- UI: componente `LlamadasProgramadas` insertado al tope de `/llamadas`. Form para programar (conv + fecha + assistant opcional + motivo) + lista de pendientes con botón cancelar + collapsible con últimas procesadas.
+
+### 3. IA puede agendar llamadas
+- Nuevo campo `agendar_llamada` en `ESQUEMA_RESPUESTA` de `openai.ts`: `{ activar: boolean, fecha_iso: string, motivo: string }`.
+- Manejador procesa el campo (similar a `agendar_cita`): valida fecha (5min-1año futuro) y crea row en `llamadas_programadas` con origen=`ia`. Mensaje sistema visible en panel.
+- Distinto de `iniciar_llamada` (que dispara YA): este es para "llamame mañana 10am".
+
+### 4. Vapi Web SDK (probar con micrófono)
+- `npm i @vapi-ai/web` v2.5.2.
+- Nueva columna `cuentas.vapi_public_key` (safe-to-expose por diseño de Vapi). User la pega en /configuracion.
+- Componente `PruebaAssistantVapi`: inicializa `new Vapi(publicKey)`, captura eventos call-start/call-end/error/transcript-final, botón "Probar ahora" + "Cortar". Muestra transcript en vivo.
+- Integrado en cada fila de assistant del `AdminAssistantsVapi` (solo aparece si el assistant ya está sincronizado en Vapi y la cuenta tiene public key).
+
+### Migraciones SQL
+- `13_vapi_multi_assistants_y_programadas`: dos tablas nuevas + RLS por relación + migración del assistant legacy de cada cuenta a la nueva tabla como default.
+- `14_cuentas_vapi_public_key`: agrega `vapi_public_key TEXT` en `cuentas`.
+
+### Flujo end-to-end típico
+1. Usuario configura Vapi en /configuracion (api_key + public_key + phone_id).
+2. Crea assistant "Vendedor cierre" → click "Crear en Vapi" (sincroniza).
+3. Click "Probar con micrófono" → habla con el agente en el navegador, sin gastar minutos de outbound.
+4. Click "Marcar como default".
+5. En el panel de conversación, el operador click "Llamar" — se usa el default. O en /llamadas → "Programar llamada" → "Vendedor cierre" → fecha futura → motivo → save. El scheduler la dispara a la hora.
+6. La IA del bot, durante una conversación, puede decidir `agendar_llamada` → queda en pendientes → scheduler la dispara.
 
 ## 📋 Resumen 6.A.3 — Storage cutover completo
 

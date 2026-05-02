@@ -8,13 +8,18 @@ import {
   insertarMensaje,
   listarCitasParaRecordar,
   listarCuentas,
+  listarLlamadasProgramadasDue,
   listarSeguimientosPendientesDue,
+  marcarLlamadaProgramadaEjecutada,
+  marcarLlamadaProgramadaFallida,
   marcarSeguimientoEnviado,
   marcarSeguimientoFallido,
+  obtenerAssistantLocal,
   obtenerConversacionPorId,
   obtenerCuenta,
 } from "@/lib/baseDatos";
 import { obtenerGestor } from "@/lib/baileys/gestor";
+import { iniciarLlamadaConContexto } from "@/lib/llamadas";
 
 interface EstadoCicloVida {
   arrancando: boolean;
@@ -24,6 +29,7 @@ interface EstadoCicloVida {
   intervaloSincronizacion: NodeJS.Timeout | null;
   intervaloSeguimientos: NodeJS.Timeout | null;
   intervaloRecordatoriosCitas: NodeJS.Timeout | null;
+  intervaloLlamadasProgramadas: NodeJS.Timeout | null;
   apagado: boolean;
   guardiasInstalados: boolean;
 }
@@ -44,6 +50,7 @@ if (!g[claveGlobal]) {
     intervaloSincronizacion: null,
     intervaloSeguimientos: null,
     intervaloRecordatoriosCitas: null,
+    intervaloLlamadasProgramadas: null,
     apagado: false,
     guardiasInstalados: false,
   };
@@ -218,6 +225,88 @@ async function procesarRecordatoriosCitas(): Promise<void> {
   }
 }
 
+/**
+ * Procesa llamadas Vapi programadas cuya hora ya pasó. Cada 30s.
+ * Para cada una: chequea cuenta activa + conversación válida +
+ * delega en iniciarLlamadaConContexto (que aplica cooldown,
+ * normalización de teléfono, contexto WhatsApp, assistant override).
+ */
+async function procesarLlamadasProgramadas(): Promise<void> {
+  if (!dentroHorarioHumano()) return;
+  let pendientes;
+  try {
+    pendientes = await listarLlamadasProgramadasDue();
+  } catch (err) {
+    console.error("[bot] error listando llamadas programadas:", err);
+    return;
+  }
+  if (pendientes.length === 0) return;
+
+  for (const lp of pendientes) {
+    try {
+      const cuenta = await obtenerCuenta(lp.cuenta_id);
+      if (!cuenta || cuenta.esta_archivada) {
+        await marcarLlamadaProgramadaFallida(lp.id, "cuenta inactiva");
+        continue;
+      }
+      // Resolver conversación (puede ser null si la llamada se programó
+      // sin conv asociada — caso edge, no soportado todavía).
+      if (!lp.conversacion_id) {
+        await marcarLlamadaProgramadaFallida(
+          lp.id,
+          "llamada sin conversación asociada",
+        );
+        continue;
+      }
+      const conv = await obtenerConversacionPorId(lp.conversacion_id);
+      if (!conv) {
+        await marcarLlamadaProgramadaFallida(lp.id, "conversación borrada");
+        continue;
+      }
+      // Resolver assistant override
+      let assistantIdOverride: string | null = null;
+      if (lp.assistant_id) {
+        const ass = await obtenerAssistantLocal(lp.assistant_id);
+        if (ass?.vapi_assistant_id) {
+          assistantIdOverride = ass.vapi_assistant_id;
+        }
+      }
+      const r = await iniciarLlamadaConContexto({
+        cuenta,
+        conversacion: conv,
+        telefonoOverride: lp.telefono_destino ?? null,
+        motivo: lp.motivo,
+        origen: lp.origen,
+        assistantIdOverride,
+      });
+      if (r.ok && r.llamada) {
+        await marcarLlamadaProgramadaEjecutada(lp.id, r.llamada.id);
+        console.log(
+          `[bot] 📞⏰ llamada programada ${lp.id} ejecutada (call ${r.llamada.vapi_call_id})`,
+        );
+      } else {
+        await marcarLlamadaProgramadaFallida(
+          lp.id,
+          r.error ?? "fallo al iniciar",
+        );
+        console.warn(
+          `[bot] ⚠ llamada programada ${lp.id} falló (${r.motivoBloqueo}): ${r.error}`,
+        );
+      }
+    } catch (err) {
+      console.error(`[bot] error procesando llamada programada ${lp.id}:`, err);
+      try {
+        await marcarLlamadaProgramadaFallida(
+          lp.id,
+          err instanceof Error ? err.message : "error desconocido",
+        );
+      } catch {
+        /* ignorar */
+      }
+    }
+  }
+}
+
 async function emitirHeartbeats(): Promise<void> {
   // Salud del bot ≠ salud del socket. Mientras el proceso esté vivo,
   // marcamos heartbeat para TODAS las cuentas no archivadas, aunque
@@ -258,6 +347,8 @@ function instalarGuardias(): void {
       clearInterval(estado.intervaloSeguimientos);
     if (estado.intervaloRecordatoriosCitas)
       clearInterval(estado.intervaloRecordatoriosCitas);
+    if (estado.intervaloLlamadasProgramadas)
+      clearInterval(estado.intervaloLlamadasProgramadas);
     try {
       await obtenerGestor().apagarTodo();
     } catch {
@@ -343,6 +434,13 @@ export async function arrancarBotEnProceso(): Promise<void> {
         console.error("[bot] error recordatorios citas:", err);
       });
     }, 60_000);
+
+    // Llamadas Vapi programadas: cada 30s revisa las que ya están due
+    estado.intervaloLlamadasProgramadas = setInterval(() => {
+      void procesarLlamadasProgramadas().catch((err) => {
+        console.error("[bot] error procesando llamadas programadas:", err);
+      });
+    }, 30_000);
 
     estado.arrancado = true;
   } finally {

@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import type { Cuenta, EstadoLlamada, LlamadaVapi } from "@/lib/baseDatos";
 import { InterruptorTema } from "@/components/InterruptorTema";
+import { LlamadasProgramadas } from "@/components/LlamadasProgramadas";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -163,6 +164,7 @@ export default function PaginaLlamadas() {
       </header>
 
       <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
+        <LlamadasProgramadas idCuenta={idCuenta} />
         {llamadas.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center dark:border-zinc-700 dark:bg-zinc-900">
             <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">

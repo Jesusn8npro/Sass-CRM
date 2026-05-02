@@ -111,6 +111,13 @@ export interface RespuestaIA {
     tipo: string;
     notas: string;
   };
+  /** Programar una LLAMADA telefónica Vapi a futuro (no ahora).
+   * Distinto de iniciar_llamada (que llama YA). */
+  agendar_llamada: {
+    activar: boolean;
+    fecha_iso: string;
+    motivo: string;
+  };
 }
 
 const ESQUEMA_RESPUESTA = {
@@ -233,6 +240,26 @@ const ESQUEMA_RESPUESTA = {
       required: ["activar", "fecha_iso", "duracion_min", "tipo", "notas"],
       additionalProperties: false,
     },
+    agendar_llamada: {
+      type: "object",
+      description:
+        "Programar una LLAMADA telefónica Vapi a una fecha/hora futura. Distinto de iniciar_llamada (que llama AHORA). Útil cuando el cliente dice 'llamame mañana a las 10am' o 'mejor el viernes después de las 3'. El bot va a disparar la llamada automáticamente a esa hora con el contexto de la conversación.",
+      properties: {
+        activar: { type: "boolean" },
+        fecha_iso: {
+          type: "string",
+          description:
+            "Fecha y hora ISO 8601 (ej: '2026-05-03T14:00:00'). Vacío si activar=false. Mínimo 5 minutos a futuro.",
+        },
+        motivo: {
+          type: "string",
+          description:
+            "Razón de la llamada agendada (ej: 'cierre venta plan premium acordado el viernes'). Vacío si activar=false.",
+        },
+      },
+      required: ["activar", "fecha_iso", "motivo"],
+      additionalProperties: false,
+    },
   },
   required: [
     "partes",
@@ -241,6 +268,7 @@ const ESQUEMA_RESPUESTA = {
     "productos_de_interes",
     "programar_seguimiento",
     "agendar_cita",
+    "agendar_llamada",
   ],
   additionalProperties: false,
 } as const;
