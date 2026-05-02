@@ -453,7 +453,23 @@ function db(): SupabaseClient {
 
 // Helpers
 function lanzar(error: unknown, contexto: string): never {
-  const msg = error instanceof Error ? error.message : String(error);
+  // Los errores de Supabase/PostgREST vienen como objetos con
+  // { message, code, details, hint }. String(obj) da "[object Object]"
+  // que es inútil para debug. Construimos un mensaje completo.
+  let msg: string;
+  if (error instanceof Error) {
+    msg = error.message;
+  } else if (error && typeof error === "object") {
+    const e = error as Record<string, unknown>;
+    const partes: string[] = [];
+    if (typeof e.message === "string") partes.push(e.message);
+    if (typeof e.code === "string") partes.push(`code=${e.code}`);
+    if (typeof e.details === "string") partes.push(`details=${e.details}`);
+    if (typeof e.hint === "string") partes.push(`hint=${e.hint}`);
+    msg = partes.length > 0 ? partes.join(" | ") : JSON.stringify(error);
+  } else {
+    msg = String(error);
+  }
   throw new Error(`[baseDatos:${contexto}] ${msg}`);
 }
 
