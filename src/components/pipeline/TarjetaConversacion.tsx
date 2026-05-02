@@ -114,7 +114,7 @@ export function TarjetaConversacion({
           )}
         </div>
         <Link
-          href={`/?cuenta=${idCuenta}&conv=${conversacion.id}`}
+          href={`/app?cuenta=${idCuenta}&conv=${conversacion.id}`}
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
           className="shrink-0 rounded-full p-1 text-zinc-400 opacity-0 transition-opacity hover:text-zinc-700 group-hover:opacity-100 dark:hover:text-zinc-200"

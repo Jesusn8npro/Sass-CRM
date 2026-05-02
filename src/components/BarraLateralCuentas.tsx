@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { Cuenta, EstadoConexion } from "@/lib/baseDatos";
 import { InterruptorTema } from "./InterruptorTema";
+import { crearClienteNavegador } from "@/lib/supabase/cliente-navegador";
 
 export interface CuentaConEstado extends Cuenta {
   bot_vivo?: boolean;
@@ -116,6 +118,71 @@ export function BarraLateralCuentas({
           <InterruptorTema />
         </div>
       </div>
+
+      <BloqueUsuario />
     </aside>
+  );
+}
+
+/**
+ * Footer con email del usuario logueado + botón cerrar sesión.
+ * Usa el cliente Supabase del navegador para leer la sesión actual.
+ */
+function BloqueUsuario() {
+  const [email, setEmail] = useState<string | null>(null);
+  const [cerrando, setCerrando] = useState(false);
+
+  useEffect(() => {
+    const supabase = crearClienteNavegador();
+    supabase.auth.getUser().then(({ data }) => {
+      setEmail(data.user?.email ?? null);
+    });
+  }, []);
+
+  async function cerrarSesion() {
+    if (cerrando) return;
+    setCerrando(true);
+    // Vamos por POST al endpoint que limpia cookies del lado server.
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = "/api/auth/cerrar-sesion";
+    document.body.appendChild(form);
+    form.submit();
+  }
+
+  return (
+    <div className="border-t border-zinc-200 px-3 py-3 dark:border-zinc-800">
+      <div className="flex items-center gap-2">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+          {email ? email.slice(0, 2).toUpperCase() : "··"}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+            {email ?? "Cargando…"}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={cerrarSesion}
+          disabled={cerrando}
+          title="Cerrar sesión"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-500/15 dark:hover:text-red-400"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-3.5 w-3.5"
+          >
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+        </button>
+      </div>
+    </div>
   );
 }

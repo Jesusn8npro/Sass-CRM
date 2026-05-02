@@ -48,7 +48,7 @@ export default function PaginaInteresados() {
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <Link
-              href={`/cuentas/${idCuenta}/productos`}
+              href={`/app/cuentas/${idCuenta}/productos`}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
               aria-label="Volver"
             >
@@ -115,7 +115,7 @@ export default function PaginaInteresados() {
                       {i.veces}× · hace {tiempoRelativo(i.ultimo_interes_en)}
                     </span>
                     <Link
-                      href={`/cuentas/${idCuenta}/contactos/${i.conversacion_id}`}
+                      href={`/app/cuentas/${idCuenta}/contactos/${i.conversacion_id}`}
                       className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
                     >
                       Ver perfil →

@@ -228,7 +228,7 @@ export default function PaginaPipeline() {
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <Link
-              href="/"
+              href="/app"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
               aria-label="Volver"
             >
@@ -255,13 +255,13 @@ export default function PaginaPipeline() {
           </div>
           <div className="flex items-center gap-2">
             <Link
-              href={`/cuentas/${idCuenta}/dashboard`}
+              href={`/app/cuentas/${idCuenta}/dashboard`}
               className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
             >
               Dashboard
             </Link>
             <Link
-              href={`/cuentas/${idCuenta}/configuracion`}
+              href={`/app/cuentas/${idCuenta}/configuracion`}
               className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
             >
               Ajustes

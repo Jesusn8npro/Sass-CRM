@@ -155,7 +155,7 @@ export default function PaginaDashboard() {
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <Link
-              href="/"
+              href="/app"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
               aria-label="Volver"
             >
@@ -182,13 +182,13 @@ export default function PaginaDashboard() {
           </div>
           <div className="flex items-center gap-2">
             <Link
-              href={`/cuentas/${idCuenta}/pipeline`}
+              href={`/app/cuentas/${idCuenta}/pipeline`}
               className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
             >
               Pipeline
             </Link>
             <Link
-              href={`/cuentas/${idCuenta}/configuracion`}
+              href={`/app/cuentas/${idCuenta}/configuracion`}
               className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
             >
               Ajustes
@@ -285,7 +285,7 @@ export default function PaginaDashboard() {
                       ))}
                     </ul>
                     <Link
-                      href={`/cuentas/${idCuenta}/inversiones`}
+                      href={`/app/cuentas/${idCuenta}/inversiones`}
                       className="mt-1 inline-block text-[11px] text-emerald-700 underline dark:text-emerald-400"
                     >
                       Ver detalle →
@@ -344,7 +344,7 @@ export default function PaginaDashboard() {
                     Productos más preguntados
                   </h2>
                   <Link
-                    href={`/cuentas/${idCuenta}/productos`}
+                    href={`/app/cuentas/${idCuenta}/productos`}
                     className="text-[11px] text-emerald-700 underline dark:text-emerald-400"
                   >
                     Ver todos →
@@ -358,7 +358,7 @@ export default function PaginaDashboard() {
                     >
                       <div className="min-w-0 flex-1">
                         <Link
-                          href={`/cuentas/${idCuenta}/productos/${p.id}/interesados`}
+                          href={`/app/cuentas/${idCuenta}/productos/${p.id}/interesados`}
                           className="truncate text-sm font-medium text-zinc-900 hover:underline dark:text-zinc-100"
                         >
                           {p.nombre}
@@ -396,7 +396,7 @@ export default function PaginaDashboard() {
                     Pipeline
                   </h2>
                   <Link
-                    href={`/cuentas/${idCuenta}/pipeline`}
+                    href={`/app/cuentas/${idCuenta}/pipeline`}
                     className="text-[11px] text-emerald-700 underline dark:text-emerald-400"
                   >
                     Ver Kanban →

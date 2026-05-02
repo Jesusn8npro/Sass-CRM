@@ -271,7 +271,7 @@ export function PanelConversacion({
         </div>
         <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
           <Link
-            href={`/cuentas/${idCuenta}/contactos/${conversacion.id}`}
+            href={`/app/cuentas/${idCuenta}/contactos/${conversacion.id}`}
             title="Ver perfil del contacto (Cliente 360)"
             className="flex h-9 items-center gap-1.5 rounded-full border border-zinc-200 px-3 text-xs font-medium text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
           >

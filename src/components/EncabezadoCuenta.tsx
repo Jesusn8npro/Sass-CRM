@@ -101,7 +101,7 @@ export function EncabezadoCuenta({
 
       <div className="flex shrink-0 items-center gap-1.5">
         <Link
-          href={`/cuentas/${cuenta.id}/dashboard`}
+          href={`/app/cuentas/${cuenta.id}/dashboard`}
           title="Dashboard"
           className="flex h-9 items-center gap-2 rounded-full border border-zinc-200 px-3 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
         >
@@ -132,44 +132,44 @@ export function EncabezadoCuenta({
           {menuAbierto && (
             <div className="absolute right-0 top-full z-[60] mt-1 w-48 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
               <ItemMenu
-                href={`/cuentas/${cuenta.id}/pipeline`}
+                href={`/app/cuentas/${cuenta.id}/pipeline`}
                 onClick={() => setMenuAbierto(false)}
                 texto="Pipeline (Kanban)"
                 icono="pipeline"
               />
               <ItemMenu
-                href={`/cuentas/${cuenta.id}/productos`}
+                href={`/app/cuentas/${cuenta.id}/productos`}
                 onClick={() => setMenuAbierto(false)}
                 texto="Productos"
                 icono="productos"
               />
               <ItemMenu
-                href={`/cuentas/${cuenta.id}/llamadas`}
+                href={`/app/cuentas/${cuenta.id}/llamadas`}
                 onClick={() => setMenuAbierto(false)}
                 texto="Llamadas"
                 icono="telefono"
               />
               <ItemMenu
-                href={`/cuentas/${cuenta.id}/inversiones`}
+                href={`/app/cuentas/${cuenta.id}/inversiones`}
                 onClick={() => setMenuAbierto(false)}
                 texto="Inversiones"
                 icono="dinero"
               />
               <ItemMenu
-                href={`/cuentas/${cuenta.id}/agenda`}
+                href={`/app/cuentas/${cuenta.id}/agenda`}
                 onClick={() => setMenuAbierto(false)}
                 texto="Agenda"
                 icono="agenda"
               />
               <ItemMenu
-                href={`/cuentas/${cuenta.id}/seguimientos`}
+                href={`/app/cuentas/${cuenta.id}/seguimientos`}
                 onClick={() => setMenuAbierto(false)}
                 texto="Seguimientos"
                 icono="reloj"
               />
               <div className="border-t border-zinc-100 dark:border-zinc-800" />
               <ItemMenu
-                href={`/cuentas/${cuenta.id}/configuracion`}
+                href={`/app/cuentas/${cuenta.id}/configuracion`}
                 onClick={() => setMenuAbierto(false)}
                 texto="Ajustes"
                 icono="ajustes"
