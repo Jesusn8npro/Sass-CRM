@@ -17,6 +17,7 @@ Este documento cubre **qué se hizo en la sub-fase 6.A.1**, **cómo probarlo**, 
 | **6.C.1 — Vapi pro: multi-assistants + llamadas programadas + Web SDK** | ✅ Completada | N assistants Vapi por cuenta (vendedor/soporte/cobranza). Llamadas programadas a futuro con scheduler. IA puede agendar llamadas con `agendar_llamada`. Test desde browser con `@vapi-ai/web`. |
 | **6.C.2 — Auth Baileys en Supabase Postgres** | ✅ Completada | Reemplaza `useMultiFileAuthState` (disco) por `useSupabaseAuthState` (DB). Sesión sobrevive reinicios del contenedor y permite multi-instancia. |
 | **6.C.3 — Vapi del .env (modelo SaaS) + notificaciones de desconexión** | ✅ Completada | Vapi keys en `.env` se usan como default para todas las cuentas; cada cuenta puede override. Notificaciones in-app + email (Resend) cuando una cuenta WhatsApp se desconecta. |
+| **6.D.1 — Rediseño tipo Talos Flow + páginas nuevas** | ✅ Completada | Sidebar persistente con secciones PRINCIPAL/CONFIGURACIÓN/VENTAS. Nuevas páginas: /clientes (CRM), /plantillas (envío masivo), /whatsapp (gestión QR/conexión), /conocimiento (standalone), /webhooks (n8n/Zapier). |
 
 > **6.A.2 logrado**: cada usuario nuevo arranca de cero (0 cuentas, 0 conversaciones). Las APIs verifican `cuenta.usuario_id === auth.uid()` antes de devolver/mutar nada, y RLS por relación protege a nivel DB como segunda capa.
 
@@ -313,6 +314,82 @@ Buckets creados con migración SQL `11_storage_buckets_y_policies`:
 ### Cleanup local pendiente
 - Detener Next con Ctrl+C y borrar `data/messages.db*` (lockeados mientras corre).
 - Borrar `auth/<id-numerico>/` (legacy) — los nuevos son UUIDs.
+
+## 📋 Resumen 6.D.1 — Rediseño tipo Talos Flow
+
+### Sidebar persistente
+- **`SidebarPanel.tsx`** componente nuevo, vive en el layout `[idCuenta]/layout.tsx` y se mantiene al navegar entre páginas dentro de la cuenta.
+- 3 secciones de navegación: **PRINCIPAL** (Conversaciones, Clientes, Reportes, Agenda, Plantillas), **CONFIGURACIÓN** (WhatsApp, Agente IA, Conocimiento, Funnel, Webhooks), **VENTAS** (Llamadas, Productos, Seguimientos, Inversiones).
+- Header con logo + selector de cuenta (dropdown si N>1, navega manteniendo la sub-ruta actual).
+- Footer con badge notificaciones, interruptor tema, link a /mi-cuenta con badge del plan.
+
+### Layout `/app/cuentas/[idCuenta]/layout.tsx`
+- Server component que valida sesión + ownership de la cuenta (redirect a /app si no es del usuario).
+- Carga la lista de cuentas del usuario una sola vez para el selector.
+- Renderiza `<SidebarPanel/>` + `<main>{children}</main>`.
+
+### `/app` página principal rediseñada
+- Si el usuario tiene **1 cuenta** → redirige automático a `/app/cuentas/{id}/conversaciones`.
+- Si tiene **>1** → muestra selector visual (cards) para elegir.
+- Si tiene **0** → muestra `<CrearPrimeraCuenta/>` con form simple (etiqueta + crear → redirige a `/whatsapp` para escanear QR).
+
+### Páginas nuevas
+
+**`/conversaciones`** (`PanelConversaciones.tsx`):
+- Lista de chats (340px) + panel de mensajes a la derecha.
+- Estado "WhatsApp no conectado" con CTA a `/whatsapp` si la cuenta no está activa.
+- Reusa los componentes existentes: `ListaConversaciones`, `PanelConversacion`, `ModalNuevaConversacion`.
+- Polling con pausa por visibility (no fetch en background tab).
+
+**`/clientes`** — vista CRM:
+- Tabla con todos los contactos (combina conversaciones + emails capturados + teléfonos).
+- Filtros: búsqueda libre + modo (Todos/IA/HUMANO).
+- Etiquetas y badges por contacto.
+- **Exportar CSV** un click → descarga CSV con nombre/teléfono/email/modo/último_mensaje.
+- "Abrir →" deep-link a la conversación.
+
+**`/whatsapp`** — gestión de conexión:
+- Estado en vivo (con polling cada 3.5s para ver el QR live).
+- Si está QR/conectando → renderiza `<PantallaQR/>`.
+- Si está conectado → mensaje OK + botones desconectar (mantener sesión / borrar credenciales).
+- Si está desconectado → botón "Generar QR".
+- Sección educativa con causas comunes de cierre de sesión.
+
+**`/conocimiento`** — base de conocimiento standalone:
+- Listado de entradas (título + contenido) que el bot inyecta en su prompt.
+- Form para crear nueva entrada.
+- Botón borrar por entrada.
+- Antes era una sub-sección de `/configuracion` — ahora dedicada para que el flujo de "agregar conocimiento" sea más visible.
+
+**`/plantillas`** — mensajes plantilla + envío masivo:
+- Reusa `respuestas_rapidas` como tabla base (mismo concepto: mensaje pre-armado).
+- Lado izquierdo: lista de plantillas + form crear.
+- Lado derecho: lista de contactos con checkboxes, "Seleccionar todos".
+- Arriba: panel "Envío masivo" — elegís plantilla + contactos → encola vía `seguimientos_programados` (1 minuto a futuro).
+- **Anti-ban**: usa el scheduler existente de seguimientos que respeta límite diario (80/cuenta) y horario humano (8-22h).
+
+**`/webhooks`** — integración con n8n/Make/Zapier:
+- Migración SQL `18_webhooks_salientes`: tabla con cuenta_id, nombre, url, eventos[], secret, esta_activo, stats.
+- API CRUD: `GET/POST /api/cuentas/[id]/webhooks`, `PATCH/DELETE .../[idWebhook]`, `POST .../[idWebhook]/probar`.
+- UI: form con nombre + URL + secret opcional + checkboxes de eventos (mensaje_recibido, mensaje_enviado, contacto_nuevo, cita_agendada, llamada_terminada, handoff_humano).
+- Botón "Probar" dispara POST con payload dummy y muestra resultado (status HTTP).
+- Estadísticas por webhook: total disparos, fallos, último resultado.
+- Toggle activar/pausar sin borrar.
+- *Nota*: el cableado del bot para disparar los webhooks reales en cada evento se hace en una próxima fase (por ahora solo está la infra y "Probar" funciona).
+
+### Cleanup
+Borrados (ya no se usan):
+- `src/components/PuertaConexion.tsx` (reemplazado por `PanelConversaciones` + sidebar global)
+- `src/components/BarraLateralCuentas.tsx` (reemplazado por `SidebarPanel`)
+- `src/components/EncabezadoCuenta.tsx` (innecesario, el sidebar reemplaza su navegación)
+- `src/components/ModalNuevaCuenta.tsx` (reemplazado por `CrearPrimeraCuenta`)
+- `src/components/BannerBotInactivo.tsx` (no usado en el nuevo layout)
+- `src/components/hooks/usePollingVisible.ts` (no se llegó a usar — los pollings tienen su propia lógica inline)
+
+### Páginas existentes intactas (accesibles desde el sidebar)
+- `/dashboard` (link como "Reportes")
+- `/agenda`, `/llamadas`, `/seguimientos`, `/productos`, `/inversiones`, `/pipeline` (link como "Funnel"), `/configuracion` (link como "Agente IA")
+- `/contactos/[idConv]` (cliente 360 — accesible desde botones internos)
 
 ## 📋 Resumen 6.C.3 — Vapi global + notificaciones
 
