@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 import crypto from "node:crypto";
 import {
   downloadMediaMessage,
@@ -10,34 +11,31 @@ import {
 import pino from "pino";
 import OpenAI from "openai";
 import type { TipoMensaje } from "../baseDatos";
+import {
+  borrarArchivo,
+  descargarArchivo,
+  subirArchivo,
+} from "../supabase/almacenamiento";
 
 const cliente = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY ?? "",
 });
 
-const directorioMediaBase = path.resolve(process.cwd(), "data", "media");
-const directorioBibliotecaBase = path.resolve(
+// Carpetas legacy locales — solo para fallback de lectura de archivos
+// pre-cutover. Ya no escribimos acá.
+const directorioMediaBaseLegacy = path.resolve(process.cwd(), "data", "media");
+const directorioBibliotecaBaseLegacy = path.resolve(
   process.cwd(),
   "data",
   "biblioteca",
 );
 
-// Logger silencioso requerido por DownloadMediaMessageContext
 const logger = pino({ level: "silent" });
 
-function asegurarDirectorio(ruta: string): void {
-  if (!fs.existsSync(ruta)) {
-    fs.mkdirSync(ruta, { recursive: true });
-  }
-}
-
-function rutaMediaCuenta(cuentaId: string): string {
-  const dir = path.join(directorioMediaBase, String(cuentaId));
-  asegurarDirectorio(dir);
-  return dir;
-}
-
-function extensionParaMime(mime: string | null | undefined, fallback: string): string {
+function extensionParaMime(
+  mime: string | null | undefined,
+  fallback: string,
+): string {
   if (!mime) return fallback;
   if (mime.includes("ogg")) return "ogg";
   if (mime.includes("mp4")) return "mp4";
@@ -52,12 +50,30 @@ function extensionParaMime(mime: string | null | undefined, fallback: string): s
   return fallback;
 }
 
+function mimePorExtension(archivo: string): string {
+  const ext = archivo.split(".").pop()?.toLowerCase() ?? "";
+  const mapa: Record<string, string> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    webp: "image/webp",
+    mp4: "video/mp4",
+    webm: "video/webm",
+    mov: "video/quicktime",
+    ogg: "audio/ogg",
+    opus: "audio/ogg",
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
+    m4a: "audio/mp4",
+    pdf: "application/pdf",
+  };
+  return mapa[ext] ?? "application/octet-stream";
+}
+
 /**
- * Desempaqueta wrappers de WhatsApp (ephemeral, view-once, document-with-caption,
- * etc) recursivamente, devolviendo el IMessage interno con el contenido real.
- *
- * Sin esto, mensajes enviados como "una sola vista" o de chats efímeros
- * vienen anidados y nuestro detectorTipoMedia no los reconoce.
+ * Desempaqueta wrappers de WhatsApp (ephemeral, view-once,
+ * document-with-caption, etc) recursivamente.
  */
 export function desempacarMensaje(
   msg: proto.IMessage | null | undefined,
@@ -77,8 +93,12 @@ export function desempacarMensaje(
 }
 
 export interface MediaDescargado {
-  rutaAbsoluta: string;
+  /** Path dentro del bucket: `<cuentaId>/<archivo>`. Lo guardamos en
+   * la columna `media_path` de la DB. */
   rutaRelativa: string;
+  /** Buffer en memoria — útil para procesar inmediato (Whisper, etc)
+   * sin re-descargar de Storage. */
+  buffer: Buffer;
   nombreArchivo: string;
   mime: string | null;
   tamano: number;
@@ -123,9 +143,10 @@ export function detectarTipoMedia(msg: WAMessage): {
 }
 
 /**
- * Descarga el contenido multimedia de un mensaje y lo guarda en disco.
- * Pasa el mensaje desempaquetado (sin wrappers ephemeral/viewOnce) a
- * downloadMediaMessage para que pueda extraer las claves de descifrado.
+ * Descarga el contenido multimedia de un mensaje y lo sube al bucket
+ * `media-chats` de Supabase Storage. Devuelve el buffer también para
+ * que el caller pueda procesarlo inmediato (transcripción) sin
+ * re-descargar.
  */
 export async function descargarYGuardarMedia(
   sock: WASocket,
@@ -136,8 +157,6 @@ export async function descargarYGuardarMedia(
 ): Promise<MediaDescargado | null> {
   try {
     const inner = desempacarMensaje(msg.message);
-    // Construir un mensaje con el contenido desempaquetado para que
-    // downloadMediaMessage no se confunda con los wrappers.
     const msgParaDescargar: WAMessage = inner
       ? { ...msg, message: inner }
       : msg;
@@ -167,14 +186,18 @@ export async function descargarYGuardarMedia(
         ? "bin"
         : "bin";
     const ext = extensionParaMime(mime, fallbackExt);
-    const dir = rutaMediaCuenta(cuentaId);
     const nombre = `${Date.now()}_${crypto.randomBytes(4).toString("hex")}.${ext}`;
-    const rutaAbsoluta = path.join(dir, nombre);
-    fs.writeFileSync(rutaAbsoluta, buffer);
+    await subirArchivo(
+      "media-chats",
+      cuentaId,
+      nombre,
+      buffer,
+      mime ?? mimePorExtension(nombre),
+    );
 
     return {
-      rutaAbsoluta,
       rutaRelativa: `${cuentaId}/${nombre}`,
+      buffer,
       nombreArchivo: nombre,
       mime,
       tamano: buffer.length,
@@ -185,14 +208,22 @@ export async function descargarYGuardarMedia(
   }
 }
 
-export async function transcribirAudio(rutaAbsoluta: string): Promise<string | null> {
+/**
+ * Transcribe un audio con Whisper a partir de un buffer en memoria.
+ * (Antes recibía path a disco — ya no.)
+ */
+export async function transcribirAudio(
+  buffer: Buffer,
+  nombreSugerido = "audio.ogg",
+): Promise<string | null> {
   if (!process.env.OPENAI_API_KEY) {
     console.warn("[media] no hay OPENAI_API_KEY, no se puede transcribir");
     return null;
   }
   try {
+    const archivo = await OpenAI.toFile(buffer, nombreSugerido);
     const transcripcion = await cliente.audio.transcriptions.create({
-      file: fs.createReadStream(rutaAbsoluta),
+      file: archivo,
       model: "whisper-1",
       language: "es",
     });
@@ -203,57 +234,171 @@ export async function transcribirAudio(rutaAbsoluta: string): Promise<string | n
   }
 }
 
-export function rutaAbsolutaDeMedia(mediaPath: string): string {
-  return path.join(directorioMediaBase, mediaPath);
-}
-
-export function guardarMediaSubido(
+/**
+ * Sube un buffer arbitrario al bucket `media-chats` (TTS, uploads
+ * manuales del panel, etc). Async porque va a Storage.
+ */
+export async function guardarMediaSubido(
   cuentaId: string,
   buffer: Buffer,
   extension: string,
-): MediaDescargado {
-  const dir = rutaMediaCuenta(cuentaId);
+): Promise<MediaDescargado> {
   const ext = extension.replace(/^\./, "").toLowerCase() || "bin";
   const nombre = `${Date.now()}_${crypto.randomBytes(4).toString("hex")}.${ext}`;
-  const rutaAbsoluta = path.join(dir, nombre);
-  fs.writeFileSync(rutaAbsoluta, buffer);
+  await subirArchivo(
+    "media-chats",
+    cuentaId,
+    nombre,
+    buffer,
+    mimePorExtension(nombre),
+  );
   return {
-    rutaAbsoluta,
     rutaRelativa: `${cuentaId}/${nombre}`,
+    buffer,
     nombreArchivo: nombre,
-    mime: null,
+    mime: mimePorExtension(nombre),
     tamano: buffer.length,
   };
+}
+
+/**
+ * Lee un archivo del bucket `media-chats`. Si no existe en Storage
+ * (legacy pre-cutover), cae a disco local.
+ */
+export async function descargarMediaChat(
+  mediaPath: string,
+): Promise<{ buffer: Buffer; mime: string } | null> {
+  const enStorage = await descargarArchivo("media-chats", mediaPath);
+  if (enStorage) return enStorage;
+  // Fallback legacy
+  try {
+    const abs = path.join(directorioMediaBaseLegacy, mediaPath);
+    if (!fs.existsSync(abs)) return null;
+    return {
+      buffer: fs.readFileSync(abs),
+      mime: mimePorExtension(abs),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Borra un archivo de chat (Storage + intento de borrar legacy local).
+ */
+export async function borrarMediaChat(mediaPath: string): Promise<void> {
+  try {
+    await borrarArchivo("media-chats", mediaPath);
+  } catch {
+    // ya no existe en Storage
+  }
+  try {
+    const abs = path.join(directorioMediaBaseLegacy, mediaPath);
+    if (fs.existsSync(abs)) fs.unlinkSync(abs);
+  } catch {
+    // ignorar
+  }
 }
 
 // ============================================================
 // Biblioteca de medios reutilizables (separada de chats)
 // ============================================================
-function rutaBibliotecaCuenta(cuentaId: string): string {
-  const dir = path.join(directorioBibliotecaBase, String(cuentaId));
-  asegurarDirectorio(dir);
-  return dir;
-}
 
-export function guardarEnBiblioteca(
+/**
+ * Sube un archivo a la biblioteca del usuario. Async — va a Storage
+ * bucket `biblioteca`.
+ */
+export async function guardarEnBiblioteca(
   cuentaId: string,
   buffer: Buffer,
   extension: string,
-): MediaDescargado {
-  const dir = rutaBibliotecaCuenta(cuentaId);
+): Promise<MediaDescargado> {
   const ext = extension.replace(/^\./, "").toLowerCase() || "bin";
   const nombre = `${Date.now()}_${crypto.randomBytes(4).toString("hex")}.${ext}`;
-  const rutaAbsoluta = path.join(dir, nombre);
-  fs.writeFileSync(rutaAbsoluta, buffer);
+  await subirArchivo(
+    "biblioteca",
+    cuentaId,
+    nombre,
+    buffer,
+    mimePorExtension(nombre),
+  );
   return {
-    rutaAbsoluta,
     rutaRelativa: `${cuentaId}/${nombre}`,
+    buffer,
     nombreArchivo: nombre,
-    mime: null,
+    mime: mimePorExtension(nombre),
     tamano: buffer.length,
   };
 }
 
-export function rutaAbsolutaDeBiblioteca(rutaRelativa: string): string {
-  return path.join(directorioBibliotecaBase, rutaRelativa);
+/**
+ * Lee un medio de biblioteca. Storage primero, fallback local.
+ */
+export async function descargarBiblioteca(
+  rutaRelativa: string,
+): Promise<{ buffer: Buffer; mime: string } | null> {
+  const enStorage = await descargarArchivo("biblioteca", rutaRelativa);
+  if (enStorage) return enStorage;
+  try {
+    const abs = path.join(directorioBibliotecaBaseLegacy, rutaRelativa);
+    if (!fs.existsSync(abs)) return null;
+    return {
+      buffer: fs.readFileSync(abs),
+      mime: mimePorExtension(abs),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Borra un medio de biblioteca (Storage + legacy).
+ */
+export async function borrarMedioBibliotecaArchivo(
+  rutaRelativa: string,
+): Promise<void> {
+  try {
+    await borrarArchivo("biblioteca", rutaRelativa);
+  } catch {
+    // ya no existe en Storage
+  }
+  try {
+    const abs = path.join(directorioBibliotecaBaseLegacy, rutaRelativa);
+    if (fs.existsSync(abs)) fs.unlinkSync(abs);
+  } catch {
+    // ignorar
+  }
+}
+
+// ============================================================
+// Helpers temp-file para Baileys / ffmpeg
+// ============================================================
+
+/**
+ * Escribe un buffer a un archivo temporal (en os.tmpdir()) y devuelve
+ * la ruta. Útil para casos donde necesitamos un path real (ffmpeg,
+ * Baileys getAudioDuration / getAudioWaveform).
+ *
+ * El caller es responsable de borrar el archivo cuando termine.
+ */
+export function escribirTemporal(
+  buffer: Buffer,
+  extension: string,
+): string {
+  const ext = extension.replace(/^\./, "").toLowerCase() || "bin";
+  const nombre = `bot_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.${ext}`;
+  const ruta = path.join(os.tmpdir(), nombre);
+  fs.writeFileSync(ruta, buffer);
+  return ruta;
+}
+
+/**
+ * Borra un archivo (silencioso). Para cleanup de archivos temp.
+ */
+export function borrarTemporal(ruta: string): void {
+  try {
+    if (fs.existsSync(ruta)) fs.unlinkSync(ruta);
+  } catch {
+    // ignorar
+  }
 }

@@ -37,14 +37,17 @@ import { generarRespuesta, type RespuestaIA } from "../openai";
 import { construirPromptSistema } from "../construirPrompt";
 import { iniciarLlamadaConContexto } from "../llamadas";
 import {
+  borrarTemporal,
+  descargarBiblioteca,
+  descargarMediaChat,
   descargarYGuardarMedia,
   desempacarMensaje,
   detectarTipoMedia,
+  escribirTemporal,
   guardarMediaSubido,
-  rutaAbsolutaDeBiblioteca,
-  rutaAbsolutaDeMedia,
   transcribirAudio,
 } from "./medios";
+import { readFile as fsReadFileAsync } from "node:fs/promises";
 import { generarAudioTTS } from "../elevenlabs";
 import { asegurarFormatoVoz } from "./conversion";
 
@@ -171,7 +174,10 @@ async function procesarMediaEntrante(
   if (info.tipo === "audio") {
     console.log(`${prefijo} 🎤 transcribiendo audio (${descargado.tamano} bytes)...`);
     const inicio = Date.now();
-    const texto = await transcribirAudio(descargado.rutaAbsoluta);
+    const texto = await transcribirAudio(
+      descargado.buffer,
+      descargado.nombreArchivo,
+    );
     const dur = Date.now() - inicio;
     if (texto) {
       console.log(`${prefijo} ✓ transcripción (${dur}ms): "${texto.slice(0, 80)}"`);
@@ -529,6 +535,8 @@ async function enviarParteAudio(
   prefijo: string,
   numParte: string,
 ): Promise<boolean> {
+  let archivoTempEntrada: string | null = null;
+  let archivoTempSalida: string | null = null;
   try {
     try {
       await sock.sendPresenceUpdate("recording", jid);
@@ -539,32 +547,37 @@ async function enviarParteAudio(
     console.log(
       `${prefijo} 🔊 parte ${numParte} TTS (${tts.buffer.length}b, ${ttsDur}ms)`,
     );
-    const guardado = guardarMediaSubido(
-      cuenta.id,
-      tts.buffer,
-      tts.extension,
-    );
 
-    let rutaTTS = guardado.rutaAbsoluta;
-    let mediaPathTTS = guardado.rutaRelativa;
+    // Para correr ffmpeg necesitamos un archivo real en disco.
+    // Lo escribimos en os.tmpdir(), procesamos, y subimos el
+    // resultado a Storage (bucket media-chats).
+    archivoTempEntrada = escribirTemporal(tts.buffer, tts.extension);
+    let rutaParaMeta = archivoTempEntrada;
+    let bufferFinal = tts.buffer;
+    let extFinal = tts.extension;
     try {
-      const conv = await asegurarFormatoVoz(guardado.rutaAbsoluta);
-      if (conv.nombre !== guardado.nombreArchivo) {
-        rutaTTS = conv.rutaAbsoluta;
-        mediaPathTTS = `${cuenta.id}/${conv.nombre}`;
+      const conv = await asegurarFormatoVoz(archivoTempEntrada);
+      if (conv.rutaAbsoluta !== archivoTempEntrada) {
+        archivoTempSalida = conv.rutaAbsoluta;
+        rutaParaMeta = conv.rutaAbsoluta;
+        bufferFinal = await fsReadFileAsync(conv.rutaAbsoluta);
+        extFinal = conv.nombre.split(".").pop() ?? extFinal;
       }
     } catch (errConv) {
       console.warn(`${prefijo} no se pudo convertir TTS:`, errConv);
     }
+
+    const guardado = await guardarMediaSubido(cuenta.id, bufferFinal, extFinal);
+    const mediaPathTTS = guardado.rutaRelativa;
 
     await insertarMensaje(cuenta.id, conversacionId, "asistente", texto, {
       tipo: "audio",
       media_path: mediaPathTTS,
     });
 
-    const meta = await obtenerMetadataAudio(rutaTTS);
+    const meta = await obtenerMetadataAudio(rutaParaMeta);
     const contenidoTTS = {
-      audio: { url: rutaTTS },
+      audio: bufferFinal,
       mimetype: "audio/ogg; codecs=opus",
       ptt: true,
       seconds: meta.seconds,
@@ -592,6 +605,9 @@ async function enviarParteAudio(
       );
     } catch {}
     return false;
+  } finally {
+    if (archivoTempEntrada) borrarTemporal(archivoTempEntrada);
+    if (archivoTempSalida) borrarTemporal(archivoTempSalida);
   }
 }
 
@@ -608,36 +624,43 @@ async function enviarMedioBiblioteca(
   conversacionId: string,
   prefijo: string,
 ): Promise<void> {
-  const ruta = rutaAbsolutaDeBiblioteca(medio.ruta_archivo);
-  // Para que el panel muestre la imagen, copiamos el path con prefijo "biblio:"
-  // como media_path. La burbuja del panel sabrá resolverlo al endpoint correcto.
+  // Para que el panel muestre el medio, guardamos el path con prefijo
+  // "biblio:" como media_path. La burbuja del panel lo resuelve a
+  // /api/biblioteca/<idCuenta>/<archivo>.
   const mediaPathPanel = `biblio:${medio.ruta_archivo}`;
 
-  // Insertar mensaje en DB para que aparezca en el panel
   await insertarMensaje(cuentaId, conversacionId, "asistente", "", {
     tipo: medio.tipo,
     media_path: mediaPathPanel,
   });
 
+  // Descargamos el contenido de Storage (con fallback local) y se lo
+  // pasamos a Baileys como Buffer en vez de URL — más portable entre
+  // instancias del bot.
+  const descargado = await descargarBiblioteca(medio.ruta_archivo);
+  if (!descargado) {
+    console.error(
+      `${prefijo} medio biblioteca ${medio.identificador} no existe en Storage ni local`,
+    );
+    return;
+  }
+  const { buffer } = descargado;
+
   let resultado: { key?: { id?: string | null } } | undefined;
   try {
     if (medio.tipo === "imagen") {
-      resultado = await sock.sendMessage(jid, {
-        image: { url: ruta },
-      });
+      resultado = await sock.sendMessage(jid, { image: buffer });
     } else if (medio.tipo === "video") {
-      resultado = await sock.sendMessage(jid, {
-        video: { url: ruta },
-      });
+      resultado = await sock.sendMessage(jid, { video: buffer });
     } else if (medio.tipo === "audio") {
       resultado = await sock.sendMessage(jid, {
-        audio: { url: ruta },
+        audio: buffer,
         mimetype: "audio/mpeg",
         ptt: false,
       });
     } else if (medio.tipo === "documento") {
       resultado = await sock.sendMessage(jid, {
-        document: { url: ruta },
+        document: buffer,
         fileName: medio.identificador,
         mimetype: "application/octet-stream",
       });
@@ -1062,48 +1085,63 @@ async function enviarItemBandeja(
       text: item.contenido || "[media no disponible]",
     });
   } else {
-    const ruta = rutaAbsolutaDeMedia(item.media_path);
-    if (tipo === "imagen") {
+    const descargado = await descargarMediaChat(item.media_path);
+    if (!descargado) {
+      console.error(
+        `[bandeja] media ${item.media_path} no encontrada en Storage ni local — enviando texto fallback`,
+      );
       resultado = await sock.sendMessage(jid, {
-        image: { url: ruta },
-        caption: item.contenido || undefined,
-      });
-    } else if (tipo === "video") {
-      resultado = await sock.sendMessage(jid, {
-        video: { url: ruta },
-        caption: item.contenido || undefined,
-      });
-    } else if (tipo === "audio") {
-      const ext = ruta.split(".").pop()?.toLowerCase() ?? "";
-      let mimetype = "audio/ogg; codecs=opus";
-      if (ext === "mp3" || ext === "mpeg") mimetype = "audio/mpeg";
-      else if (ext === "m4a" || ext === "mp4") mimetype = "audio/mp4";
-      else if (ext === "wav") mimetype = "audio/wav";
-      else if (ext === "ogg" || ext === "opus" || ext === "webm")
-        mimetype = "audio/ogg; codecs=opus";
-      // Metadata crítica para que WhatsApp muestre nota de voz correctamente:
-      // sin seconds + waveform aparece "este audio ya no está disponible".
-      const meta = await obtenerMetadataAudio(ruta);
-      // Los tipos públicos de Baileys no exponen `waveform` pero Baileys
-      // sí lo procesa correctamente en runtime. Cast vía unknown.
-      const contenidoAudio = {
-        audio: { url: ruta },
-        mimetype,
-        ptt: true,
-        seconds: meta.seconds,
-        waveform: meta.waveform,
-      } as unknown as Parameters<typeof sock.sendMessage>[1];
-      resultado = await sock.sendMessage(jid, contenidoAudio);
-    } else if (tipo === "documento") {
-      resultado = await sock.sendMessage(jid, {
-        document: { url: ruta },
-        fileName: item.contenido || "documento",
-        mimetype: "application/octet-stream",
+        text: item.contenido || "[media no disponible]",
       });
     } else {
-      resultado = await sock.sendMessage(jid, {
-        text: item.contenido || "[mensaje]",
-      });
+      const { buffer } = descargado;
+      const nombreArchivo = item.media_path.split("/").pop() ?? "";
+      const ext = nombreArchivo.split(".").pop()?.toLowerCase() ?? "";
+
+      if (tipo === "imagen") {
+        resultado = await sock.sendMessage(jid, {
+          image: buffer,
+          caption: item.contenido || undefined,
+        });
+      } else if (tipo === "video") {
+        resultado = await sock.sendMessage(jid, {
+          video: buffer,
+          caption: item.contenido || undefined,
+        });
+      } else if (tipo === "audio") {
+        let mimetype = "audio/ogg; codecs=opus";
+        if (ext === "mp3" || ext === "mpeg") mimetype = "audio/mpeg";
+        else if (ext === "m4a" || ext === "mp4") mimetype = "audio/mp4";
+        else if (ext === "wav") mimetype = "audio/wav";
+
+        // getAudioDuration / getAudioWaveform de Baileys necesitan path real.
+        // Escribimos a temp, calculamos meta, borramos.
+        const tmp = escribirTemporal(buffer, ext || "ogg");
+        let meta: { seconds: number; waveform: Uint8Array | undefined };
+        try {
+          meta = await obtenerMetadataAudio(tmp);
+        } finally {
+          borrarTemporal(tmp);
+        }
+        const contenidoAudio = {
+          audio: buffer,
+          mimetype,
+          ptt: true,
+          seconds: meta.seconds,
+          waveform: meta.waveform,
+        } as unknown as Parameters<typeof sock.sendMessage>[1];
+        resultado = await sock.sendMessage(jid, contenidoAudio);
+      } else if (tipo === "documento") {
+        resultado = await sock.sendMessage(jid, {
+          document: buffer,
+          fileName: item.contenido || nombreArchivo || "documento",
+          mimetype: "application/octet-stream",
+        });
+      } else {
+        resultado = await sock.sendMessage(jid, {
+          text: item.contenido || "[mensaje]",
+        });
+      }
     }
   }
 

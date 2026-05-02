@@ -10,7 +10,7 @@ Este documento cubre **qué se hizo en la sub-fase 6.A.1**, **cómo probarlo**, 
 |---|---|---|
 | **6.A.1 — Auth + Landing + Schema** | ✅ Completada | Schema Supabase, login/signup, panel protegido |
 | **6.A.2 — Migración DB SQLite → Postgres + multi-tenant** | ✅ Completada | `baseDatos.ts` 100% Supabase, IDs UUID, todas las APIs verifican propiedad de cuenta, RLS por relación |
-| **6.A.3 — Storage scaffolding** | 🟡 Scaffolding listo | Buckets `productos`, `biblioteca`, `media-chats` + helper `almacenamiento.ts` + RLS policies. Cutover de write-paths queda para después de testing. |
+| **6.A.3 — Storage cutover completo** | ✅ Completada | Productos, biblioteca y media-chats viven en Supabase Storage. Bot pasa Buffers a Baileys (no paths). Lectura híbrida: Storage primero, fallback a disco local para archivos pre-cutover. |
 | **6.A.4 — Landing PRO** | ✅ Completada | Landing nueva con hero, métricas, mockup, 9 funciones, casos de uso, 3 planes de precios, FAQ y CTA final. |
 | **6.A.5 — Historial bajo demanda** | ✅ Completada | Auto-fetch del historial al primer mensaje de un contacto + botón "cargar más antiguos" en el panel. Sin import masivo. |
 | **6.B.1 — Planes + Mi Cuenta** | ✅ Completada | Free/Pro/Business con límites enforced en POST /api/cuentas (402). Página /app/mi-cuenta con perfil + plan + uso. Badge en sidebar con uso vs límite. |
@@ -282,9 +282,9 @@ SELECT * FROM public.cuentas;
 - Policy `FOR ALL TO authenticated USING (cuenta_es_mia(cuenta_id))` en 15 tablas.
 - `conversacion_etiquetas` joinea via `conversaciones.cuenta_id`.
 
-## 📋 Resumen 6.A.3 — Storage scaffolding
+## 📋 Scaffolding inicial 6.A.3 (referencia histórica)
 
-### Buckets creados (privados, RLS por cuenta)
+Buckets creados con migración SQL `11_storage_buckets_y_policies`:
 - `productos` — imágenes/videos del catálogo (límite 50MB, mimes whitelistados)
 - `biblioteca` — medios reutilizables del bot (límite 50MB)
 - `media-chats` — multimedia entrante de WhatsApp (límite 100MB, cualquier mime)
@@ -310,6 +310,42 @@ SELECT * FROM public.cuentas;
 ### Cleanup local pendiente
 - Detener Next con Ctrl+C y borrar `data/messages.db*` (lockeados mientras corre).
 - Borrar `auth/<id-numerico>/` (legacy) — los nuevos son UUIDs.
+
+## 📋 Resumen 6.A.3 — Storage cutover completo
+
+### Patrón general
+- **Write**: nuevas subidas escriben directo a Supabase Storage (`subirArchivo()` del helper).
+- **Read**: intenta Storage primero, fallback a disco local legacy si no existe (para archivos pre-cutover, sin necesidad de backfill).
+- **Bot ↔ Baileys**: en vez de pasar paths locales (`{ image: { url: 'file://...' } }`), descargamos el buffer de Storage y lo pasamos directo (`{ image: <Buffer> }`). Más portable: el bot puede correr en N instancias sin sticky storage.
+
+### Phase A — Productos
+- `src/lib/productos.ts`: `guardarImagenProducto`/`guardarVideoProducto` ahora `async`, suben a bucket `productos`. `borrarImagenProducto` borra de Storage + intento de borrar legacy. Nueva función `leerArchivoProducto(rutaRelativa)` con fallback.
+- `GET /api/productos/[idCuenta]/[archivo]`: lee de Storage con fallback. **Bug fix**: removida la validación `Number(idCuenta)` que bloqueaba todos los UUIDs.
+- POST/DELETE en `/api/cuentas/[idCuenta]/productos/[idProducto]/imagen` y `/video`: ahora `await` los helpers.
+
+### Phase B — Biblioteca
+- `src/lib/baileys/medios.ts`: `guardarEnBiblioteca` async → bucket `biblioteca`. Nueva `descargarBiblioteca(ruta)` con fallback. Nueva `borrarMedioBibliotecaArchivo`.
+- `enviarMedioBiblioteca` en `manejador.ts`: descarga buffer de Storage y lo pasa a Baileys directo.
+- `GET /api/biblioteca/[idCuenta]/[archivo]`: cutover a Storage + fix UUID bug.
+- `DELETE /api/cuentas/[idCuenta]/biblioteca/[idMedio]`: usa nuevo helper.
+
+### Phase C — Media-chats (lo más complejo)
+- `descargarYGuardarMedia` (audios/imágenes que llegan al bot): async → bucket `media-chats`. Devuelve `{ rutaRelativa, buffer, ... }` para que el caller pueda usar el buffer inmediato (Whisper) sin re-descargar.
+- `transcribirAudio(buffer, nombre)`: nueva firma — toma buffer en vez de path. Usa `OpenAI.toFile()` para enviar a Whisper.
+- `guardarMediaSubido` (TTS de ElevenLabs, uploads manuales): async → bucket `media-chats`.
+- **TTS flow** en `enviarParteAudio` (manejador.ts): TTS buffer → temp file (para ffmpeg) → ffmpeg conversion → temp file final → leer buffer → upload a Storage → pass buffer a Baileys → cleanup temps en `finally`.
+- **Multimedia panel POST** en `/api/cuentas/[idCuenta]/mensajes/[idConv]/multimedia`: mismo dance temp-file para audio (ffmpeg requiere disco), upload a Storage del resultado.
+- **Visión OpenAI** en `openai.ts`: `construirContenidoUsuario` ahora async, usa `descargarMediaChat` para conseguir el buffer de la imagen y mandarla a GPT-4o vision.
+- `enviarItemBandeja` en manejador.ts: descarga de Storage, pasa buffer a Baileys. Para audio escribe temp file solo para `getAudioDuration`/`getAudioWaveform` (Baileys los necesita en disco para metadata).
+- `GET /api/media/[idCuenta]/[archivo]`: cutover a Storage + fix UUID bug.
+
+### Helpers nuevos en `medios.ts`
+- `escribirTemporal(buffer, ext)` — escribe en `os.tmpdir()` y devuelve path para ffmpeg/Baileys.
+- `borrarTemporal(ruta)` — cleanup silencioso.
+
+### Lo que quedó intencionalmente NO migrado
+- **`auth/<cuentaId>/`** (sesiones multi-archivo de Baileys) — sigue en disco local. Adaptador-Storage para esto es muy delicado (Baileys lee/escribe constante) y necesita más diseño. Fase futura.
+- Archivos pre-cutover en `data/productos/`, `data/biblioteca/`, `data/media/` — siguen funcionando vía fallback. Si querés liberar disco, podés borrar carpetas individuales después de re-subir los archivos importantes.
 
 ## 📋 Resumen 6.B.1 — Planes y Mi Cuenta
 

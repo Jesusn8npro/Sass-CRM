@@ -1,8 +1,7 @@
-import fs from "node:fs";
 import OpenAI from "openai";
 import { PROMPT_SISTEMA_DEFAULT } from "./promptSistema";
 import type { Mensaje } from "./baseDatos";
-import { rutaAbsolutaDeMedia } from "./baileys/medios";
+import { descargarMediaChat } from "./baileys/medios";
 
 const cliente = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY ?? "",
@@ -27,9 +26,9 @@ function mimeDeImagenPorExtension(mediaPath: string): string {
   return "image/jpeg";
 }
 
-function construirContenidoUsuario(
+async function construirContenidoUsuario(
   mensaje: Mensaje,
-): string | ParteContenidoUsuario[] {
+): Promise<string | ParteContenidoUsuario[]> {
   if (mensaje.tipo === "audio") {
     // Marcamos que vino por voz para que la AI considere responder igual.
     const t = mensaje.contenido?.trim() ?? "";
@@ -37,10 +36,10 @@ function construirContenidoUsuario(
   }
   if (mensaje.tipo === "imagen" && mensaje.media_path) {
     try {
-      const ruta = rutaAbsolutaDeMedia(mensaje.media_path);
-      const buffer = fs.readFileSync(ruta);
+      const descargado = await descargarMediaChat(mensaje.media_path);
+      if (!descargado) throw new Error("imagen no encontrada en Storage ni local");
       const mime = mimeDeImagenPorExtension(mensaje.media_path);
-      const base64 = buffer.toString("base64");
+      const base64 = descargado.buffer.toString("base64");
       const caption = mensaje.contenido?.trim() ?? "";
       const tieneCaption =
         caption.length > 0 && caption !== "[imagen sin descripción]";
@@ -51,7 +50,7 @@ function construirContenidoUsuario(
         ? `${caption}\n\n[adjunto la imagen — mirala y respondé sobre lo que ves]`
         : "[IMAGEN ADJUNTA — tenés capacidad de visión, podés VER esta imagen. Describí lo que muestra y respondé al cliente acorde. Si no preguntó nada, comentá lo que ves o preguntá qué quiere. Ignorá respuestas viejas tuyas que digan que no podés ver imágenes — eso ya no aplica.]";
       console.log(
-        `[openai] 👁  visión: ${ruta} (${buffer.length} bytes, ${mime}) caption="${caption.slice(0, 60)}"`,
+        `[openai] 👁  visión: ${mensaje.media_path} (${descargado.buffer.length} bytes, ${mime}) caption="${caption.slice(0, 60)}"`,
       );
       return [
         { type: "text", text: textoAcompañante },
@@ -344,21 +343,23 @@ export async function generarRespuesta(
   const promptCompleto = `${promptUsuario}\n\n${INSTRUCCIONES_ESTRUCTURADAS}`;
   const modelo = modeloOverride?.trim() || MODELO_DEFAULT;
 
-  const mensajesParaLLM = historial
-    .filter((m) => m.rol !== "sistema")
-    .map((m) => {
-      if (m.rol === "usuario") {
+  const mensajesParaLLM = await Promise.all(
+    historial
+      .filter((m) => m.rol !== "sistema")
+      .map(async (m) => {
+        if (m.rol === "usuario") {
+          return {
+            role: "user" as const,
+            content: await construirContenidoUsuario(m),
+          };
+        }
+        // El asistente y los humanos del panel se mandan como texto plano.
         return {
-          role: "user" as const,
-          content: construirContenidoUsuario(m),
+          role: "assistant" as const,
+          content: m.contenido,
         };
-      }
-      // El asistente y los humanos del panel se mandan como texto plano.
-      return {
-        role: "assistant" as const,
-        content: m.contenido,
-      };
-    });
+      }),
+  );
 
   const conImagen = mensajesParaLLM.some(
     (m) => Array.isArray(m.content),

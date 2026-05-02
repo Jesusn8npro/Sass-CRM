@@ -67,9 +67,9 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   const nombreOriginal = (archivo as File).name ?? "imagen.jpg";
 
   // Borrar la imagen previa si había
-  borrarImagenProducto(prod.imagen_path);
+  await borrarImagenProducto(prod.imagen_path);
 
-  const guardado = guardarImagenProducto(
+  const guardado = await guardarImagenProducto(
     idCuenta,
     buffer,
     nombreOriginal,
@@ -98,7 +98,7 @@ export async function DELETE(_req: NextRequest, { params }: Contexto) {
   if (!prod || prod.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "Producto no encontrado" }, { status: 404 });
   }
-  borrarImagenProducto(prod.imagen_path);
+  await borrarImagenProducto(prod.imagen_path);
   const actualizado = await actualizarProducto(idProducto, {
     imagen_path: null,
   });

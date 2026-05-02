@@ -1,12 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import fs from "node:fs";
 import {
   actualizarDescripcionMedio,
   borrarMedioBiblioteca,
   obtenerCuenta,
   obtenerMedioBiblioteca,
 } from "@/lib/baseDatos";
-import { rutaAbsolutaDeBiblioteca } from "@/lib/baileys/medios";
+import { borrarMedioBibliotecaArchivo } from "@/lib/baileys/medios";
 import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
@@ -71,10 +70,9 @@ export async function DELETE(_req: NextRequest, { params }: Contexto) {
     return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   }
 
-  // Borrar archivo de disco
+  // Borrar archivo de Storage (con fallback de borrar legacy local).
   try {
-    const ruta = rutaAbsolutaDeBiblioteca(medio.ruta_archivo);
-    if (fs.existsSync(ruta)) fs.unlinkSync(ruta);
+    await borrarMedioBibliotecaArchivo(medio.ruta_archivo);
   } catch (err) {
     console.warn("[biblioteca] no se pudo borrar archivo:", err);
   }

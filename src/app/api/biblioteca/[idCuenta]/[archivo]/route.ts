@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import path from "node:path";
-import fs from "node:fs";
+import { descargarBiblioteca } from "@/lib/baileys/medios";
 
 export const dynamic = "force-dynamic";
 
@@ -8,33 +7,20 @@ interface Contexto {
   params: Promise<{ idCuenta: string; archivo: string }>;
 }
 
-function mimePorExtension(archivo: string): string {
-  const ext = archivo.split(".").pop()?.toLowerCase() ?? "";
-  const mapa: Record<string, string> = {
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    png: "image/png",
-    gif: "image/gif",
-    webp: "image/webp",
-    mp4: "video/mp4",
-    webm: "video/webm",
-    ogg: "audio/ogg",
-    mp3: "audio/mpeg",
-    wav: "audio/wav",
-    m4a: "audio/mp4",
-    pdf: "application/pdf",
-  };
-  return mapa[ext] ?? "application/octet-stream";
-}
-
+/**
+ * Sirve archivos de biblioteca (medios reutilizables del bot).
+ * Lee de Supabase Storage primero, fallback a disco local legacy.
+ *
+ * Sin auth: las URLs solo son adivinables si conocés el UUID del
+ * archivo (random hex + timestamp). El panel solo las renderiza
+ * para conversaciones del usuario logueado.
+ */
 export async function GET(_req: NextRequest, { params }: Contexto) {
   const { idCuenta, archivo } = await params;
-  const cuentaId = Number(idCuenta);
-  if (!Number.isFinite(cuentaId) || cuentaId <= 0) {
-    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  if (!idCuenta || !archivo) {
+    return NextResponse.json({ error: "Ruta inválida" }, { status: 400 });
   }
   if (
-    !archivo ||
     archivo.includes("..") ||
     archivo.includes("/") ||
     archivo.includes("\\")
@@ -42,37 +28,20 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
     return NextResponse.json({ error: "Nombre inválido" }, { status: 400 });
   }
 
-  const ruta = path.resolve(
-    process.cwd(),
-    "data",
-    "biblioteca",
-    String(cuentaId),
-    archivo,
-  );
-  const baseEsperado = path.resolve(
-    process.cwd(),
-    "data",
-    "biblioteca",
-    String(cuentaId),
-  );
-  if (!ruta.startsWith(baseEsperado + path.sep) && ruta !== baseEsperado) {
-    return NextResponse.json({ error: "Path inválido" }, { status: 400 });
-  }
-  if (!fs.existsSync(ruta)) {
+  const rutaRelativa = `${idCuenta}/${archivo}`;
+  const descargado = await descargarBiblioteca(rutaRelativa);
+  if (!descargado) {
     return NextResponse.json(
       { error: "Archivo no encontrado" },
       { status: 404 },
     );
   }
 
-  const buffer = fs.readFileSync(ruta);
-  const mime = mimePorExtension(archivo);
-  return new NextResponse(buffer as unknown as BodyInit, {
-    status: 200,
+  return new NextResponse(new Uint8Array(descargado.buffer), {
     headers: {
-      "Content-Type": mime,
+      "Content-Type": descargado.mime,
       "Cache-Control": "private, max-age=3600",
-      "Content-Length": String(buffer.length),
+      "Content-Length": String(descargado.buffer.length),
     },
   });
 }

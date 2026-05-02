@@ -69,9 +69,9 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   const nombreOriginal = (archivo as File).name ?? "video.mp4";
 
   // Borrar el video previo si había
-  borrarVideoProducto(prod.video_path);
+  await borrarVideoProducto(prod.video_path);
 
-  const guardado = guardarVideoProducto(
+  const guardado = await guardarVideoProducto(
     idCuenta,
     buffer,
     nombreOriginal,
@@ -100,7 +100,7 @@ export async function DELETE(_req: NextRequest, { params }: Contexto) {
   if (!prod || prod.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "Producto no encontrado" }, { status: 404 });
   }
-  borrarVideoProducto(prod.video_path);
+  await borrarVideoProducto(prod.video_path);
   const actualizado = await actualizarProducto(idProducto, {
     video_path: null,
   });

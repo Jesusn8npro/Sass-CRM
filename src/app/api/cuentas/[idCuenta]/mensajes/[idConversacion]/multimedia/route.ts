@@ -6,9 +6,14 @@ import {
   obtenerCuenta,
   type TipoMensaje,
 } from "@/lib/baseDatos";
-import { guardarMediaSubido } from "@/lib/baileys/medios";
+import {
+  borrarTemporal,
+  escribirTemporal,
+  guardarMediaSubido,
+} from "@/lib/baileys/medios";
 import { asegurarFormatoVoz } from "@/lib/baileys/conversion";
 import { requerirSesion } from "@/lib/auth/sesion";
+import { readFile as fsReadFileAsync } from "node:fs/promises";
 
 export const dynamic = "force-dynamic";
 
@@ -139,23 +144,27 @@ export async function POST(req: NextRequest, { params }: Contexto) {
       ? "mp3"
       : "bin";
 
-  const guardado = guardarMediaSubido(idCuenta, buffer, extension);
+  // Para audio: hay que correr ffmpeg para convertir a OGG/Opus (sin
+  // esto WhatsApp muestra "este audio ya no está disponible"). ffmpeg
+  // necesita un archivo en disco, así que escribimos a temp, convertimos,
+  // y subimos el resultado a Storage.
+  let bufferFinal = buffer;
+  let extFinal = extension;
+  let archivoTempEntrada: string | null = null;
+  let archivoTempSalida: string | null = null;
 
-  // Si es audio, convertir a OGG/Opus para que WhatsApp lo reconozca
-  // como nota de voz. Sin esta conversión, los WebM/Opus de Chrome
-  // llegan a WhatsApp como "este audio ya no está disponible".
-  let mediaPathFinal = guardado.rutaRelativa;
   if (tipo === "audio") {
     console.log(
-      `[multimedia] convirtiendo audio: ${guardado.nombreArchivo} (${buffer.length} bytes)`,
+      `[multimedia] convirtiendo audio: ${archivo.name} (${buffer.length} bytes)`,
     );
+    archivoTempEntrada = escribirTemporal(buffer, extension);
     try {
-      const convertido = await asegurarFormatoVoz(guardado.rutaAbsoluta);
-      if (convertido.nombre !== guardado.nombreArchivo) {
-        mediaPathFinal = `${idCuenta}/${convertido.nombre}`;
-        console.log(
-          `[multimedia] ✓ convertido a OGG/Opus: ${convertido.nombre}`,
-        );
+      const convertido = await asegurarFormatoVoz(archivoTempEntrada);
+      if (convertido.rutaAbsoluta !== archivoTempEntrada) {
+        archivoTempSalida = convertido.rutaAbsoluta;
+        bufferFinal = await fsReadFileAsync(convertido.rutaAbsoluta);
+        extFinal = convertido.nombre.split(".").pop() ?? extension;
+        console.log(`[multimedia] ✓ convertido a OGG/Opus: ${convertido.nombre}`);
       } else {
         console.warn(
           `[multimedia] ⚠ asegurarFormatoVoz devolvió mismo archivo (no se convirtió)`,
@@ -165,6 +174,15 @@ export async function POST(req: NextRequest, { params }: Contexto) {
       console.error("[multimedia] ✗ falló conversión audio:", err);
     }
   }
+
+  let guardado;
+  try {
+    guardado = await guardarMediaSubido(idCuenta, bufferFinal, extFinal);
+  } finally {
+    if (archivoTempEntrada) borrarTemporal(archivoTempEntrada);
+    if (archivoTempSalida) borrarTemporal(archivoTempSalida);
+  }
+  const mediaPathFinal = guardado.rutaRelativa;
 
   await insertarMensaje(idCuenta, idConversacion, "humano", caption, {
     tipo,

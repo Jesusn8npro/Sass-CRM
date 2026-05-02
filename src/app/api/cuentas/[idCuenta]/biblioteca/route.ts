@@ -149,7 +149,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   const ext =
     archivo.name.includes(".") ? archivo.name.split(".").pop() ?? "bin" : "bin";
 
-  const guardado = guardarEnBiblioteca(idCuenta, buffer, ext);
+  const guardado = await guardarEnBiblioteca(idCuenta, buffer, ext);
   const medio = await crearMedioBiblioteca(
     idCuenta,
     identificador,
