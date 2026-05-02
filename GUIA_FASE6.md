@@ -13,6 +13,7 @@ Este documento cubre **qué se hizo en la sub-fase 6.A.1**, **cómo probarlo**, 
 | **6.A.3 — Storage scaffolding** | 🟡 Scaffolding listo | Buckets `productos`, `biblioteca`, `media-chats` + helper `almacenamiento.ts` + RLS policies. Cutover de write-paths queda para después de testing. |
 | **6.A.4 — Landing PRO** | ✅ Completada | Landing nueva con hero, métricas, mockup, 9 funciones, casos de uso, 3 planes de precios, FAQ y CTA final. |
 | **6.A.5 — Historial bajo demanda** | ✅ Completada | Auto-fetch del historial al primer mensaje de un contacto + botón "cargar más antiguos" en el panel. Sin import masivo. |
+| **6.B.1 — Planes + Mi Cuenta** | ✅ Completada | Free/Pro/Business con límites enforced en POST /api/cuentas (402). Página /app/mi-cuenta con perfil + plan + uso. Badge en sidebar con uso vs límite. |
 
 > **6.A.2 logrado**: cada usuario nuevo arranca de cero (0 cuentas, 0 conversaciones). Las APIs verifican `cuenta.usuario_id === auth.uid()` antes de devolver/mutar nada, y RLS por relación protege a nivel DB como segunda capa.
 
@@ -309,6 +310,43 @@ SELECT * FROM public.cuentas;
 ### Cleanup local pendiente
 - Detener Next con Ctrl+C y borrar `data/messages.db*` (lockeados mientras corre).
 - Borrar `auth/<id-numerico>/` (legacy) — los nuevos son UUIDs.
+
+## 📋 Resumen 6.B.1 — Planes y Mi Cuenta
+
+### Definición central de planes — `src/lib/planes.ts`
+- `PLANES.free` — 1 cuenta, 100 conv/mes, sin voz/Vapi/multi-modelo. Default.
+- `PLANES.pro` — 10 cuentas, 100K conv/mes, voz + Vapi + multi-modelo. $29/mes.
+- `PLANES.business` — ilimitado, white-label. A medida.
+- Helpers: `obtenerPlan(id)`, `formatearLimite(n)`, `normalizarPlan(str)`.
+- Single source of truth: cambiás precios/límites acá y se reflejan en /precios, /mi-cuenta y banners.
+
+### Helpers en `baseDatos.ts`
+- `obtenerUsuarioApp(id)` → fila completa de `public.usuarios`.
+- `actualizarNombreUsuario(id, nombre)` para edición de perfil.
+- `contarCuentasDeUsuario(id)` para validación de límite.
+
+### Endpoints nuevos
+- `GET /api/usuarios/me` → `{ usuario, plan, uso }`. Usado por sidebar y Mi Cuenta.
+- `PATCH /api/usuarios/me` con body `{ nombre }` para editar perfil.
+
+### Enforce de límite en `POST /api/cuentas`
+- Antes de crear cuenta: lee plan del usuario, cuenta cuentas activas, compara.
+- Si `usadas >= limite_cuentas` devuelve **402 Payment Required** con:
+  ```json
+  { "error": "...", "codigo": "limite_plan_alcanzado", "plan_actual": "free", "limite": 1, "usadas": 1 }
+  ```
+- `ModalNuevaCuenta.tsx` detecta `status===402` y agrega CTA "Actualizá tu plan en Mi Cuenta" al mensaje de error.
+
+### Página `/app/mi-cuenta` (Server Component)
+- Topbar con "← Volver al panel".
+- **Perfil**: avatar gradiente + email + form para editar nombre (`FormularioPerfil` client component) + rol + miembro desde.
+- **Plan actual**: badge (Free/Pro/Business con colores), barra de progreso de uso de cuentas, lista de beneficios incluidos, CTA "Actualizar a Pro →" (link a `/#precios`).
+- **Sesión**: botón "Cerrar sesión" (`CerrarSesionBoton` client component que postea a `/api/auth/cerrar-sesion`).
+
+### Badge en sidebar (`BarraLateralCuentas` → `BloqueUsuario`)
+- Footer ahora es un `<Link href="/app/mi-cuenta">` clickeable entero.
+- Avatar gradiente + email + badge del plan + contador `1/1` (color amber si lleno).
+- Eliminado el botón "cerrar sesión" del sidebar — ahora vive en `/mi-cuenta` (un solo lugar de verdad).
 
 ## 📋 Resumen 6.A.5 — Historial bajo demanda
 

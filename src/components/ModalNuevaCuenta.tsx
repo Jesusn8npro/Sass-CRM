@@ -37,8 +37,19 @@ export function ModalNuevaCuenta({ abierto, onCerrar, onCreada }: Props) {
         }),
       });
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(data.error ?? "Error creando la cuenta");
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          codigo?: string;
+        };
+        // 402 = límite de plan alcanzado. Marcamos para mostrar CTA upgrade.
+        if (res.status === 402 || data.codigo === "limite_plan_alcanzado") {
+          setError(
+            (data.error ?? "Llegaste al límite de cuentas de tu plan.") +
+              " Actualizá tu plan en Mi Cuenta.",
+          );
+        } else {
+          setError(data.error ?? "Error creando la cuenta");
+        }
         return;
       }
       const data = (await res.json()) as { cuenta: Cuenta };

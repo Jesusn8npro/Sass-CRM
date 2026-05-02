@@ -1,9 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import QRCode from "qrcode";
-import { crearCuenta, listarCuentas } from "@/lib/baseDatos";
+import {
+  contarCuentasDeUsuario,
+  crearCuenta,
+  listarCuentas,
+  obtenerUsuarioApp,
+} from "@/lib/baseDatos";
 import { arrancarBotEnProceso } from "@/lib/bot/cicloVida";
 import { calcularBotVivo } from "@/lib/latidoBot";
 import { requerirSesion } from "@/lib/auth/sesion";
+import { obtenerPlan } from "@/lib/planes";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +75,25 @@ export async function POST(req: NextRequest) {
   const promptSistema =
     typeof payload.prompt_sistema === "string" ? payload.prompt_sistema : null;
   const modelo = typeof payload.modelo === "string" ? payload.modelo : null;
+
+  // Enforce de límite por plan: leemos el plan del usuario y comparamos
+  // contra cuentas activas. Devolvemos 402 (Payment Required) cuando
+  // hay que upgradear — el front muestra CTA al plan superior.
+  const usuario = await obtenerUsuarioApp(auth.id);
+  const plan = obtenerPlan(usuario?.plan);
+  const usadas = await contarCuentasDeUsuario(auth.id);
+  if (usadas >= plan.limite_cuentas) {
+    return NextResponse.json(
+      {
+        error: `Llegaste al límite de ${plan.limite_cuentas} cuenta(s) del plan ${plan.nombre}. Actualizá a un plan superior para crear más.`,
+        codigo: "limite_plan_alcanzado",
+        plan_actual: plan.id,
+        limite: plan.limite_cuentas,
+        usadas,
+      },
+      { status: 402 },
+    );
+  }
 
   const cuenta = await crearCuenta(auth.id, etiqueta, promptSistema, modelo);
   return NextResponse.json({ cuenta });

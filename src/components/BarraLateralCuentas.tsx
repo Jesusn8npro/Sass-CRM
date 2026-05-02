@@ -1,9 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Cuenta, EstadoConexion } from "@/lib/baseDatos";
 import { InterruptorTema } from "./InterruptorTema";
-import { crearClienteNavegador } from "@/lib/supabase/cliente-navegador";
+
+interface InfoUsuario {
+  usuario: { id: string; email: string; nombre: string | null; plan: string };
+  plan: { id: string; nombre: string };
+  uso: { cuentas: number; limite_cuentas: number | null; lleno: boolean };
+}
 
 export interface CuentaConEstado extends Cuenta {
   bot_vivo?: boolean;
@@ -125,64 +131,65 @@ export function BarraLateralCuentas({
 }
 
 /**
- * Footer con email del usuario logueado + botón cerrar sesión.
- * Usa el cliente Supabase del navegador para leer la sesión actual.
+ * Footer con avatar/email del usuario logueado, badge del plan,
+ * uso de cuentas y link a Mi Cuenta.
+ * Lee /api/usuarios/me al montar.
  */
 function BloqueUsuario() {
-  const [email, setEmail] = useState<string | null>(null);
-  const [cerrando, setCerrando] = useState(false);
+  const [info, setInfo] = useState<InfoUsuario | null>(null);
 
   useEffect(() => {
-    const supabase = crearClienteNavegador();
-    supabase.auth.getUser().then(({ data }) => {
-      setEmail(data.user?.email ?? null);
-    });
+    fetch("/api/usuarios/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: InfoUsuario | null) => {
+        if (data) setInfo(data);
+      })
+      .catch(() => {});
   }, []);
 
-  async function cerrarSesion() {
-    if (cerrando) return;
-    setCerrando(true);
-    // Vamos por POST al endpoint que limpia cookies del lado server.
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = "/api/auth/cerrar-sesion";
-    document.body.appendChild(form);
-    form.submit();
-  }
+  const email = info?.usuario.email ?? null;
+  const nombrePlan = info?.plan.nombre ?? "—";
+  const usadas = info?.uso.cuentas ?? 0;
+  const limite = info?.uso.limite_cuentas;
+  const lleno = info?.uso.lleno ?? false;
+  const idPlan = info?.plan.id ?? "free";
 
   return (
-    <div className="border-t border-zinc-200 px-3 py-3 dark:border-zinc-800">
+    <Link
+      href="/app/mi-cuenta"
+      className="block border-t border-zinc-200 px-3 py-3 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900/40"
+    >
       <div className="flex items-center gap-2">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-[10px] font-bold text-white shadow-sm">
           {email ? email.slice(0, 2).toUpperCase() : "··"}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+          <p className="truncate text-[11px] font-medium text-zinc-800 dark:text-zinc-200">
             {email ?? "Cargando…"}
           </p>
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span
+              className={`rounded-full px-1.5 py-px text-[8px] font-bold uppercase tracking-wider ${
+                idPlan === "free"
+                  ? "bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200"
+                  : idPlan === "pro"
+                  ? "bg-emerald-500 text-white"
+                  : "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+              }`}
+            >
+              {nombrePlan}
+            </span>
+            <span
+              className={`font-mono text-[9px] ${
+                lleno ? "text-amber-600 dark:text-amber-400" : "text-zinc-500"
+              }`}
+            >
+              {usadas}/{limite === null ? "∞" : limite}
+            </span>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={cerrarSesion}
-          disabled={cerrando}
-          title="Cerrar sesión"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-500/15 dark:hover:text-red-400"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-3.5 w-3.5"
-          >
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-        </button>
+        <span className="text-zinc-400">→</span>
       </div>
-    </div>
+    </Link>
   );
 }
