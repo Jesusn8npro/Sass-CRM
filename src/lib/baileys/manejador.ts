@@ -6,6 +6,7 @@ import {
   type WAMessage,
 } from "@whiskeysockets/baileys";
 import {
+  contarMensajesDeConversacion,
   crearCita,
   crearSeguimiento,
   extraerEmailsDelTexto,
@@ -752,6 +753,13 @@ export function registrarManejadores(
           jidParaEnviar,
         );
 
+        // Detectar si la conversación está vacía ANTES de insertar.
+        // Si es la primera vez que vemos a este contacto en nuestra DB,
+        // disparamos fetch on-demand del historial para que la IA tenga
+        // contexto en sus próximas respuestas.
+        const eraConversacionNueva =
+          (await contarMensajesDeConversacion(conversacion.id)) === 0;
+
         const previewLog =
           tipo === "texto"
             ? `"${contenido.slice(0, 80)}"`
@@ -768,6 +776,7 @@ export function registrarManejadores(
           await insertarMensaje(cuentaId, conversacion.id, "humano", contenido, {
             tipo,
             media_path: mediaPath,
+            wa_msg_id: msg.key.id ?? null,
           });
           // Cancelar cualquier timer de buffer pendiente: ya respondió un humano
           cancelarTimer(conversacion.id);
@@ -777,7 +786,22 @@ export function registrarManejadores(
         await insertarMensaje(cuentaId, conversacion.id, "usuario", contenido, {
           tipo,
           media_path: mediaPath,
+          wa_msg_id: msg.key.id ?? null,
         });
+
+        // Conversación nueva → en background traemos los últimos 50
+        // mensajes de WhatsApp de este contacto. Llegan vía
+        // 'messaging-history.set' y se insertan como históricos
+        // (sin disparar IA, con timestamp original).
+        if (eraConversacionNueva && msg.key && msg.messageTimestamp) {
+          dispararFetchHistorialContacto(
+            sock,
+            cuentaId,
+            conversacion.id,
+            msg,
+            prefijo,
+          );
+        }
 
         // Extracción de emails: si el cliente tipeó un email en el mensaje
         // (texto, transcripción de audio, o caption de imagen), lo capturamos
@@ -876,6 +900,147 @@ export function registrarManejadores(
       }
     }
   });
+
+  // ============================================================
+  // Historial bajo demanda: 'messaging-history.set' llega como respuesta
+  // a sock.fetchMessageHistory() (o al sync inicial si syncFullHistory=true).
+  // Insertamos como históricos: sin disparar IA, con timestamp original,
+  // upsert por wa_msg_id para idempotencia entre reconexiones.
+  // ============================================================
+  sock.ev.on("messaging-history.set", async ({ messages, progress, isLatest }) => {
+    if (!messages || messages.length === 0) return;
+    console.log(
+      `${prefijo} 📜 historial recibido: ${messages.length} msgs (progress=${progress ?? "?"}, isLatest=${isLatest ?? "?"})`,
+    );
+    let insertados = 0;
+    for (const m of messages) {
+      try {
+        await procesarMensajeHistorico(m, cuentaId, prefijo);
+        insertados++;
+      } catch (err) {
+        console.error(`${prefijo} error procesando msg histórico:`, err);
+      }
+    }
+    if (insertados > 0) {
+      console.log(`${prefijo} 📜 ${insertados} msgs históricos guardados`);
+    }
+  });
+}
+
+// ============================================================
+// Procesa UN mensaje histórico: lo asocia a su conversación
+// (creándola si no existe) y lo inserta marcado como histórico.
+// NUNCA dispara IA ni encola respuesta.
+// ============================================================
+async function procesarMensajeHistorico(
+  m: WAMessage,
+  cuentaId: string,
+  prefijo: string,
+): Promise<void> {
+  const remoteJid = m.key?.remoteJid;
+  if (!remoteJid || !m.key?.id) return;
+  if (remoteJid.endsWith("@g.us")) return;
+  if (remoteJid.endsWith("@broadcast")) return;
+  if (remoteJid.endsWith("@newsletter")) return;
+
+  // Timestamp original del mensaje (Long o number, en segundos).
+  const tsRaw = m.messageTimestamp;
+  if (!tsRaw) return;
+  const tsNum = typeof tsRaw === "number" ? tsRaw : Number(tsRaw);
+  if (!Number.isFinite(tsNum) || tsNum <= 0) return;
+  const creadoEn = new Date(tsNum * 1000).toISOString();
+
+  // Identidad / teléfono
+  const sinSufijo = remoteJid.split("@")[0] ?? "";
+  const telefono = sinSufijo.split(":")[0] ?? "";
+  if (!telefono) return;
+
+  // Texto + tipo (sin descargar media — claves E2E suelen estar expiradas)
+  const textoPlano = extraerTexto(m.message);
+  const infoMedia = !textoPlano ? detectarTipoMedia(m) : null;
+  let tipo: TipoMensaje = "texto";
+  let contenido = "";
+  if (textoPlano) {
+    contenido = textoPlano;
+  } else if (infoMedia) {
+    tipo = infoMedia.tipo;
+    contenido = infoMedia.caption?.trim() || `[${infoMedia.tipo} histórico]`;
+  } else {
+    return; // sin contenido reconocible
+  }
+
+  // Conversación (si no existe la creamos para que el panel la muestre)
+  const conv = await obtenerOCrearConversacion(
+    cuentaId,
+    telefono,
+    m.pushName ?? null,
+    remoteJid,
+  );
+
+  const rol = m.key.fromMe ? "humano" : "usuario";
+  await insertarMensaje(cuentaId, conv.id, rol, contenido, {
+    tipo,
+    media_path: null, // media histórica no la bajamos
+    wa_msg_id: m.key.id,
+    creado_en: creadoEn,
+    es_historico: true,
+  });
+  // Sin extracción de emails/teléfonos para no spamear logs.
+  void prefijo;
+}
+
+// ============================================================
+// Dispara fetchMessageHistory para una conversación específica.
+// Pide los 50 mensajes anteriores al que acabamos de recibir.
+// La respuesta llega async vía 'messaging-history.set'.
+// ============================================================
+function dispararFetchHistorialContacto(
+  sock: WASocket,
+  cuentaId: string,
+  conversacionId: string,
+  msgPivote: WAMessage,
+  prefijo: string,
+): void {
+  void cuentaId;
+  void conversacionId;
+  if (!msgPivote.key || !msgPivote.messageTimestamp) return;
+  const ts = msgPivote.messageTimestamp;
+  const tsNum = typeof ts === "number" ? ts : Number(ts);
+  if (!Number.isFinite(tsNum)) return;
+
+  // Background — no bloqueamos el procesamiento del mensaje real.
+  void (async () => {
+    try {
+      const reqId = await sock.fetchMessageHistory(50, msgPivote.key, ts);
+      console.log(
+        `${prefijo} 📜 pidiendo historial on-demand para nueva conv (req ${reqId})`,
+      );
+    } catch (err) {
+      console.warn(`${prefijo} fetchMessageHistory falló (no es crítico):`, err);
+    }
+  })();
+}
+
+/**
+ * Pide más historial de una conversación específica desde el mensaje
+ * más viejo que tenemos. Llamado desde la API cuando el usuario clickea
+ * "Cargar mensajes anteriores" en el panel.
+ *
+ * Devuelve el reqId de Baileys (los mensajes llegan async via
+ * 'messaging-history.set' y se guardan vía procesarMensajeHistorico).
+ */
+export async function pedirMasHistorialConversacion(
+  sock: WASocket,
+  msgMasViejoKey: { id: string; remoteJid: string; fromMe: boolean },
+  msgMasViejoTimestampIso: string,
+  cantidad = 50,
+): Promise<string> {
+  const ts = Math.floor(new Date(msgMasViejoTimestampIso).getTime() / 1000);
+  return await sock.fetchMessageHistory(
+    Math.min(50, Math.max(1, cantidad)),
+    msgMasViejoKey as WAMessage["key"],
+    ts,
+  );
 }
 
 // ============================================================

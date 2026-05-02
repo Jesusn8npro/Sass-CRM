@@ -12,6 +12,7 @@ Este documento cubre **qué se hizo en la sub-fase 6.A.1**, **cómo probarlo**, 
 | **6.A.2 — Migración DB SQLite → Postgres + multi-tenant** | ✅ Completada | `baseDatos.ts` 100% Supabase, IDs UUID, todas las APIs verifican propiedad de cuenta, RLS por relación |
 | **6.A.3 — Storage scaffolding** | 🟡 Scaffolding listo | Buckets `productos`, `biblioteca`, `media-chats` + helper `almacenamiento.ts` + RLS policies. Cutover de write-paths queda para después de testing. |
 | **6.A.4 — Landing PRO** | ✅ Completada | Landing nueva con hero, métricas, mockup, 9 funciones, casos de uso, 3 planes de precios, FAQ y CTA final. |
+| **6.A.5 — Historial bajo demanda** | ✅ Completada | Auto-fetch del historial al primer mensaje de un contacto + botón "cargar más antiguos" en el panel. Sin import masivo. |
 
 > **6.A.2 logrado**: cada usuario nuevo arranca de cero (0 cuentas, 0 conversaciones). Las APIs verifican `cuenta.usuario_id === auth.uid()` antes de devolver/mutar nada, y RLS por relación protege a nivel DB como segunda capa.
 
@@ -308,6 +309,48 @@ SELECT * FROM public.cuentas;
 ### Cleanup local pendiente
 - Detener Next con Ctrl+C y borrar `data/messages.db*` (lockeados mientras corre).
 - Borrar `auth/<id-numerico>/` (legacy) — los nuevos son UUIDs.
+
+## 📋 Resumen 6.A.5 — Historial bajo demanda
+
+### Estrategia
+**Sin `syncFullHistory`** (que dumpea TODO el historial al conectar y satura DB).
+En su lugar:
+
+1. **Auto-fetch on-demand**: cuando llega el primer mensaje de un contacto **nuevo en nuestra DB**, disparamos `sock.fetchMessageHistory(50, msg.key, msg.messageTimestamp)` en background. WhatsApp responde con los 50 mensajes anteriores de ese chat (lo que tenga).
+2. **Botón "Cargar mensajes anteriores"** en el panel: pide otros 50 anteriores al mensaje más viejo que tengamos. Repetible hasta agotar el historial que WhatsApp guarda.
+3. **Sin disparar IA sobre históricos**: los mensajes históricos se insertan con `es_historico=true` y **no** triggerean respuesta del bot.
+
+### Migración SQL `12_mensajes_wa_msg_id_idempotencia`
+- Columna `wa_msg_id TEXT` en `mensajes`.
+- Índice único parcial `(cuenta_id, wa_msg_id) WHERE wa_msg_id IS NOT NULL`.
+- Mensajes generados internamente (sistema, llamadas) tienen `wa_msg_id NULL` y no entran al unique.
+
+### Cambios en `baseDatos.ts`
+- `insertarMensaje()` ahora acepta `wa_msg_id`, `creado_en` y `es_historico`. Si trae `wa_msg_id`, hace **upsert** con `ON CONFLICT (cuenta_id, wa_msg_id) DO NOTHING` → idempotente entre reconexiones.
+- `obtenerMensajeMasViejoConWaId(conversacionId)` para encontrar el pivote para fetch siguiente.
+- `contarMensajesDeConversacion(conversacionId)` para detectar conversaciones nuevas.
+
+### Cambios en `manejador.ts`
+- Listener nuevo `messaging-history.set`: procesa cada mensaje histórico vía `procesarMensajeHistorico()` que crea/encuentra conversación, extrae texto, e inserta como histórico (sin descargar media — claves E2E expiradas).
+- En `messages.upsert`, antes de insertar el primer mensaje de una conv chequeamos `contarMensajesDeConversacion === 0`. Si sí → disparamos `dispararFetchHistorialContacto()` en background.
+- Helper exportado `pedirMasHistorialConversacion()` para que el endpoint API pueda llamarlo.
+
+### Endpoint nuevo
+- `POST /api/cuentas/[idCuenta]/conversaciones/[idConversacion]/cargar-historial`
+- Body opcional `{ cantidad?: number }` (1..50, default 50).
+- Verifica sesión + propiedad + cuenta conectada.
+- Toma el msg más viejo con wa_msg_id y llama a Baileys.
+- Devuelve 200 con `{ ok, req_id, esperando_mensajes }` o errores 4xx/5xx con explicación.
+
+### UI en `PanelConversacion.tsx`
+- Botón "↑ Cargar mensajes anteriores" arriba de la lista de mensajes.
+- Estado `cargandoHistorial` para deshabilitar mientras pide.
+- Mensaje de feedback ("Pedido enviado a WhatsApp. Los mensajes van a aparecer en unos segundos.") porque la respuesta es asíncrona — los mensajes los ve via el polling de `/mensajes` cada 2s.
+
+### Limitaciones honestas
+- WhatsApp **no manda** medios viejos: las claves de descifrado E2E expiran y los media históricos llegan rotos. Solo texto + caption.
+- WhatsApp **limita** cuánto historial guarda: típicamente ~6 meses para chats activos, menos para chats viejos. No es ilimitado.
+- En grupos no aplica: filtramos `@g.us`, `@broadcast`, `@newsletter`.
 
 ## 📋 Resumen 6.A.4 — Landing PRO
 

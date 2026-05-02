@@ -45,6 +45,8 @@ export function PanelConversacion({
   const [emojiAbierto, setEmojiAbierto] = useState(false);
   const [respuestasAbiertas, setRespuestasAbiertas] = useState(false);
   const [respuestas, setRespuestas] = useState<RespuestaRapida[]>([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [mensajeHistorial, setMensajeHistorial] = useState<string | null>(null);
   const refScroll = useRef<HTMLDivElement>(null);
   const refInputArchivo = useRef<HTMLInputElement>(null);
   const refTextarea = useRef<HTMLTextAreaElement>(null);
@@ -85,7 +87,43 @@ export function PanelConversacion({
     setBorrador("");
     setEmojiAbierto(false);
     setRespuestasAbiertas(false);
+    setMensajeHistorial(null);
   }, [idConversacion]);
+
+  /**
+   * Pide a WhatsApp más mensajes anteriores al más viejo que tenemos
+   * de esta conversación. Llegan async vía Baileys; el polling de
+   * mensajes los va a mostrar en cuanto se inserten en DB.
+   */
+  async function cargarHistorialAnterior() {
+    if (cargandoHistorial) return;
+    setCargandoHistorial(true);
+    setMensajeHistorial(null);
+    try {
+      const res = await fetch(
+        `/api/cuentas/${idCuenta}/conversaciones/${idConversacion}/cargar-historial`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cantidad: 50 }),
+        },
+      );
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setMensajeHistorial(data.error ?? "No se pudo pedir el historial.");
+      } else {
+        setMensajeHistorial(
+          "Pedido enviado a WhatsApp. Los mensajes van a aparecer en unos segundos.",
+        );
+      }
+    } catch (err) {
+      setMensajeHistorial(
+        err instanceof Error ? err.message : "Error de red pidiendo historial.",
+      );
+    } finally {
+      setCargandoHistorial(false);
+    }
+  }
 
   // Cargar respuestas rápidas de la cuenta una vez
   useEffect(() => {
@@ -338,6 +376,24 @@ export function PanelConversacion({
           </div>
         ) : (
           <div className="flex flex-col gap-3">
+            {/* Botón "cargar mensajes anteriores": pide a WhatsApp 50 más */}
+            <div className="mx-auto flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={cargarHistorialAnterior}
+                disabled={cargandoHistorial}
+                className="rounded-full border border-zinc-200 bg-white px-4 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:border-emerald-500/30 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
+              >
+                {cargandoHistorial
+                  ? "Pidiendo a WhatsApp…"
+                  : "↑ Cargar mensajes anteriores"}
+              </button>
+              {mensajeHistorial && (
+                <p className="text-center text-[11px] text-zinc-500">
+                  {mensajeHistorial}
+                </p>
+              )}
+            </div>
             {mensajes.map((m) => (
               <BurbujaMensaje key={m.id} mensaje={m} idCuenta={idCuenta} />
             ))}

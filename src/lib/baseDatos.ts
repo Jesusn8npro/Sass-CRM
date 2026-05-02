@@ -122,6 +122,7 @@ export interface Mensaje {
   contenido: string;
   media_path: string | null;
   creado_en: string;
+  wa_msg_id: string | null;
 }
 
 export interface FilaBandejaSalida {
@@ -713,28 +714,85 @@ export async function insertarMensaje(
   conversacionId: string,
   rol: RolMensaje,
   contenido: string,
-  opciones?: { tipo?: TipoMensaje; media_path?: string | null },
-): Promise<Mensaje> {
-  const ahoraIso = new Date().toISOString();
+  opciones?: {
+    tipo?: TipoMensaje;
+    media_path?: string | null;
+    wa_msg_id?: string | null;
+    /** Si viene, se usa como creado_en (ISO string). Sirve para
+     * mensajes históricos importados con su timestamp original. */
+    creado_en?: string;
+    /** Si true, no actualiza ultimo_mensaje_en (mensajes históricos). */
+    es_historico?: boolean;
+  },
+): Promise<Mensaje | null> {
+  const fila: Record<string, unknown> = {
+    cuenta_id: cuentaId,
+    conversacion_id: conversacionId,
+    rol,
+    tipo: opciones?.tipo ?? "texto",
+    contenido,
+    media_path: opciones?.media_path ?? null,
+    wa_msg_id: opciones?.wa_msg_id ?? null,
+  };
+  if (opciones?.creado_en) fila.creado_en = opciones.creado_en;
+
+  // Si trae wa_msg_id usamos upsert para idempotencia. Si no, insert plano.
+  let res;
+  if (opciones?.wa_msg_id) {
+    res = await db()
+      .from("mensajes")
+      .upsert(fila, {
+        onConflict: "cuenta_id,wa_msg_id",
+        ignoreDuplicates: true,
+      })
+      .select()
+      .maybeSingle();
+  } else {
+    res = await db().from("mensajes").insert(fila).select().single();
+  }
+  if (res.error) lanzar(res.error, "insertarMensaje");
+  // Si fue duplicado (upsert con ignoreDuplicates) data viene null — es OK.
+  if (!res.data) return null;
+
+  // Solo actualizamos ultimo_mensaje_en para mensajes en tiempo real,
+  // no para los históricos (que llegan en cualquier orden).
+  if (!opciones?.es_historico) {
+    await db()
+      .from("conversaciones")
+      .update({ ultimo_mensaje_en: new Date().toISOString() })
+      .eq("id", conversacionId);
+  }
+  return res.data as Mensaje;
+}
+
+/** Devuelve el mensaje más viejo de la conversación (con wa_msg_id),
+ * útil para pedir más historial via fetchMessageHistory. */
+export async function obtenerMensajeMasViejoConWaId(
+  conversacionId: string,
+): Promise<Mensaje | null> {
   const { data, error } = await db()
     .from("mensajes")
-    .insert({
-      cuenta_id: cuentaId,
-      conversacion_id: conversacionId,
-      rol,
-      tipo: opciones?.tipo ?? "texto",
-      contenido,
-      media_path: opciones?.media_path ?? null,
-    })
-    .select()
-    .single();
-  if (error) lanzar(error, "insertarMensaje");
-  // Touch ultimo_mensaje_en de la conversación
-  await db()
-    .from("conversaciones")
-    .update({ ultimo_mensaje_en: ahoraIso })
-    .eq("id", conversacionId);
-  return data as Mensaje;
+    .select("*")
+    .eq("conversacion_id", conversacionId)
+    .not("wa_msg_id", "is", null)
+    .order("creado_en", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) lanzar(error, "obtenerMensajeMasViejoConWaId");
+  return (data as Mensaje) ?? null;
+}
+
+/** Cuenta cuántos mensajes tiene una conversación.
+ * Usado para detectar conversaciones recién creadas (fetch on-demand). */
+export async function contarMensajesDeConversacion(
+  conversacionId: string,
+): Promise<number> {
+  const { count, error } = await db()
+    .from("mensajes")
+    .select("id", { count: "exact", head: true })
+    .eq("conversacion_id", conversacionId);
+  if (error) lanzar(error, "contarMensajesDeConversacion");
+  return count ?? 0;
 }
 
 export async function obtenerMensajes(
