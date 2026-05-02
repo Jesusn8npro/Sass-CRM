@@ -10,8 +10,8 @@ Este documento cubre **qué se hizo en la sub-fase 6.A.1**, **cómo probarlo**, 
 |---|---|---|
 | **6.A.1 — Auth + Landing + Schema** | ✅ Completada | Schema Supabase, login/signup, panel protegido |
 | **6.A.2 — Migración DB SQLite → Postgres + multi-tenant** | ✅ Completada | `baseDatos.ts` 100% Supabase, IDs UUID, todas las APIs verifican propiedad de cuenta, RLS por relación |
-| 6.A.3 — Storage migration + UI mejoras | ⏳ Pendiente | Mover medios/auth a Supabase Storage, cleanup local |
-| 6.A.4 — Landing PRO | ⏳ Pendiente | Landing tipo Zolutium con copy de ventas |
+| **6.A.3 — Storage scaffolding** | 🟡 Scaffolding listo | Buckets `productos`, `biblioteca`, `media-chats` + helper `almacenamiento.ts` + RLS policies. Cutover de write-paths queda para después de testing. |
+| **6.A.4 — Landing PRO** | ✅ Completada | Landing nueva con hero, métricas, mockup, 9 funciones, casos de uso, 3 planes de precios, FAQ y CTA final. |
 
 > **6.A.2 logrado**: cada usuario nuevo arranca de cero (0 cuentas, 0 conversaciones). Las APIs verifican `cuenta.usuario_id === auth.uid()` antes de devolver/mutar nada, y RLS por relación protege a nivel DB como segunda capa.
 
@@ -280,17 +280,51 @@ SELECT * FROM public.cuentas;
 - Policy `FOR ALL TO authenticated USING (cuenta_es_mia(cuenta_id))` en 15 tablas.
 - `conversacion_etiquetas` joinea via `conversaciones.cuenta_id`.
 
-## 📋 Lo que viene en 6.A.3
+## 📋 Resumen 6.A.3 — Storage scaffolding
 
-### Storage migration
-- Mover `auth/<uuid>/` (sesiones Baileys multi-archivo) a Supabase Storage o adapter custom.
-- Mover `data/media/` y `data/biblioteca/` a Storage con rutas firmadas.
-- Mover `data/productos/` (imágenes/videos de catálogo) a Storage.
-- Beneficio: el bot puede correr en N instancias sin sticky storage.
+### Buckets creados (privados, RLS por cuenta)
+- `productos` — imágenes/videos del catálogo (límite 50MB, mimes whitelistados)
+- `biblioteca` — medios reutilizables del bot (límite 50MB)
+- `media-chats` — multimedia entrante de WhatsApp (límite 100MB, cualquier mime)
 
-### Cleanup local
-- Borrar `data/messages.db*` (después de detener Next con Ctrl+C; los archivos están lockeados mientras el dev server corre).
-- Borrar `auth/<id>/` con IDs numéricos legacy si aparecen — los nuevos son UUIDs.
+### Helper `src/lib/supabase/almacenamiento.ts`
+- `subirArchivo(bucket, cuentaId, nombre, buffer, mime)`
+- `urlFirmadaDe(bucket, ruta, segundos)` — URL temporal para servir
+- `descargarArchivo(bucket, ruta)` — Buffer + mime para proxy server-side
+- `borrarArchivo(bucket, ruta)`
+- `existeArchivo(bucket, ruta)` — para modo híbrido lee-Storage-primero-fallback-local
+
+### Migración SQL `11_storage_buckets_y_policies`
+- Buckets vía `INSERT ... ON CONFLICT DO NOTHING` (idempotente).
+- Policies SELECT/INSERT/DELETE por cuenta usando `cuenta_es_mia()`.
+- Path convention: `<cuenta_uuid>/<archivo>` para que la policy pueda chequear ownership.
+
+### Cutover (NO HECHO — pendiente de testing)
+1. Cambiar API de upload de productos para escribir en `productos` bucket en lugar de `data/productos/`.
+2. Cambiar `/api/productos/[idCuenta]/[archivo]` a redirect 302 a URL firmada.
+3. Mismo patrón para biblioteca y media-chats.
+4. Script de backfill de archivos existentes en `data/` → buckets.
+
+### Cleanup local pendiente
+- Detener Next con Ctrl+C y borrar `data/messages.db*` (lockeados mientras corre).
+- Borrar `auth/<id-numerico>/` (legacy) — los nuevos son UUIDs.
+
+## 📋 Resumen 6.A.4 — Landing PRO
+
+### `src/app/page.tsx` reescrito
+Server component puro (cero JS, máximo SEO). Secciones:
+1. **Nav sticky** con scroll-spy a anchors (#funciones, #como-funciona, #precios, #faq).
+2. **Hero** con gradiente animado, badge "beta abierta", H1 grande con título degradado, doble CTA, mockup del panel realista (sidebar + conversación con burbujas).
+3. **Métricas** (24/7, < 5s, ∞, 0%) en gradiente.
+4. **Cómo funciona** — 3 pasos numerados.
+5. **Funciones** — grid de 9 tarjetas (IA multimodal, voz clonada, pipeline, catálogo, agenda, multi-cuenta, captura automática, seguimientos, anti-ban).
+6. **Casos de uso** — 9 verticales.
+7. **Precios** — 3 planes (Gratis $0, Pro $29/mes, Business a medida) con beneficios y CTAs.
+8. **FAQ** — 6 preguntas con `<details>` nativos.
+9. **CTA final** — banner gradiente esmeralda con CTAs grandes.
+10. **Footer** — 4 columnas (producto, cuenta, legal, branding).
+
+Todo responsive (mobile-first), dark mode soportado, sin imágenes externas.
 
 ---
 
