@@ -1,11 +1,8 @@
-import path from "node:path";
-import fs from "node:fs";
 import {
   Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeWASocket,
-  useMultiFileAuthState,
   type WASocket,
 } from "@whiskeysockets/baileys";
 import pino from "pino";
@@ -20,6 +17,10 @@ import {
   procesarBandejaSalidaDeCuenta,
   registrarManejadores,
 } from "./manejador";
+import {
+  borrarSesionBaileysDeCuenta,
+  useSupabaseAuthState,
+} from "./auth-supabase";
 
 interface ErrorConCodigo {
   output?: { statusCode?: number };
@@ -35,16 +36,6 @@ interface SocketCuenta {
 
 const logger = pino({ level: "silent" });
 
-function rutaAuthCuenta(cuentaId: string): string {
-  return path.resolve(process.cwd(), "auth", String(cuentaId));
-}
-
-function asegurarDirectorio(ruta: string): void {
-  if (!fs.existsSync(ruta)) {
-    fs.mkdirSync(ruta, { recursive: true });
-  }
-}
-
 function extraerTelefonoDeJID(jid: string | undefined): string | null {
   if (!jid) return null;
   const sinSufijo = jid.split("@")[0];
@@ -53,37 +44,11 @@ function extraerTelefonoDeJID(jid: string | undefined): string | null {
   return sinDispositivo || null;
 }
 
-/**
- * Migración legacy: si existe contenido directo en auth/ (de la versión
- * single-account), lo movemos a auth/1/.
- */
-function migrarAuthLegacy(): void {
-  const dirAuth = path.resolve(process.cwd(), "auth");
-  if (!fs.existsSync(dirAuth)) return;
-  const entradas = fs.readdirSync(dirAuth, { withFileTypes: true });
-  const tieneArchivosSueltos = entradas.some((e) => e.isFile());
-  if (!tieneArchivosSueltos) return;
-  const dirCuenta1 = rutaAuthCuenta("1");
-  asegurarDirectorio(dirCuenta1);
-  for (const entrada of entradas) {
-    if (!entrada.isFile()) continue;
-    const origen = path.join(dirAuth, entrada.name);
-    const destino = path.join(dirCuenta1, entrada.name);
-    if (!fs.existsSync(destino)) {
-      fs.renameSync(origen, destino);
-    } else {
-      fs.unlinkSync(origen);
-    }
-  }
-  console.log("[gestor] Sesión legacy auth/ movida a auth/1/");
-}
-
 class GestorCuentas {
   private sockets = new Map<string, SocketCuenta>();
   private detenido = false;
 
   async iniciar(): Promise<void> {
-    migrarAuthLegacy();
     await this.sincronizar();
   }
 
@@ -119,9 +84,9 @@ class GestorCuentas {
   }
 
   private async iniciarSocketCuenta(cuenta: Cuenta): Promise<void> {
-    const dirAuth = rutaAuthCuenta(cuenta.id);
-    asegurarDirectorio(dirAuth);
-    const { state, saveCreds } = await useMultiFileAuthState(dirAuth);
+    // Sesión persistida en Supabase Postgres (no más disco local).
+    // Sobrevive reinicios y permite multi-instancia del bot.
+    const { state, saveCreds } = await useSupabaseAuthState(cuenta.id);
 
     let version: [number, number, number] | undefined;
     try {
@@ -207,22 +172,16 @@ class GestorCuentas {
 
         if (codigo === DisconnectReason.loggedOut) {
           console.log(
-            `${prefijo} sesión cerrada por el usuario. Limpiando estado.`,
+            `${prefijo} sesión cerrada por WhatsApp. Limpiando creds.`,
           );
           void actualizarEstadoCuenta(cuenta.id, {
             estado: "desconectado",
             cadena_qr: null,
             telefono: null,
           });
-          try {
-            fs.rmSync(dirAuth, { recursive: true, force: true });
-            asegurarDirectorio(dirAuth);
-          } catch (errBorrado) {
-            console.warn(
-              `${prefijo} no se pudo limpiar carpeta auth:`,
-              errBorrado,
-            );
-          }
+          // Borrar la sesión de Supabase para que el siguiente arranque
+          // genere QR limpio.
+          void borrarSesionBaileysDeCuenta(cuenta.id).catch(() => {});
           return;
         }
 
@@ -288,11 +247,7 @@ class GestorCuentas {
       this.sockets.delete(cuentaId);
     }
     if (limpiarAuth) {
-      try {
-        fs.rmSync(rutaAuthCuenta(cuentaId), { recursive: true, force: true });
-      } catch {
-        // ignorar
-      }
+      await borrarSesionBaileysDeCuenta(cuentaId);
     }
     await actualizarEstadoCuenta(cuentaId, {
       estado: "desconectado",

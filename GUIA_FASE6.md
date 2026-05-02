@@ -15,6 +15,7 @@ Este documento cubre **qué se hizo en la sub-fase 6.A.1**, **cómo probarlo**, 
 | **6.A.5 — Historial bajo demanda** | ✅ Completada | Auto-fetch del historial al primer mensaje de un contacto + botón "cargar más antiguos" en el panel. Sin import masivo. |
 | **6.B.1 — Planes + Mi Cuenta** | ✅ Completada | Free/Pro/Business con límites enforced en POST /api/cuentas (402). Página /app/mi-cuenta con perfil + plan + uso. Badge en sidebar con uso vs límite. |
 | **6.C.1 — Vapi pro: multi-assistants + llamadas programadas + Web SDK** | ✅ Completada | N assistants Vapi por cuenta (vendedor/soporte/cobranza). Llamadas programadas a futuro con scheduler. IA puede agendar llamadas con `agendar_llamada`. Test desde browser con `@vapi-ai/web`. |
+| **6.C.2 — Auth Baileys en Supabase Postgres** | ✅ Completada | Reemplaza `useMultiFileAuthState` (disco) por `useSupabaseAuthState` (DB). Sesión sobrevive reinicios del contenedor y permite multi-instancia. |
 
 > **6.A.2 logrado**: cada usuario nuevo arranca de cero (0 cuentas, 0 conversaciones). Las APIs verifican `cuenta.usuario_id === auth.uid()` antes de devolver/mutar nada, y RLS por relación protege a nivel DB como segunda capa.
 
@@ -311,6 +312,48 @@ Buckets creados con migración SQL `11_storage_buckets_y_policies`:
 ### Cleanup local pendiente
 - Detener Next con Ctrl+C y borrar `data/messages.db*` (lockeados mientras corre).
 - Borrar `auth/<id-numerico>/` (legacy) — los nuevos son UUIDs.
+
+## 📋 Resumen 6.C.2 — Auth Baileys en Supabase Postgres
+
+### Problema que resuelve
+Antes Baileys guardaba la sesión (`creds.json` + ~50-200 archivos de signal keys) en `auth/<cuentaId>/` del disco local del server. Eso significaba:
+- Reinicio del contenedor → sesión PERDIDA → re-escanear QR.
+- No se puede correr el bot en N instancias (cada una tendría su propia carpeta).
+- En EasyPanel/Docker la carpeta `auth/` se va con el deploy si no hay volumen montado.
+
+### Solución
+Implementé `useSupabaseAuthState(cuentaId)` que usa la misma firma que `useMultiFileAuthState` pero persiste todo en una tabla `baileys_auth` en Postgres.
+
+### Migración SQL `15_baileys_auth_en_supabase`
+```sql
+CREATE TABLE baileys_auth (
+  cuenta_id UUID REFERENCES cuentas(id) ON DELETE CASCADE,
+  tipo TEXT,          -- 'creds' | 'pre-key' | 'session' | 'sender-key' | etc
+  id TEXT,            -- 'main' for creds, key id for everything else
+  valor JSONB,        -- BufferJSON.replacer aplicado
+  PRIMARY KEY (cuenta_id, tipo, id)
+);
+```
+RLS por `cuenta_es_mia()` aplicado.
+
+### Helper `src/lib/baileys/auth-supabase.ts`
+- `useSupabaseAuthState(cuentaId)` → `{ state, saveCreds }` (misma firma que `useMultiFileAuthState`).
+- Implementa `SignalKeyStore` con `get` / `set` / batch upserts (100 por batch).
+- Usa `BufferJSON.replacer` / `BufferJSON.reviver` para serializar Buffers como `{ type:'Buffer', data:[...] }`.
+- `borrarSesionBaileysDeCuenta(cuentaId)` para cuando WhatsApp cierra sesión (DisconnectReason.loggedOut).
+- `tieneSesionBaileys(cuentaId)` para detectar primera conexión.
+
+### Cambios en `gestor.ts`
+- Removidas las dependencias de `node:fs` y `node:path` (ya no escribimos en disco).
+- Removidas `rutaAuthCuenta`, `asegurarDirectorio`, `migrarAuthLegacy`.
+- `iniciarSocketCuenta` ahora hace `useSupabaseAuthState(cuenta.id)`.
+- En `connection.update` con `DisconnectReason.loggedOut`: borra sesión de DB.
+- En `desconectar(cuentaId, limpiarAuth)`: borra de DB en vez de `fs.rmSync`.
+
+### Beneficio inmediato
+- **Reiniciá el server cuantas veces quieras** → la sesión se mantiene.
+- **WhatsApp Web cerrando sesión sigue siendo decisión de Meta** (no podemos impedirlo). Pero si vos NO cerrás sesión, el bot mantiene la conexión hasta el próximo deploy y a través de él también.
+- **Multi-instancia**: si en algún momento corrés 2 réplicas del bot, ambas leen las mismas keys (igual hay que coordinar quién maneja cada cuenta — pero el storage ya no es bloqueante).
 
 ## 📋 Resumen 6.C.1 — Vapi pro
 
