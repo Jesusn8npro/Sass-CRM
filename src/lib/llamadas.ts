@@ -44,12 +44,12 @@ function normalizarTelefonoE164(telefono: string): string | null {
   return conMas;
 }
 
-function dentroDeCooldown(conversacionId: number): boolean {
-  const llamadas = listarLlamadasDeConversacion(conversacionId);
+async function dentroDeCooldown(conversacionId: string): Promise<boolean> {
+  const llamadas = await listarLlamadasDeConversacion(conversacionId);
   if (llamadas.length === 0) return false;
   const ultima = llamadas[0]!; // ordenadas DESC por iniciada_en
   const ahora = Date.now();
-  const ultimaMs = ultima.iniciada_en * 1000;
+  const ultimaMs = new Date(ultima.iniciada_en).getTime();
   return ahora - ultimaMs < COOLDOWN_MS;
 }
 
@@ -86,12 +86,12 @@ function resumirHistorial(historial: Mensaje[], maxChars = 1500): string {
   return texto;
 }
 
-function construirContextoLlamada(
+async function construirContextoLlamada(
   cuenta: Cuenta,
   conversacion: Conversacion,
   motivo: string | null,
-): string {
-  const historial = obtenerHistorialReciente(conversacion.id, 30);
+): Promise<string> {
+  const historial = await obtenerHistorialReciente(conversacion.id, 30);
   const resumen = resumirHistorial(historial);
   const nombreCliente =
     conversacion.nombre?.trim() || `+${conversacion.telefono}`;
@@ -175,7 +175,7 @@ export async function iniciarLlamadaConContexto(
     };
   }
 
-  if (dentroDeCooldown(conversacion.id)) {
+  if (await dentroDeCooldown(conversacion.id)) {
     return {
       ok: false,
       error:
@@ -184,7 +184,11 @@ export async function iniciarLlamadaConContexto(
     };
   }
 
-  const contexto = construirContextoLlamada(cuenta, conversacion, motivo ?? null);
+  const contexto = await construirContextoLlamada(
+    cuenta,
+    conversacion,
+    motivo ?? null,
+  );
   const primerMensaje = construirPrimerMensaje(cuenta, conversacion);
 
   try {
@@ -211,7 +215,7 @@ export async function iniciarLlamadaConContexto(
     }
 
     const soloDigitos = telefonoE164.replace(/[^\d]/g, "");
-    const llamada = crearLlamadaVapi(
+    const llamada = await crearLlamadaVapi(
       cuenta.id,
       conversacion.id,
       respuesta.id,
@@ -223,7 +227,7 @@ export async function iniciarLlamadaConContexto(
     try {
       const prefijo = origen === "ia" ? "🤖📞" : "👤📞";
       const linea = `${prefijo} Llamada saliente iniciada${motivo ? ` — ${motivo}` : ""}`;
-      insertarMensaje(cuenta.id, conversacion.id, "sistema", linea, {
+      await insertarMensaje(cuenta.id, conversacion.id, "sistema", linea, {
         tipo: "sistema",
       });
     } catch {

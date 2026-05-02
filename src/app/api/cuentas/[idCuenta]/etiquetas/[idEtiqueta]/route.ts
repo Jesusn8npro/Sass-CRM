@@ -2,8 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   actualizarEtiqueta,
   borrarEtiqueta,
-  obtenerEtiqueta,
+  listarEtiquetas,
+  obtenerCuenta,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -22,27 +24,21 @@ const COLORES_VALIDOS = new Set([
   "rosa",
 ]);
 
-function validar(idCuenta: string, idEtiqueta: string) {
-  const cuentaId = Number(idCuenta);
-  const etiquetaId = Number(idEtiqueta);
-  if (
-    !Number.isFinite(cuentaId) ||
-    cuentaId <= 0 ||
-    !Number.isFinite(etiquetaId) ||
-    etiquetaId <= 0
-  ) {
-    return null;
-  }
-  return { cuentaId, etiquetaId };
-}
-
 export async function PATCH(req: NextRequest, { params }: Contexto) {
-  const { idCuenta, idEtiqueta } = await params;
-  const ids = validar(idCuenta, idEtiqueta);
-  if (!ids) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
 
-  const etiqueta = obtenerEtiqueta(ids.etiquetaId);
-  if (!etiqueta || etiqueta.cuenta_id !== ids.cuentaId) {
+  const { idCuenta, idEtiqueta } = await params;
+  if (!idCuenta || !idEtiqueta) {
+    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  }
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const etiquetas = await listarEtiquetas(idCuenta);
+  const etiqueta = etiquetas.find((e) => e.id === idEtiqueta);
+  if (!etiqueta) {
     return NextResponse.json({ error: "No encontrada" }, { status: 404 });
   }
 
@@ -66,7 +62,7 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
       ? null
       : undefined;
 
-  const actualizada = actualizarEtiqueta(ids.etiquetaId, {
+  const actualizada = await actualizarEtiqueta(idEtiqueta, {
     nombre,
     color,
     descripcion,
@@ -75,13 +71,22 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idEtiqueta } = await params;
-  const ids = validar(idCuenta, idEtiqueta);
-  if (!ids) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  const etiqueta = obtenerEtiqueta(ids.etiquetaId);
-  if (!etiqueta || etiqueta.cuenta_id !== ids.cuentaId) {
+  if (!idCuenta || !idEtiqueta) {
+    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  }
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const etiquetas = await listarEtiquetas(idCuenta);
+  const etiqueta = etiquetas.find((e) => e.id === idEtiqueta);
+  if (!etiqueta) {
     return NextResponse.json({ error: "No encontrada" }, { status: 404 });
   }
-  borrarEtiqueta(ids.etiquetaId);
+  await borrarEtiqueta(idEtiqueta);
   return NextResponse.json({ ok: true });
 }

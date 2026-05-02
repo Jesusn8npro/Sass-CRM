@@ -35,8 +35,8 @@ const NOMBRE_ESTADO: Record<EstadoSeguimiento, string> = {
   fallido: "Fallido",
 };
 
-function formatearFechaHora(unix: number): string {
-  return new Date(unix * 1000).toLocaleString("es-ES", {
+function formatearFechaHora(iso: string): string {
+  return new Date(iso).toLocaleString("es-ES", {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
@@ -44,8 +44,10 @@ function formatearFechaHora(unix: number): string {
   });
 }
 
-function tiempoRelativo(unix: number): string {
-  const diff = unix - Math.floor(Date.now() / 1000);
+function tiempoRelativo(iso: string): string {
+  const ts = new Date(iso).getTime();
+  const diffMs = ts - Date.now();
+  const diff = Math.floor(diffMs / 1000);
   if (Math.abs(diff) < 60) return "ahora";
   const abs = Math.abs(diff);
   const txt =
@@ -59,7 +61,7 @@ function tiempoRelativo(unix: number): string {
 
 export default function PaginaSeguimientos() {
   const params = useParams<{ idCuenta: string }>();
-  const idCuenta = Number(params?.idCuenta);
+  const idCuenta = params?.idCuenta ?? "";
 
   const [cuenta, setCuenta] = useState<Cuenta | null>(null);
   const [seguimientos, setSeguimientos] = useState<SeguimientoConContacto[]>(
@@ -67,7 +69,7 @@ export default function PaginaSeguimientos() {
   );
 
   const cargar = useCallback(async () => {
-    if (!Number.isFinite(idCuenta)) return;
+    if (!idCuenta) return;
     const [resCuenta, resS] = await Promise.all([
       fetch(`/api/cuentas/${idCuenta}`, { cache: "no-store" }),
       fetch(`/api/cuentas/${idCuenta}/seguimientos`, { cache: "no-store" }),
@@ -88,7 +90,7 @@ export default function PaginaSeguimientos() {
     return () => clearInterval(t);
   }, [cargar]);
 
-  async function cancelar(id: number) {
+  async function cancelar(id: string) {
     if (!confirm("¿Cancelar este seguimiento? No se enviará al cliente."))
       return;
     await fetch(`/api/cuentas/${idCuenta}/seguimientos/${id}`, {

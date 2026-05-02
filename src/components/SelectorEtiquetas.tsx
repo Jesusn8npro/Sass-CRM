@@ -25,8 +25,8 @@ function clasesPill(color: string): string {
 }
 
 interface Props {
-  idCuenta: number;
-  idConversacion: number;
+  idCuenta: string;
+  idConversacion: string;
 }
 
 interface RespuestaEtiquetasCuenta {

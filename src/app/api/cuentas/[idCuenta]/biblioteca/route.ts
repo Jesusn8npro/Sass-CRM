@@ -7,6 +7,7 @@ import {
   type TipoMediaBiblioteca,
 } from "@/lib/baseDatos";
 import { guardarEnBiblioteca } from "@/lib/baileys/medios";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -59,25 +60,31 @@ function slugify(s: string): string {
 }
 
 export async function GET(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
-  const medios = listarBiblioteca(id);
+  const medios = await listarBiblioteca(idCuenta);
   return NextResponse.json({ medios });
 }
 
 export async function POST(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
 
@@ -121,7 +128,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
       { status: 400 },
     );
   }
-  if (obtenerMedioPorIdentificador(id, identificador)) {
+  if (await obtenerMedioPorIdentificador(idCuenta, identificador)) {
     return NextResponse.json(
       { error: `Ya existe un medio con identificador "${identificador}"` },
       { status: 409 },
@@ -142,9 +149,9 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   const ext =
     archivo.name.includes(".") ? archivo.name.split(".").pop() ?? "bin" : "bin";
 
-  const guardado = guardarEnBiblioteca(id, buffer, ext);
-  const medio = crearMedioBiblioteca(
-    id,
+  const guardado = guardarEnBiblioteca(idCuenta, buffer, ext);
+  const medio = await crearMedioBiblioteca(
+    idCuenta,
     identificador,
     tipo,
     guardado.rutaRelativa,

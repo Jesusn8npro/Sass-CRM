@@ -4,16 +4,12 @@ import {
   listarContactosEmail,
   obtenerCuenta,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
 interface Contexto {
   params: Promise<{ idCuenta: string }>;
-}
-
-function validarId(ic: string): number | null {
-  const id = Number(ic);
-  return Number.isFinite(id) && id > 0 ? id : null;
 }
 
 function escapeCSV(s: string | null | undefined): string {
@@ -25,16 +21,19 @@ function escapeCSV(s: string | null | undefined): string {
 }
 
 export async function GET(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = validarId(idCuenta);
-  if (id === null) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
 
-  const contactos = listarContactosEmail(id);
+  const contactos = await listarContactosEmail(idCuenta);
 
   // Si piden ?formato=csv, devolvemos un CSV descargable.
   const formato = req.nextUrl.searchParams.get("formato");
@@ -43,7 +42,7 @@ export async function GET(req: NextRequest, { params }: Contexto) {
       "email,nombre_contacto,telefono,capturado_en",
     ];
     for (const c of contactos) {
-      const fecha = new Date(c.capturado_en * 1000).toISOString();
+      const fecha = new Date(c.capturado_en).toISOString();
       lineas.push(
         [
           escapeCSV(c.email),
@@ -57,7 +56,7 @@ export async function GET(req: NextRequest, { params }: Contexto) {
     return new NextResponse(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="contactos_email_cuenta_${id}.csv"`,
+        "Content-Disposition": `attachment; filename="contactos_email_cuenta_${idCuenta}.csv"`,
       },
     });
   }
@@ -66,18 +65,24 @@ export async function GET(req: NextRequest, { params }: Contexto) {
 }
 
 export async function DELETE(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = validarId(idCuenta);
-  if (id === null) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  const idContacto = Number(req.nextUrl.searchParams.get("id"));
-  if (!Number.isFinite(idContacto) || idContacto <= 0) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const idContacto = req.nextUrl.searchParams.get("id");
+  if (!idContacto) {
     return NextResponse.json(
       { error: "Falta ?id=<id_contacto>" },
       { status: 400 },
     );
   }
-  borrarContactoEmail(idContacto);
+  await borrarContactoEmail(idContacto);
   return NextResponse.json({ ok: true });
 }

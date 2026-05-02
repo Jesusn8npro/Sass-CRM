@@ -6,6 +6,7 @@ import {
   reordenarEtapas,
   sembrarEtapasSiVacias,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -25,34 +26,34 @@ const COLORES_VALIDOS = new Set([
   "rosa",
 ]);
 
-function validarId(idCuenta: string): number | null {
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) return null;
-  return id;
-}
-
 export async function GET(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = validarId(idCuenta);
-  if (id === null) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   // Lazy seed: si la cuenta venía de antes y no tenía etapas, sembramos.
-  sembrarEtapasSiVacias(id);
-  const etapas = listarEtapas(id);
+  await sembrarEtapasSiVacias(idCuenta);
+  const etapas = await listarEtapas(idCuenta);
   return NextResponse.json({ etapas });
 }
 
 export async function POST(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = validarId(idCuenta);
-  if (id === null) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
 
@@ -63,13 +64,14 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
-  // Reordenar (drag-drop de columnas): payload trae { orden_ids: number[] }
+  // Reordenar (drag-drop de columnas): payload trae { orden_ids: string[] }
   if (Array.isArray(payload.orden_ids)) {
     const ids = payload.orden_ids.filter(
-      (n): n is number => typeof n === "number" && Number.isFinite(n),
+      (s): s is string => typeof s === "string" && s.length > 0,
     );
-    reordenarEtapas(id, ids);
-    return NextResponse.json({ etapas: listarEtapas(id) });
+    await reordenarEtapas(idCuenta, ids);
+    const etapas = await listarEtapas(idCuenta);
+    return NextResponse.json({ etapas });
   }
 
   // Crear nueva etapa
@@ -86,7 +88,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
       ? payload.color
       : "zinc";
   try {
-    const etapa = crearEtapa(id, nombre, color);
+    const etapa = await crearEtapa(idCuenta, nombre, color);
     return NextResponse.json({ etapa }, { status: 201 });
   } catch (err) {
     return NextResponse.json(

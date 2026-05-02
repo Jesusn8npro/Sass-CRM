@@ -38,14 +38,15 @@ function PillEtiqueta({ etiqueta }: { etiqueta: EtiquetaResumen }) {
 
 interface Props {
   conversaciones: ConversacionConPreview[];
-  idSeleccionada: number | null;
-  onSeleccionar: (id: number) => void;
+  idSeleccionada: string | null;
+  onSeleccionar: (id: string) => void;
 }
 
-function tiempoRelativo(unix: number | null): string {
-  if (!unix) return "";
-  const ahora = Date.now() / 1000;
-  const diff = Math.max(0, ahora - unix);
+function tiempoRelativo(iso: string | null): string {
+  if (!iso) return "";
+  const ahora = Date.now();
+  const ts = new Date(iso).getTime();
+  const diff = Math.max(0, Math.floor((ahora - ts) / 1000));
   if (diff < 60) return "ahora";
   if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
   if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`;

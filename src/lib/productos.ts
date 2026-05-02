@@ -36,7 +36,7 @@ function extensionVideoSegura(nombre: string, mime: string | null): string {
   return "mp4";
 }
 
-export function rutaCarpetaProductos(cuentaId: number): string {
+export function rutaCarpetaProductos(cuentaId: string): string {
   const dir = path.join(directorioBase, String(cuentaId));
   asegurarDir(dir);
   return dir;
@@ -52,7 +52,7 @@ export function rutaAbsolutaImagenProducto(rutaRelativa: string): string {
  * pueda construir la URL `/api/productos/<rutaRelativa>`.
  */
 export function guardarImagenProducto(
-  cuentaId: number,
+  cuentaId: string,
   buffer: Buffer,
   nombreOriginal: string,
   mimeType: string | null,
@@ -85,7 +85,7 @@ export function borrarImagenProducto(rutaRelativa: string | null): void {
  * Igual que guardarImagenProducto pero para videos (mp4/webm/mov).
  */
 export function guardarVideoProducto(
-  cuentaId: number,
+  cuentaId: string,
   buffer: Buffer,
   nombreOriginal: string,
   mimeType: string | null,

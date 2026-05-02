@@ -4,6 +4,7 @@ import {
   listarEtiquetasConCount,
   obtenerCuenta,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -23,25 +24,31 @@ const COLORES_VALIDOS = new Set([
 ]);
 
 export async function GET(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
-  const etiquetas = listarEtiquetasConCount(id);
+  const etiquetas = await listarEtiquetasConCount(idCuenta);
   return NextResponse.json({ etiquetas });
 }
 
 export async function POST(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
 
@@ -66,6 +73,6 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   const descripcion =
     typeof payload.descripcion === "string" ? payload.descripcion : null;
 
-  const etiqueta = crearEtiqueta(id, nombre, color, descripcion);
+  const etiqueta = await crearEtiqueta(idCuenta, nombre, color, descripcion);
   return NextResponse.json({ etiqueta });
 }

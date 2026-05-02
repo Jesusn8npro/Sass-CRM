@@ -5,6 +5,7 @@ import {
   obtenerCuenta,
   obtenerEtapa,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -23,31 +24,20 @@ const COLORES_VALIDOS = new Set([
   "rosa",
 ]);
 
-function validarIds(ic: string, ie: string) {
-  const idCuenta = Number(ic);
-  const idEtapa = Number(ie);
-  if (
-    !Number.isFinite(idCuenta) ||
-    idCuenta <= 0 ||
-    !Number.isFinite(idEtapa) ||
-    idEtapa <= 0
-  ) {
-    return null;
-  }
-  return { idCuenta, idEtapa };
-}
-
 export async function PATCH(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idEtapa } = await params;
-  const ids = validarIds(idCuenta, idEtapa);
-  if (!ids) {
+  if (!idCuenta || !idEtapa) {
     return NextResponse.json({ error: "IDs inválidos" }, { status: 400 });
   }
-  if (!obtenerCuenta(ids.idCuenta)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
-  const etapa = obtenerEtapa(ids.idEtapa);
-  if (!etapa || etapa.cuenta_id !== ids.idCuenta) {
+  const etapa = await obtenerEtapa(idEtapa);
+  if (!etapa || etapa.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "Etapa no encontrada" }, { status: 404 });
   }
 
@@ -71,20 +61,26 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
       ? payload.orden
       : undefined;
 
-  const actualizada = actualizarEtapa(ids.idEtapa, { nombre, color, orden });
+  const actualizada = await actualizarEtapa(idEtapa, { nombre, color, orden });
   return NextResponse.json({ etapa: actualizada });
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idEtapa } = await params;
-  const ids = validarIds(idCuenta, idEtapa);
-  if (!ids) {
+  if (!idCuenta || !idEtapa) {
     return NextResponse.json({ error: "IDs inválidos" }, { status: 400 });
   }
-  const etapa = obtenerEtapa(ids.idEtapa);
-  if (!etapa || etapa.cuenta_id !== ids.idCuenta) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const etapa = await obtenerEtapa(idEtapa);
+  if (!etapa || etapa.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "Etapa no encontrada" }, { status: 404 });
   }
-  borrarEtapa(ids.idEtapa);
+  await borrarEtapa(idEtapa);
   return NextResponse.json({ ok: true });
 }

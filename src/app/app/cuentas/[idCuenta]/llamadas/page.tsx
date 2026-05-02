@@ -40,8 +40,8 @@ const COLOR_ESTADO: Record<EstadoLlamada, string> = {
     "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
 };
 
-function formatearHora(unix: number): string {
-  return new Date(unix * 1000).toLocaleString("es-ES", {
+function formatearHora(iso: string): string {
+  return new Date(iso).toLocaleString("es-ES", {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
@@ -58,14 +58,14 @@ function formatearDuracion(seg: number | null): string {
 
 export default function PaginaLlamadas() {
   const params = useParams<{ idCuenta: string }>();
-  const idCuenta = Number(params?.idCuenta);
+  const idCuenta = params?.idCuenta ?? "";
 
   const [cuenta, setCuenta] = useState<Cuenta | null>(null);
   const [llamadas, setLlamadas] = useState<LlamadaVapi[]>([]);
   const [seleccionada, setSeleccionada] = useState<LlamadaVapi | null>(null);
 
   const cargarTodo = useCallback(async () => {
-    if (!Number.isFinite(idCuenta)) return;
+    if (!idCuenta) return;
     try {
       const [resCuenta, resLlamadas] = await Promise.all([
         fetch(`/api/cuentas/${idCuenta}`, { cache: "no-store" }),
@@ -95,7 +95,7 @@ export default function PaginaLlamadas() {
     return () => clearInterval(t);
   }, [cargarTodo]);
 
-  async function refrescarDetalle(id: number) {
+  async function refrescarDetalle(id: string) {
     try {
       const res = await fetch(
         `/api/cuentas/${idCuenta}/llamadas/${id}`,

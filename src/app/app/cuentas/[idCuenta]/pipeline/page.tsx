@@ -49,14 +49,14 @@ const COLORES_VALIDOS = [
 
 export default function PaginaPipeline() {
   const params = useParams<{ idCuenta: string }>();
-  const idCuenta = Number(params?.idCuenta);
+  const idCuenta = params?.idCuenta ?? "";
 
   const [cuenta, setCuenta] = useState<Cuenta | null>(null);
   const [etapas, setEtapas] = useState<EtapaPipeline[]>([]);
   const [conversaciones, setConversaciones] = useState<
     ConversacionConPreview[]
   >([]);
-  const [arrastrando, setArrastrando] = useState<number | null>(null);
+  const [arrastrando, setArrastrando] = useState<string | null>(null);
   const [creandoEtapa, setCreandoEtapa] = useState(false);
   const [nombreEtapaNueva, setNombreEtapaNueva] = useState("");
   const [colorEtapaNueva, setColorEtapaNueva] = useState("zinc");
@@ -66,7 +66,7 @@ export default function PaginaPipeline() {
   );
 
   const cargarTodo = useCallback(async () => {
-    if (!Number.isFinite(idCuenta)) return;
+    if (!idCuenta) return;
     try {
       const [resCuenta, resEtapas, resConvs] = await Promise.all([
         fetch(`/api/cuentas/${idCuenta}`, { cache: "no-store" }),
@@ -104,7 +104,7 @@ export default function PaginaPipeline() {
   }, [cargarTodo]);
 
   const conversacionesPorEtapa = useMemo(() => {
-    const mapa = new Map<number | "sin", ConversacionConPreview[]>();
+    const mapa = new Map<string | "sin", ConversacionConPreview[]>();
     for (const e of etapas) mapa.set(e.id, []);
     mapa.set("sin", []);
     for (const c of conversaciones) {
@@ -123,19 +123,18 @@ export default function PaginaPipeline() {
   );
 
   function alIniciarArrastre(e: DragStartEvent) {
-    const id = Number(e.active.id);
-    if (Number.isFinite(id)) setArrastrando(id);
+    const id = String(e.active.id);
+    if (id) setArrastrando(id);
   }
 
   async function alTerminarArrastre(e: DragEndEvent) {
     setArrastrando(null);
     if (!e.over) return;
-    const idConv = Number(e.active.id);
+    const idConv = String(e.active.id);
     const idDestino = e.over.id;
-    if (!Number.isFinite(idConv)) return;
+    if (!idConv) return;
 
-    const nuevaEtapaId = idDestino === "sin" ? null : Number(idDestino);
-    if (nuevaEtapaId !== null && !Number.isFinite(nuevaEtapaId)) return;
+    const nuevaEtapaId = idDestino === "sin" ? null : String(idDestino);
 
     // Optimistic update
     setConversaciones((prev) =>
@@ -186,7 +185,7 @@ export default function PaginaPipeline() {
     }
   }
 
-  async function borrarEtapa(idEtapa: number) {
+  async function borrarEtapa(idEtapa: string) {
     if (
       !confirm(
         "¿Borrar esta etapa? Las conversaciones quedan sin etapa (no se borran).",
@@ -199,7 +198,7 @@ export default function PaginaPipeline() {
     cargarTodo();
   }
 
-  async function renombrarEtapa(idEtapa: number, nuevoNombre: string) {
+  async function renombrarEtapa(idEtapa: string, nuevoNombre: string) {
     const limpio = nuevoNombre.trim();
     if (!limpio) return;
     await fetch(`/api/cuentas/${idCuenta}/etapas/${idEtapa}`, {
@@ -210,7 +209,7 @@ export default function PaginaPipeline() {
     cargarTodo();
   }
 
-  async function cambiarColorEtapa(idEtapa: number, color: string) {
+  async function cambiarColorEtapa(idEtapa: string, color: string) {
     await fetch(`/api/cuentas/${idCuenta}/etapas/${idEtapa}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

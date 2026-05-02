@@ -16,8 +16,9 @@ export function calcularBotVivo(cuenta: Cuenta): boolean {
     const segDesde = ahora - cuenta.ultimo_heartbeat;
     if (segDesde <= UMBRAL_HEARTBEAT_SEG) return true;
   }
-  // Período de gracia para cuentas recién creadas
-  const segDesdeCreacion = ahora - cuenta.creada_en;
+  // Período de gracia para cuentas recién creadas (creada_en es ISO).
+  const creadaSeg = Math.floor(new Date(cuenta.creada_en).getTime() / 1000);
+  const segDesdeCreacion = ahora - creadaSeg;
   if (segDesdeCreacion <= GRACIA_RECIEN_CREADA_SEG) return true;
   return false;
 }

@@ -3,10 +3,12 @@ import {
   encolarBandejaSalida,
   insertarMensaje,
   obtenerConversacionPorId,
+  obtenerCuenta,
   type TipoMensaje,
 } from "@/lib/baseDatos";
 import { guardarMediaSubido } from "@/lib/baileys/medios";
 import { asegurarFormatoVoz } from "@/lib/baileys/conversion";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -73,29 +75,22 @@ function detectarTipo(mime: string, nombreArchivo: string): TipoMensaje {
 const TAMANO_MAX_MB = 50;
 
 export async function POST(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idConversacion } = await params;
-  const cuentaId = Number(idCuenta);
-  const convId = Number(idConversacion);
-  if (
-    !Number.isFinite(cuentaId) ||
-    cuentaId <= 0 ||
-    !Number.isFinite(convId) ||
-    convId <= 0
-  ) {
+  if (!idCuenta || !idConversacion) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-
-  const conv = obtenerConversacionPorId(convId);
-  if (!conv) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const conv = await obtenerConversacionPorId(idConversacion);
+  if (!conv || conv.cuenta_id !== idCuenta) {
     return NextResponse.json(
       { error: "Conversación no encontrada" },
       { status: 404 },
-    );
-  }
-  if (conv.cuenta_id !== cuentaId) {
-    return NextResponse.json(
-      { error: "La conversación no pertenece a esta cuenta" },
-      { status: 403 },
     );
   }
 
@@ -144,7 +139,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
       ? "mp3"
       : "bin";
 
-  const guardado = guardarMediaSubido(cuentaId, buffer, extension);
+  const guardado = guardarMediaSubido(idCuenta, buffer, extension);
 
   // Si es audio, convertir a OGG/Opus para que WhatsApp lo reconozca
   // como nota de voz. Sin esta conversión, los WebM/Opus de Chrome
@@ -157,7 +152,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     try {
       const convertido = await asegurarFormatoVoz(guardado.rutaAbsoluta);
       if (convertido.nombre !== guardado.nombreArchivo) {
-        mediaPathFinal = `${cuentaId}/${convertido.nombre}`;
+        mediaPathFinal = `${idCuenta}/${convertido.nombre}`;
         console.log(
           `[multimedia] ✓ convertido a OGG/Opus: ${convertido.nombre}`,
         );
@@ -171,12 +166,12 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     }
   }
 
-  insertarMensaje(cuentaId, convId, "humano", caption, {
+  await insertarMensaje(idCuenta, idConversacion, "humano", caption, {
     tipo,
     media_path: mediaPathFinal,
   });
 
-  encolarBandejaSalida(cuentaId, convId, conv.telefono, caption, {
+  await encolarBandejaSalida(idCuenta, idConversacion, conv.telefono, caption, {
     tipo,
     media_path: mediaPathFinal,
   });

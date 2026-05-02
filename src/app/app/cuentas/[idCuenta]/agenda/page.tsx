@@ -30,8 +30,8 @@ const NOMBRE_ESTADO: Record<EstadoCita, string> = {
   no_asistio: "No asistió",
 };
 
-function formatearFechaHora(unix: number): string {
-  return new Date(unix * 1000).toLocaleString("es-ES", {
+function formatearFechaHora(iso: string): string {
+  return new Date(iso).toLocaleString("es-ES", {
     weekday: "short",
     day: "2-digit",
     month: "short",
@@ -40,8 +40,8 @@ function formatearFechaHora(unix: number): string {
   });
 }
 
-function diaCorto(unix: number): string {
-  return new Date(unix * 1000).toLocaleDateString("es-ES", {
+function diaCorto(iso: string): string {
+  return new Date(iso).toLocaleDateString("es-ES", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -50,7 +50,7 @@ function diaCorto(unix: number): string {
 
 export default function PaginaAgenda() {
   const params = useParams<{ idCuenta: string }>();
-  const idCuenta = Number(params?.idCuenta);
+  const idCuenta = params?.idCuenta ?? "";
 
   const [cuenta, setCuenta] = useState<Cuenta | null>(null);
   const [citas, setCitas] = useState<Cita[]>([]);
@@ -58,7 +58,7 @@ export default function PaginaAgenda() {
   const [editando, setEditando] = useState<Cita | null>(null);
 
   const cargar = useCallback(async () => {
-    if (!Number.isFinite(idCuenta)) return;
+    if (!idCuenta) return;
     const [resCuenta, resC] = await Promise.all([
       fetch(`/api/cuentas/${idCuenta}`, { cache: "no-store" }),
       fetch(`/api/cuentas/${idCuenta}/citas`, { cache: "no-store" }),
@@ -79,7 +79,7 @@ export default function PaginaAgenda() {
     return () => clearInterval(t);
   }, [cargar]);
 
-  async function cambiarEstado(id: number, estado: EstadoCita) {
+  async function cambiarEstado(id: string, estado: EstadoCita) {
     await fetch(`/api/cuentas/${idCuenta}/citas/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -88,16 +88,20 @@ export default function PaginaAgenda() {
     cargar();
   }
 
-  async function borrar(id: number) {
+  async function borrar(id: string) {
     if (!confirm("¿Borrar esta cita?")) return;
     await fetch(`/api/cuentas/${idCuenta}/citas/${id}`, { method: "DELETE" });
     cargar();
   }
 
   // Agrupar por día
-  const ahora = Math.floor(Date.now() / 1000);
-  const futuras = citas.filter((c) => c.fecha_hora >= ahora - 3600);
-  const pasadas = citas.filter((c) => c.fecha_hora < ahora - 3600);
+  const limiteMs = Date.now() - 3600 * 1000;
+  const futuras = citas.filter(
+    (c) => new Date(c.fecha_hora).getTime() >= limiteMs,
+  );
+  const pasadas = citas.filter(
+    (c) => new Date(c.fecha_hora).getTime() < limiteMs,
+  );
 
   const porDia = new Map<string, Cita[]>();
   for (const c of futuras) {
@@ -310,13 +314,13 @@ function ModalCita({
   onCerrar,
   onGuardado,
 }: {
-  idCuenta: number;
+  idCuenta: string;
   citaActual: Cita | null;
   onCerrar: () => void;
   onGuardado: () => void;
 }) {
   const fechaInicial = citaActual
-    ? new Date(citaActual.fecha_hora * 1000)
+    ? new Date(citaActual.fecha_hora)
     : new Date(Date.now() + 24 * 3600 * 1000);
 
   const [nombre, setNombre] = useState(citaActual?.cliente_nombre ?? "");

@@ -5,6 +5,7 @@ import {
   obtenerCuenta,
   obtenerResumenInversiones,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -12,32 +13,33 @@ interface Contexto {
   params: Promise<{ idCuenta: string }>;
 }
 
-function validarId(s: string): number | null {
-  const n = Number(s);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
 export async function GET(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = validarId(idCuenta);
-  if (id === null) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
-  const inversiones = listarInversiones(id);
-  const resumen = obtenerResumenInversiones(id);
+  const inversiones = await listarInversiones(idCuenta);
+  const resumen = await obtenerResumenInversiones(idCuenta);
   return NextResponse.json({ inversiones, resumen });
 }
 
 export async function POST(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = validarId(idCuenta);
-  if (id === null) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
 
@@ -83,16 +85,17 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     typeof payload.categoria === "string" && payload.categoria.trim()
       ? payload.categoria.trim()
       : null;
+  // fecha como ISO string del cliente; si no llega, la firma usa now().
   const fecha =
-    typeof payload.fecha === "number" && Number.isFinite(payload.fecha)
-      ? Math.floor(payload.fecha)
-      : Math.floor(Date.now() / 1000);
+    typeof payload.fecha === "string" && payload.fecha.trim()
+      ? payload.fecha
+      : undefined;
   const notas =
     typeof payload.notas === "string" && payload.notas.trim()
       ? payload.notas.trim()
       : null;
 
-  const inversion = crearInversion(id, {
+  const inversion = await crearInversion(idCuenta, {
     concepto,
     monto: payload.monto,
     moneda,

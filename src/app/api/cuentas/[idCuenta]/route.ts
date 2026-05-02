@@ -5,6 +5,7 @@ import {
   obtenerCuenta,
 } from "@/lib/baseDatos";
 import { calcularBotVivo } from "@/lib/latidoBot";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -13,13 +14,15 @@ interface Contexto {
 }
 
 export async function GET(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  const cuenta = obtenerCuenta(id);
-  if (!cuenta) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   return NextResponse.json({
@@ -28,10 +31,16 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
 }
 
 export async function PATCH(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  }
+  const cuentaActual = await obtenerCuenta(idCuenta);
+  if (!cuentaActual || cuentaActual.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
 
   let payload: {
@@ -117,19 +126,10 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
       : payload.vapi_max_segundos === null
       ? null
       : undefined;
-  const vapiGrabarRaw = payload.vapi_grabar;
-  const vapiGrabar: 0 | 1 | undefined =
-    typeof vapiGrabarRaw === "boolean"
-      ? vapiGrabarRaw
-        ? 1
-        : 0
-      : typeof vapiGrabarRaw === "number"
-      ? vapiGrabarRaw
-        ? 1
-        : 0
-      : undefined;
+  const vapiGrabar =
+    typeof payload.vapi_grabar === "boolean" ? payload.vapi_grabar : undefined;
 
-  const actualizada = actualizarCuenta(id, {
+  const actualizada = await actualizarCuenta(idCuenta, {
     etiqueta,
     prompt_sistema: prompt,
     contexto_negocio: contexto,
@@ -151,15 +151,17 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  const cuenta = obtenerCuenta(id);
-  if (!cuenta) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
-  archivarCuenta(id);
+  await archivarCuenta(idCuenta);
   return NextResponse.json({ ok: true });
 }

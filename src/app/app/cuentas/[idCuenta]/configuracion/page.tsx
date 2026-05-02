@@ -42,7 +42,7 @@ const VOCES_DEFAULT = [
 
 export default function PaginaConfiguracion() {
   const params = useParams<{ idCuenta: string }>();
-  const idCuenta = Number(params?.idCuenta);
+  const idCuenta = params?.idCuenta ?? "";
 
   const [cuenta, setCuenta] = useState<Cuenta | null>(null);
   const [conocimiento, setConocimiento] = useState<EntradaConocimiento[]>([]);
@@ -52,7 +52,7 @@ export default function PaginaConfiguracion() {
   const [error, setError] = useState<string | null>(null);
 
   const recargarCuenta = useCallback(async () => {
-    if (!Number.isFinite(idCuenta)) return;
+    if (!idCuenta) return;
     try {
       const res = await fetch(`/api/cuentas/${idCuenta}`, { cache: "no-store" });
       if (!res.ok) {
@@ -68,7 +68,7 @@ export default function PaginaConfiguracion() {
   }, [idCuenta]);
 
   const recargarConocimiento = useCallback(async () => {
-    if (!Number.isFinite(idCuenta)) return;
+    if (!idCuenta) return;
     try {
       const res = await fetch(`/api/cuentas/${idCuenta}/conocimiento`, {
         cache: "no-store",
@@ -82,7 +82,7 @@ export default function PaginaConfiguracion() {
   }, [idCuenta]);
 
   const recargarRespuestas = useCallback(async () => {
-    if (!Number.isFinite(idCuenta)) return;
+    if (!idCuenta) return;
     try {
       const res = await fetch(`/api/cuentas/${idCuenta}/respuestas-rapidas`, {
         cache: "no-store",
@@ -94,7 +94,7 @@ export default function PaginaConfiguracion() {
   }, [idCuenta]);
 
   const recargarEtiquetas = useCallback(async () => {
-    if (!Number.isFinite(idCuenta)) return;
+    if (!idCuenta) return;
     try {
       const res = await fetch(`/api/cuentas/${idCuenta}/etiquetas`, {
         cache: "no-store",
@@ -106,7 +106,7 @@ export default function PaginaConfiguracion() {
   }, [idCuenta]);
 
   const recargarBiblioteca = useCallback(async () => {
-    if (!Number.isFinite(idCuenta)) return;
+    if (!idCuenta) return;
     try {
       const res = await fetch(`/api/cuentas/${idCuenta}/biblioteca`, {
         cache: "no-store",
@@ -131,7 +131,7 @@ export default function PaginaConfiguracion() {
     recargarBiblioteca,
   ]);
 
-  if (!Number.isFinite(idCuenta) || idCuenta <= 0) {
+  if (!idCuenta) {
     return <CargandoOError mensaje="ID de cuenta inválido" />;
   }
   if (error && !cuenta) {
@@ -314,7 +314,7 @@ function MensajeEstado({
 }
 
 async function patchCuenta(
-  idCuenta: number,
+  idCuenta: string,
   body: Record<string, unknown>,
 ): Promise<Cuenta | { error: string }> {
   try {
@@ -537,7 +537,7 @@ Horario: L-V 9am a 6pm, S 10am a 2pm.`}
 // Sección: Conocimiento estructurado (entradas individuales)
 // ============================================================
 interface PropsSeccionConocimiento {
-  idCuenta: number;
+  idCuenta: string;
   entradas: EntradaConocimiento[];
   onCambio: () => void;
 }
@@ -641,7 +641,7 @@ function EntradaConocimientoItem({
   entrada,
   onCambio,
 }: {
-  idCuenta: number;
+  idCuenta: string;
   entrada: EntradaConocimiento;
   onCambio: () => void;
 }) {
@@ -1125,7 +1125,7 @@ function SeccionVapi({ cuenta, onActualizada }: PropsSeccionBase) {
   const [maxSegundos, setMaxSegundos] = useState<number>(
     cuenta.vapi_max_segundos ?? 600,
   );
-  const [grabar, setGrabar] = useState<boolean>(cuenta.vapi_grabar !== 0);
+  const [grabar, setGrabar] = useState<boolean>(!!cuenta.vapi_grabar);
   const [avanzadoAbierto, setAvanzadoAbierto] = useState(false);
 
   const [guardando, setGuardando] = useState(false);
@@ -1151,7 +1151,7 @@ function SeccionVapi({ cuenta, onActualizada }: PropsSeccionBase) {
     setPromptExtra(cuenta.vapi_prompt_extra ?? "");
     setPrimerMensaje(cuenta.vapi_primer_mensaje ?? "");
     setMaxSegundos(cuenta.vapi_max_segundos ?? 600);
-    setGrabar(cuenta.vapi_grabar !== 0);
+    setGrabar(!!cuenta.vapi_grabar);
     setError(null);
     setExito(false);
     setResultadoSync(null);
@@ -1171,7 +1171,7 @@ function SeccionVapi({ cuenta, onActualizada }: PropsSeccionBase) {
       vapi_prompt_extra: promptExtra.trim() || null,
       vapi_primer_mensaje: primerMensaje.trim() || null,
       vapi_max_segundos: maxSegundos,
-      vapi_grabar: grabar ? 1 : 0,
+      vapi_grabar: grabar,
     });
     if ("error" in r) setError(r.error);
     else {
@@ -1491,7 +1491,7 @@ function SeccionVapi({ cuenta, onActualizada }: PropsSeccionBase) {
               activo={tieneAssistant}
               texto={
                 cuenta.vapi_sincronizado_en
-                  ? `Assistant sincronizado (${new Date(cuenta.vapi_sincronizado_en * 1000).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })})`
+                  ? `Assistant sincronizado (${new Date(cuenta.vapi_sincronizado_en).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })})`
                   : "Assistant sincronizado con Vapi"
               }
             />
@@ -1620,7 +1620,7 @@ function SeccionRespuestasRapidas({
   respuestas,
   onCambio,
 }: {
-  idCuenta: number;
+  idCuenta: string;
   respuestas: RespuestaRapida[];
   onCambio: () => void;
 }) {
@@ -1723,7 +1723,7 @@ function RespuestaRapidaItem({
   respuesta,
   onCambio,
 }: {
-  idCuenta: number;
+  idCuenta: string;
   respuesta: RespuestaRapida;
   onCambio: () => void;
 }) {
@@ -1904,7 +1904,7 @@ function SeccionEtiquetas({
   etiquetas,
   onCambio,
 }: {
-  idCuenta: number;
+  idCuenta: string;
   etiquetas: EtiquetaConCount[];
   onCambio: () => void;
 }) {
@@ -2022,7 +2022,7 @@ function EtiquetaItem({
   etiqueta,
   onCambio,
 }: {
-  idCuenta: number;
+  idCuenta: string;
   etiqueta: EtiquetaConCount;
   onCambio: () => void;
 }) {
@@ -2060,8 +2060,8 @@ function EtiquetaItem({
           </p>
         )}
         <p className="text-[10px] text-zinc-500">
-          {etiqueta.total_conversaciones}{" "}
-          {etiqueta.total_conversaciones === 1
+          {etiqueta.conversaciones_count}{" "}
+          {etiqueta.conversaciones_count === 1
             ? "conversación"
             : "conversaciones"}
         </p>
@@ -2105,7 +2105,7 @@ function SeccionBiblioteca({
   medios,
   onCambio,
 }: {
-  idCuenta: number;
+  idCuenta: string;
   medios: MedioBiblioteca[];
   onCambio: () => void;
 }) {
@@ -2226,7 +2226,7 @@ function MedioBibliotecaItem({
   medio,
   onCambio,
 }: {
-  idCuenta: number;
+  idCuenta: string;
   medio: MedioBiblioteca;
   onCambio: () => void;
 }) {

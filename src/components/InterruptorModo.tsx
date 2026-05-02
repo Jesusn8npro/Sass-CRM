@@ -4,8 +4,8 @@ import { useState } from "react";
 import type { ModoConversacion } from "@/lib/baseDatos";
 
 interface Props {
-  idCuenta: number;
-  idConversacion: number;
+  idCuenta: string;
+  idConversacion: string;
   modo: ModoConversacion;
   onCambio: (nuevoModo: ModoConversacion) => void;
 }

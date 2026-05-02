@@ -3,9 +3,11 @@ import fs from "node:fs";
 import {
   actualizarDescripcionMedio,
   borrarMedioBiblioteca,
+  obtenerCuenta,
   obtenerMedioBiblioteca,
 } from "@/lib/baseDatos";
 import { rutaAbsolutaDeBiblioteca } from "@/lib/baileys/medios";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -13,27 +15,21 @@ interface Contexto {
   params: Promise<{ idCuenta: string; idMedio: string }>;
 }
 
-function validar(idCuenta: string, idMedio: string) {
-  const cuentaId = Number(idCuenta);
-  const medioId = Number(idMedio);
-  if (
-    !Number.isFinite(cuentaId) ||
-    cuentaId <= 0 ||
-    !Number.isFinite(medioId) ||
-    medioId <= 0
-  ) {
-    return null;
-  }
-  return { cuentaId, medioId };
-}
-
 export async function PATCH(req: NextRequest, { params }: Contexto) {
-  const { idCuenta, idMedio } = await params;
-  const ids = validar(idCuenta, idMedio);
-  if (!ids) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
 
-  const medio = obtenerMedioBiblioteca(ids.medioId);
-  if (!medio || medio.cuenta_id !== ids.cuentaId) {
+  const { idCuenta, idMedio } = await params;
+  if (!idCuenta || !idMedio) {
+    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  }
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+
+  const medio = await obtenerMedioBiblioteca(idMedio);
+  if (!medio || medio.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   }
 
@@ -53,17 +49,25 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
       { status: 400 },
     );
   }
-  const actualizado = actualizarDescripcionMedio(ids.medioId, descripcion);
+  const actualizado = await actualizarDescripcionMedio(idMedio, descripcion);
   return NextResponse.json({ medio: actualizado });
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
-  const { idCuenta, idMedio } = await params;
-  const ids = validar(idCuenta, idMedio);
-  if (!ids) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
 
-  const medio = obtenerMedioBiblioteca(ids.medioId);
-  if (!medio || medio.cuenta_id !== ids.cuentaId) {
+  const { idCuenta, idMedio } = await params;
+  if (!idCuenta || !idMedio) {
+    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  }
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+
+  const medio = await obtenerMedioBiblioteca(idMedio);
+  if (!medio || medio.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   }
 
@@ -75,6 +79,6 @@ export async function DELETE(_req: NextRequest, { params }: Contexto) {
     console.warn("[biblioteca] no se pudo borrar archivo:", err);
   }
 
-  borrarMedioBiblioteca(ids.medioId);
+  await borrarMedioBiblioteca(idMedio);
   return NextResponse.json({ ok: true });
 }

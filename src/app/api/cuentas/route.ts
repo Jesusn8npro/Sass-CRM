@@ -3,10 +3,14 @@ import QRCode from "qrcode";
 import { crearCuenta, listarCuentas } from "@/lib/baseDatos";
 import { arrancarBotEnProceso } from "@/lib/bot/cicloVida";
 import { calcularBotVivo } from "@/lib/latidoBot";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   // Fallback: si por algún motivo instrumentation no arrancó el bot,
   // lo arrancamos en la primera request al panel. arrancarBotEnProceso
   // es idempotente: llamadas repetidas no duplican intervals ni sockets.
@@ -15,7 +19,7 @@ export async function GET() {
       console.error("[api/cuentas] fallback arrancar bot:", err),
     );
   }
-  const cuentas = listarCuentas();
+  const cuentas = await listarCuentas(auth.id);
   const enriquecidas = await Promise.all(
     cuentas.map(async (c) => {
       // Pre-renderizar QR como PNG para cuentas en estado 'qr' o 'conectando'.
@@ -39,6 +43,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   let payload: {
     etiqueta?: unknown;
     prompt_sistema?: unknown;
@@ -63,6 +70,6 @@ export async function POST(req: NextRequest) {
     typeof payload.prompt_sistema === "string" ? payload.prompt_sistema : null;
   const modelo = typeof payload.modelo === "string" ? payload.modelo : null;
 
-  const cuenta = crearCuenta(etiqueta, promptSistema, modelo);
+  const cuenta = await crearCuenta(auth.id, etiqueta, promptSistema, modelo);
   return NextResponse.json({ cuenta });
 }

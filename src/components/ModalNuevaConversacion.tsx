@@ -5,7 +5,7 @@ import type { Conversacion } from "@/lib/baseDatos";
 
 interface Props {
   abierto: boolean;
-  idCuenta: number;
+  idCuenta: string;
   onCerrar: () => void;
   onCreada: (conv: Conversacion) => void;
 }

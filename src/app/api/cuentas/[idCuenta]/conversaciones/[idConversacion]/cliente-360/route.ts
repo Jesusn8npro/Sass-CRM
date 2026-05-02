@@ -7,6 +7,7 @@ import {
   obtenerEtapa,
   obtenerHistorialReciente,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -23,24 +24,20 @@ interface Contexto {
  *  - emails y teléfonos capturados de SUS mensajes (filtrados por la conv)
  */
 export async function GET(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idConversacion } = await params;
-  const idC = Number(idCuenta);
-  const idConv = Number(idConversacion);
-  if (
-    !Number.isFinite(idC) ||
-    idC <= 0 ||
-    !Number.isFinite(idConv) ||
-    idConv <= 0
-  ) {
+  if (!idCuenta || !idConversacion) {
     return NextResponse.json({ error: "IDs inválidos" }, { status: 400 });
   }
 
-  const cuenta = obtenerCuenta(idC);
-  if (!cuenta) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
-  const conversacion = obtenerConversacionPorId(idConv);
-  if (!conversacion || conversacion.cuenta_id !== idC) {
+  const conversacion = await obtenerConversacionPorId(idConversacion);
+  if (!conversacion || conversacion.cuenta_id !== idCuenta) {
     return NextResponse.json(
       { error: "Conversación no encontrada" },
       { status: 404 },
@@ -48,12 +45,12 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
   }
 
   const etapa = conversacion.etapa_id
-    ? obtenerEtapa(conversacion.etapa_id)
+    ? await obtenerEtapa(conversacion.etapa_id)
     : null;
 
-  const productos_interes = listarInteresDeConversacion(idConv);
-  const llamadas = listarLlamadasDeConversacion(idConv);
-  const ultimos_mensajes = obtenerHistorialReciente(idConv, 50);
+  const productos_interes = await listarInteresDeConversacion(idConversacion);
+  const llamadas = await listarLlamadasDeConversacion(idConversacion);
+  const ultimos_mensajes = await obtenerHistorialReciente(idConversacion, 50);
 
   // Estadísticas rápidas
   const total_mensajes = ultimos_mensajes.length;

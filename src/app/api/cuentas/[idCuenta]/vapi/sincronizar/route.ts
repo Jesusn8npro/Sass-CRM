@@ -13,6 +13,7 @@ import {
   obtenerAssistant,
 } from "@/lib/vapi";
 import { construirPromptSistema } from "@/lib/construirPrompt";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -55,13 +56,15 @@ INSTRUCCIONES ADICIONALES — ESTÁS EN UNA LLAMADA DE VOZ:
  * Si ya tiene, lo actualiza (PATCH).
  */
 export async function POST(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  const cuenta = obtenerCuenta(id);
-  if (!cuenta) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   if (!cuenta.vapi_api_key?.trim()) {
@@ -80,9 +83,9 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     );
   }
 
-  const conocimiento = listarConocimientoDeCuenta(id);
-  const biblioteca = listarBiblioteca(id);
-  const productos = listarProductosActivos(id);
+  const conocimiento = await listarConocimientoDeCuenta(idCuenta);
+  const biblioteca = await listarBiblioteca(idCuenta);
+  const productos = await listarProductosActivos(idCuenta);
   const promptBase = construirPromptSistema(
     cuenta,
     conocimiento,
@@ -99,7 +102,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   let secret = cuenta.vapi_webhook_secret;
   if (!secret) {
     secret = crypto.randomBytes(24).toString("hex");
-    actualizarCuenta(id, { vapi_webhook_secret: secret });
+    await actualizarCuenta(idCuenta, { vapi_webhook_secret: secret });
   }
   const baseUrl = urlPublica(req);
   const webhookUrl = `${baseUrl}/api/vapi/webhook`;
@@ -110,7 +113,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     : `Hola, te llamo de ${cuenta.etiqueta}. ¿Tenés un momento?`;
 
   const opciones = {
-    nombre: `${cuenta.etiqueta} (cuenta ${id})`,
+    nombre: `${cuenta.etiqueta} (cuenta ${idCuenta})`,
     systemPrompt: promptCompleto,
     primerMensaje: primerMensajeBase,
     modelo: cuenta.modelo?.trim() || "gpt-4o-mini",
@@ -118,7 +121,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     serverUrl: webhookUrl,
     serverUrlSecret: secret,
     maxSegundos: cuenta.vapi_max_segundos ?? 600,
-    grabar: cuenta.vapi_grabar !== 0,
+    grabar: cuenta.vapi_grabar !== false,
   };
 
   try {
@@ -147,9 +150,9 @@ export async function POST(req: NextRequest, { params }: Contexto) {
       creado = true;
     }
 
-    actualizarCuenta(id, {
+    await actualizarCuenta(idCuenta, {
       vapi_assistant_id: assistantId,
-      vapi_sincronizado_en: Math.floor(Date.now() / 1000),
+      vapi_sincronizado_en: new Date().toISOString(),
     });
 
     return NextResponse.json({

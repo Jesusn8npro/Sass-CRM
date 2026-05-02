@@ -44,8 +44,8 @@ const CLASE_COLOR_BARRA: Record<string, string> = {
   rosa: "bg-pink-500",
 };
 
-function formatearFecha(unix: number): string {
-  const d = new Date(unix * 1000);
+function formatearFecha(iso: string): string {
+  const d = new Date(iso);
   return d.toLocaleDateString("es-ES", {
     day: "2-digit",
     month: "short",
@@ -60,7 +60,7 @@ function formatearDia(iso: string): string {
 
 export default function PaginaDashboard() {
   const params = useParams<{ idCuenta: string }>();
-  const idCuenta = Number(params?.idCuenta);
+  const idCuenta = params?.idCuenta ?? "";
 
   const [cuenta, setCuenta] = useState<Cuenta | null>(null);
   const [metricas, setMetricas] = useState<MetricasCuenta | null>(null);
@@ -70,10 +70,10 @@ export default function PaginaDashboard() {
   const [telefonos, setTelefonos] = useState<
     RespuestaTelefonos["contactos"]
   >([]);
-  const [llamandoId, setLlamandoId] = useState<number | null>(null);
+  const [llamandoId, setLlamandoId] = useState<string | null>(null);
 
   const cargarTodo = useCallback(async () => {
-    if (!Number.isFinite(idCuenta)) return;
+    if (!idCuenta) return;
     try {
       const [resCuenta, resMetricas, resContactos, resTels] = await Promise.all(
         [
@@ -108,7 +108,7 @@ export default function PaginaDashboard() {
     }
   }, [idCuenta]);
 
-  async function llamarTelefono(idContacto: number, tel: string) {
+  async function llamarTelefono(idContacto: string, tel: string) {
     if (llamandoId !== null) return;
     if (!confirm(`¿Llamar a +${tel}?`)) return;
     setLlamandoId(idContacto);

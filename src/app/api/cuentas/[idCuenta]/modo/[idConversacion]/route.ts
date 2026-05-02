@@ -2,8 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   cambiarModo,
   obtenerConversacionPorId,
+  obtenerCuenta,
   type ModoConversacion,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -12,29 +14,22 @@ interface Contexto {
 }
 
 export async function POST(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idConversacion } = await params;
-  const cuentaId = Number(idCuenta);
-  const convId = Number(idConversacion);
-  if (
-    !Number.isFinite(cuentaId) ||
-    cuentaId <= 0 ||
-    !Number.isFinite(convId) ||
-    convId <= 0
-  ) {
+  if (!idCuenta || !idConversacion) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-
-  const conv = obtenerConversacionPorId(convId);
-  if (!conv) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const conv = await obtenerConversacionPorId(idConversacion);
+  if (!conv || conv.cuenta_id !== idCuenta) {
     return NextResponse.json(
       { error: "Conversación no encontrada" },
       { status: 404 },
-    );
-  }
-  if (conv.cuenta_id !== cuentaId) {
-    return NextResponse.json(
-      { error: "La conversación no pertenece a esta cuenta" },
-      { status: 403 },
     );
   }
 
@@ -53,6 +48,6 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     );
   }
 
-  cambiarModo(convId, modo as ModoConversacion);
+  await cambiarModo(idConversacion, modo as ModoConversacion);
   return NextResponse.json({ ok: true, modo });
 }

@@ -3,8 +3,10 @@ import {
   actualizarCita,
   borrarCita,
   obtenerCita,
+  obtenerCuenta,
   type EstadoCita,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -20,22 +22,20 @@ const ESTADOS_VALIDOS: EstadoCita[] = [
   "no_asistio",
 ];
 
-function validar(ic: string, ica: string) {
-  const idC = Number(ic);
-  const idCa = Number(ica);
-  if (!Number.isFinite(idC) || idC <= 0 || !Number.isFinite(idCa) || idCa <= 0)
-    return null;
-  return { idC, idCa };
-}
-
 export async function PATCH(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idCita } = await params;
-  const ids = validar(idCuenta, idCita);
-  if (!ids) {
+  if (!idCuenta || !idCita) {
     return NextResponse.json({ error: "IDs inválidos" }, { status: 400 });
   }
-  const cita = obtenerCita(ids.idCa);
-  if (!cita || cita.cuenta_id !== ids.idC) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const cita = await obtenerCita(idCita);
+  if (!cita || cita.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "Cita no encontrada" }, { status: 404 });
   }
 
@@ -57,14 +57,16 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     cambios.cliente_telefono =
       payload.cliente_telefono.replace(/[^\d]/g, "") || null;
   }
-  if (typeof payload.fecha_iso === "string") {
-    const ms = new Date(payload.fecha_iso).getTime();
-    if (Number.isFinite(ms)) cambios.fecha_hora = Math.floor(ms / 1000);
-  } else if (
-    typeof payload.fecha_hora === "number" &&
-    Number.isFinite(payload.fecha_hora)
-  ) {
-    cambios.fecha_hora = Math.floor(payload.fecha_hora);
+  // fecha_iso o fecha_hora como ISO string del cliente — se pasa directo.
+  const fechaRaw =
+    typeof payload.fecha_iso === "string"
+      ? payload.fecha_iso
+      : typeof payload.fecha_hora === "string"
+      ? payload.fecha_hora
+      : null;
+  if (fechaRaw) {
+    const ms = new Date(fechaRaw).getTime();
+    if (Number.isFinite(ms)) cambios.fecha_hora = new Date(ms).toISOString();
   }
   if (
     typeof payload.duracion_min === "number" &&
@@ -85,21 +87,30 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
   if (typeof payload.notas === "string") {
     cambios.notas = payload.notas.trim() || null;
   }
+  if (typeof payload.recordatorio_enviado === "boolean") {
+    cambios.recordatorio_enviado = payload.recordatorio_enviado;
+  }
 
-  const actualizada = actualizarCita(ids.idCa, cambios);
+  const actualizada = await actualizarCita(idCita, cambios);
   return NextResponse.json({ cita: actualizada });
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idCita } = await params;
-  const ids = validar(idCuenta, idCita);
-  if (!ids) {
+  if (!idCuenta || !idCita) {
     return NextResponse.json({ error: "IDs inválidos" }, { status: 400 });
   }
-  const cita = obtenerCita(ids.idCa);
-  if (!cita || cita.cuenta_id !== ids.idC) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const cita = await obtenerCita(idCita);
+  if (!cita || cita.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "Cita no encontrada" }, { status: 404 });
   }
-  borrarCita(ids.idCa);
+  await borrarCita(idCita);
   return NextResponse.json({ ok: true });
 }

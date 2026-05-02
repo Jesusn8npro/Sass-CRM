@@ -27,7 +27,7 @@ interface ErrorConCodigo {
 }
 
 interface SocketCuenta {
-  cuentaId: number;
+  cuentaId: string;
   etiqueta: string;
   sock: WASocket;
   temporizadorReconexion: NodeJS.Timeout | null;
@@ -35,7 +35,7 @@ interface SocketCuenta {
 
 const logger = pino({ level: "silent" });
 
-function rutaAuthCuenta(cuentaId: number): string {
+function rutaAuthCuenta(cuentaId: string): string {
   return path.resolve(process.cwd(), "auth", String(cuentaId));
 }
 
@@ -63,7 +63,7 @@ function migrarAuthLegacy(): void {
   const entradas = fs.readdirSync(dirAuth, { withFileTypes: true });
   const tieneArchivosSueltos = entradas.some((e) => e.isFile());
   if (!tieneArchivosSueltos) return;
-  const dirCuenta1 = rutaAuthCuenta(1);
+  const dirCuenta1 = rutaAuthCuenta("1");
   asegurarDirectorio(dirCuenta1);
   for (const entrada of entradas) {
     if (!entrada.isFile()) continue;
@@ -79,7 +79,7 @@ function migrarAuthLegacy(): void {
 }
 
 class GestorCuentas {
-  private sockets = new Map<number, SocketCuenta>();
+  private sockets = new Map<string, SocketCuenta>();
   private detenido = false;
 
   async iniciar(): Promise<void> {
@@ -89,7 +89,8 @@ class GestorCuentas {
 
   async sincronizar(): Promise<void> {
     if (this.detenido) return;
-    const cuentas = listarCuentas().filter(
+    const todas = await listarCuentas();
+    const cuentas = todas.filter(
       (c) => c.esta_activa && !c.esta_archivada,
     );
     const idsActivos = new Set(cuentas.map((c) => c.id));
@@ -130,9 +131,9 @@ class GestorCuentas {
       // ignorar, se usa la versión default
     }
 
-    const estadoActual = obtenerCuenta(cuenta.id);
+    const estadoActual = await obtenerCuenta(cuenta.id);
     if (estadoActual && estadoActual.estado === "desconectado") {
-      actualizarEstadoCuenta(cuenta.id, { estado: "conectando" });
+      await actualizarEstadoCuenta(cuenta.id, { estado: "conectando" });
     }
 
     const sock = makeWASocket({
@@ -165,7 +166,7 @@ class GestorCuentas {
       if (qr) {
         console.log(`${prefijo} QR generado, esperando escaneo...`);
         qrcodeTerminal.generate(qr, { small: true });
-        actualizarEstadoCuenta(cuenta.id, {
+        void actualizarEstadoCuenta(cuenta.id, {
           estado: "qr",
           cadena_qr: qr,
           telefono: null,
@@ -174,17 +175,19 @@ class GestorCuentas {
       }
 
       if (connection === "connecting") {
-        const actual = obtenerCuenta(cuenta.id);
-        if (actual && actual.estado === "desconectado") {
-          actualizarEstadoCuenta(cuenta.id, { estado: "conectando" });
-        }
+        void (async () => {
+          const actual = await obtenerCuenta(cuenta.id);
+          if (actual && actual.estado === "desconectado") {
+            await actualizarEstadoCuenta(cuenta.id, { estado: "conectando" });
+          }
+        })();
         return;
       }
 
       if (connection === "open") {
         const telefono = extraerTelefonoDeJID(sock.user?.id);
         console.log(`${prefijo} conexión abierta. Número: ${telefono ?? "?"}`);
-        actualizarEstadoCuenta(cuenta.id, {
+        void actualizarEstadoCuenta(cuenta.id, {
           estado: "conectado",
           cadena_qr: null,
           telefono,
@@ -206,7 +209,7 @@ class GestorCuentas {
           console.log(
             `${prefijo} sesión cerrada por el usuario. Limpiando estado.`,
           );
-          actualizarEstadoCuenta(cuenta.id, {
+          void actualizarEstadoCuenta(cuenta.id, {
             estado: "desconectado",
             cadena_qr: null,
             telefono: null,
@@ -231,7 +234,7 @@ class GestorCuentas {
   }
 
   private programarReconexion(
-    cuentaId: number,
+    cuentaId: string,
     codigo: number | undefined,
   ): void {
     const entrada = this.sockets.get(cuentaId);
@@ -243,7 +246,7 @@ class GestorCuentas {
     );
     entrada.temporizadorReconexion = setTimeout(async () => {
       entrada.temporizadorReconexion = null;
-      const cuenta = obtenerCuenta(cuentaId);
+      const cuenta = await obtenerCuenta(cuentaId);
       if (!cuenta || cuenta.esta_archivada || !cuenta.esta_activa) {
         await this.apagarSocket(cuentaId);
         return;
@@ -266,7 +269,7 @@ class GestorCuentas {
     }, espera);
   }
 
-  async desconectar(cuentaId: number, limpiarAuth: boolean): Promise<void> {
+  async desconectar(cuentaId: string, limpiarAuth: boolean): Promise<void> {
     const entrada = this.sockets.get(cuentaId);
     if (entrada) {
       if (entrada.temporizadorReconexion) {
@@ -291,14 +294,14 @@ class GestorCuentas {
         // ignorar
       }
     }
-    actualizarEstadoCuenta(cuentaId, {
+    await actualizarEstadoCuenta(cuentaId, {
       estado: "desconectado",
       cadena_qr: null,
       telefono: null,
     });
   }
 
-  private async apagarSocket(cuentaId: number): Promise<void> {
+  private async apagarSocket(cuentaId: string): Promise<void> {
     const entrada = this.sockets.get(cuentaId);
     if (!entrada) return;
     if (entrada.temporizadorReconexion) {
@@ -319,11 +322,11 @@ class GestorCuentas {
     }
   }
 
-  obtenerSocket(cuentaId: number): WASocket | null {
+  obtenerSocket(cuentaId: string): WASocket | null {
     return this.sockets.get(cuentaId)?.sock ?? null;
   }
 
-  cuentasActivas(): number[] {
+  cuentasActivas(): string[] {
     return Array.from(this.sockets.keys());
   }
 

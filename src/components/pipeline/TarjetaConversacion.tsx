@@ -6,7 +6,7 @@ import type { ConversacionConPreview } from "@/lib/baseDatos";
 
 interface Props {
   conversacion: ConversacionConPreview;
-  idCuenta: number;
+  idCuenta: string;
   /** True cuando se renderiza dentro del DragOverlay */
   arrastrando?: boolean;
 }
@@ -25,10 +25,11 @@ const CLASE_COLOR_PILL: Record<string, string> = {
   rosa: "bg-pink-100 text-pink-700 dark:bg-pink-500/20 dark:text-pink-300",
 };
 
-function tiempoRelativo(timestamp: number | null): string {
-  if (!timestamp) return "—";
-  const ahora = Math.floor(Date.now() / 1000);
-  const diff = ahora - timestamp;
+function tiempoRelativo(iso: string | null): string {
+  if (!iso) return "—";
+  const ahora = Date.now();
+  const ts = new Date(iso).getTime();
+  const diff = Math.max(0, Math.floor((ahora - ts) / 1000));
   if (diff < 60) return "ahora";
   if (diff < 3600) return `${Math.floor(diff / 60)}m`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
@@ -92,7 +93,7 @@ export function TarjetaConversacion({
 
       <div className="mt-2 flex items-center justify-between gap-1">
         <div className="flex flex-wrap gap-1">
-          {conversacion.necesita_humano === 1 && (
+          {conversacion.necesita_humano && (
             <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-700 dark:bg-red-500/20 dark:text-red-300">
               Atención
             </span>

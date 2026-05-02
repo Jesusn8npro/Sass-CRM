@@ -17,10 +17,10 @@ import { SelectorEtiquetas } from "./SelectorEtiquetas";
 import { BotonLlamar } from "./BotonLlamar";
 
 interface Props {
-  idCuenta: number;
-  idConversacion: number;
+  idCuenta: string;
+  idConversacion: string;
   cuenta: Cuenta;
-  onConversacionBorrada: (id: number) => void;
+  onConversacionBorrada: (id: string) => void;
 }
 
 interface RespuestaMensajes {

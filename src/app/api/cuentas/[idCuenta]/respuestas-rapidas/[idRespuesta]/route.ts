@@ -2,8 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   actualizarRespuestaRapida,
   borrarRespuestaRapida,
-  obtenerRespuestaRapida,
+  listarRespuestasRapidas,
+  obtenerCuenta,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -11,27 +13,21 @@ interface Contexto {
   params: Promise<{ idCuenta: string; idRespuesta: string }>;
 }
 
-function validar(idCuenta: string, idRespuesta: string) {
-  const cuentaId = Number(idCuenta);
-  const respId = Number(idRespuesta);
-  if (
-    !Number.isFinite(cuentaId) ||
-    cuentaId <= 0 ||
-    !Number.isFinite(respId) ||
-    respId <= 0
-  ) {
-    return null;
-  }
-  return { cuentaId, respId };
-}
-
 export async function PATCH(req: NextRequest, { params }: Contexto) {
-  const { idCuenta, idRespuesta } = await params;
-  const ids = validar(idCuenta, idRespuesta);
-  if (!ids) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
 
-  const respuesta = obtenerRespuestaRapida(ids.respId);
-  if (!respuesta || respuesta.cuenta_id !== ids.cuentaId) {
+  const { idCuenta, idRespuesta } = await params;
+  if (!idCuenta || !idRespuesta) {
+    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  }
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const respuestas = await listarRespuestasRapidas(idCuenta);
+  const respuesta = respuestas.find((r) => r.id === idRespuesta);
+  if (!respuesta) {
     return NextResponse.json({ error: "No encontrada" }, { status: 404 });
   }
 
@@ -45,19 +41,30 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
   const atajo = typeof payload.atajo === "string" ? payload.atajo : undefined;
   const texto = typeof payload.texto === "string" ? payload.texto : undefined;
 
-  const actualizada = actualizarRespuestaRapida(ids.respId, { atajo, texto });
+  const actualizada = await actualizarRespuestaRapida(idRespuesta, {
+    atajo,
+    texto,
+  });
   return NextResponse.json({ respuesta: actualizada });
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
-  const { idCuenta, idRespuesta } = await params;
-  const ids = validar(idCuenta, idRespuesta);
-  if (!ids) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
 
-  const respuesta = obtenerRespuestaRapida(ids.respId);
-  if (!respuesta || respuesta.cuenta_id !== ids.cuentaId) {
+  const { idCuenta, idRespuesta } = await params;
+  if (!idCuenta || !idRespuesta) {
+    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  }
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const respuestas = await listarRespuestasRapidas(idCuenta);
+  const respuesta = respuestas.find((r) => r.id === idRespuesta);
+  if (!respuesta) {
     return NextResponse.json({ error: "No encontrada" }, { status: 404 });
   }
-  borrarRespuestaRapida(ids.respId);
+  await borrarRespuestaRapida(idRespuesta);
   return NextResponse.json({ ok: true });
 }

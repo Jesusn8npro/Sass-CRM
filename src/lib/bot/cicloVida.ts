@@ -69,12 +69,12 @@ function dentroHorarioHumano(): boolean {
  * Aplica reglas anti-ban antes de poner el mensaje en bandeja_salida.
  * Llamado cada 30s desde el scheduler.
  */
-function procesarSeguimientosPendientes(): void {
+async function procesarSeguimientosPendientes(): Promise<void> {
   if (!dentroHorarioHumano()) return;
 
   let pendientes;
   try {
-    pendientes = listarSeguimientosPendientesDue();
+    pendientes = await listarSeguimientosPendientesDue();
   } catch (err) {
     console.error("[bot] error listando seguimientos:", err);
     return;
@@ -82,31 +82,31 @@ function procesarSeguimientosPendientes(): void {
   if (pendientes.length === 0) return;
 
   // Cache rápido por cuenta para no consultar mil veces el mismo conteo
-  const cuentaActiva = new Map<number, boolean>();
-  const enviadosHoyPorCuenta = new Map<number, number>();
+  const cuentaActiva = new Map<string, boolean>();
+  const enviadosHoyPorCuenta = new Map<string, number>();
 
   for (const s of pendientes) {
     try {
       // 1. Cuenta activa (no archivada, conectada)
       if (!cuentaActiva.has(s.cuenta_id)) {
-        const c = obtenerCuenta(s.cuenta_id);
+        const c = await obtenerCuenta(s.cuenta_id);
         cuentaActiva.set(
           s.cuenta_id,
-          !!c && c.esta_archivada === 0 && c.estado === "conectado",
+          !!c && !c.esta_archivada && c.estado === "conectado",
         );
       }
       if (!cuentaActiva.get(s.cuenta_id)) {
-        marcarSeguimientoFallido(s.id, "cuenta inactiva o desconectada");
+        await marcarSeguimientoFallido(s.id, "cuenta inactiva o desconectada");
         continue;
       }
 
       // 2. Si el cliente respondió desde que se programó → cancelar
-      const respuestasNuevas = contarMensajesUsuarioPosteriores(
+      const respuestasNuevas = await contarMensajesUsuarioPosteriores(
         s.conversacion_id,
         s.creado_en,
       );
       if (respuestasNuevas > 0) {
-        cancelarSeguimiento(
+        await cancelarSeguimiento(
           s.id,
           "el cliente respondió, no necesita seguimiento",
         );
@@ -117,9 +117,9 @@ function procesarSeguimientosPendientes(): void {
       }
 
       // 3. Conversación válida + cliente que ya escribió antes
-      const conv = obtenerConversacionPorId(s.conversacion_id);
+      const conv = await obtenerConversacionPorId(s.conversacion_id);
       if (!conv) {
-        marcarSeguimientoFallido(s.id, "conversación borrada");
+        await marcarSeguimientoFallido(s.id, "conversación borrada");
         continue;
       }
 
@@ -127,7 +127,7 @@ function procesarSeguimientosPendientes(): void {
       if (!enviadosHoyPorCuenta.has(s.cuenta_id)) {
         enviadosHoyPorCuenta.set(
           s.cuenta_id,
-          contarMensajesEnviadosHoyCuenta(s.cuenta_id),
+          await contarMensajesEnviadosHoyCuenta(s.cuenta_id),
         );
       }
       const enviadosHoy = enviadosHoyPorCuenta.get(s.cuenta_id)!;
@@ -141,7 +141,7 @@ function procesarSeguimientosPendientes(): void {
       //    por el procesamiento cada 2s — para varios seguimientos
       //    consecutivos el efecto es escalonado).
       try {
-        encolarBandejaSalida(
+        await encolarBandejaSalida(
           s.cuenta_id,
           s.conversacion_id,
           conv.telefono,
@@ -149,19 +149,19 @@ function procesarSeguimientosPendientes(): void {
         );
         // Insertar como mensaje rol=humano (asistente) para que aparezca
         // en el panel inmediatamente. La bandeja la enviará por Baileys.
-        insertarMensaje(
+        await insertarMensaje(
           s.cuenta_id,
           s.conversacion_id,
           "asistente",
           s.contenido,
         );
-        marcarSeguimientoEnviado(s.id);
+        await marcarSeguimientoEnviado(s.id);
         console.log(
           `[bot] ⏰→ seguimiento ${s.id} enviado a +${conv.telefono} (origen ${s.origen})`,
         );
       } catch (err) {
         console.error(`[bot] error encolando seguimiento ${s.id}:`, err);
-        marcarSeguimientoFallido(s.id, "error al encolar");
+        await marcarSeguimientoFallido(s.id, "error al encolar");
       }
     } catch (err) {
       console.error(`[bot] error procesando seguimiento ${s.id}:`, err);
@@ -171,14 +171,14 @@ function procesarSeguimientosPendientes(): void {
 
 /**
  * Manda recordatorios automáticos 1h antes de cada cita.
- * Marca recordatorio_enviado=1 para no duplicar.
+ * Marca recordatorio_enviado=true para no duplicar.
  */
-function procesarRecordatoriosCitas(): void {
-  const ahora = Math.floor(Date.now() / 1000);
-  const en1h = ahora + 60 * 60;
+async function procesarRecordatoriosCitas(): Promise<void> {
+  const ahoraIso = new Date().toISOString();
+  const en1hIso = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   let citas;
   try {
-    citas = listarCitasParaRecordar(ahora, en1h);
+    citas = await listarCitasParaRecordar(ahoraIso, en1hIso);
   } catch (err) {
     console.error("[bot] error listando citas a recordar:", err);
     return;
@@ -187,8 +187,8 @@ function procesarRecordatoriosCitas(): void {
 
   for (const cita of citas) {
     try {
-      const cuenta = obtenerCuenta(cita.cuenta_id);
-      if (!cuenta || cuenta.esta_archivada === 1 || cuenta.estado !== "conectado") {
+      const cuenta = await obtenerCuenta(cita.cuenta_id);
+      if (!cuenta || cuenta.esta_archivada || cuenta.estado !== "conectado") {
         continue;
       }
       const tel = cita.cliente_telefono || cita.conversacion_id
@@ -196,7 +196,7 @@ function procesarRecordatoriosCitas(): void {
         : null;
       if (!tel) continue;
 
-      const fechaStr = new Date(cita.fecha_hora * 1000).toLocaleString(
+      const fechaStr = new Date(cita.fecha_hora).toLocaleString(
         "es-ES",
         { hour: "2-digit", minute: "2-digit" },
       );
@@ -205,10 +205,10 @@ function procesarRecordatoriosCitas(): void {
 
       const idConv = cita.conversacion_id;
       if (idConv) {
-        encolarBandejaSalida(cita.cuenta_id, idConv, tel, contenido);
-        insertarMensaje(cita.cuenta_id, idConv, "asistente", contenido);
+        await encolarBandejaSalida(cita.cuenta_id, idConv, tel, contenido);
+        await insertarMensaje(cita.cuenta_id, idConv, "asistente", contenido);
       }
-      actualizarCita(cita.id, { recordatorio_enviado: 1 });
+      await actualizarCita(cita.id, { recordatorio_enviado: true });
       console.log(
         `[bot] 📅 recordatorio enviado para cita ${cita.id} (${cita.cliente_nombre}) a las ${fechaStr}`,
       );
@@ -218,16 +218,16 @@ function procesarRecordatoriosCitas(): void {
   }
 }
 
-function emitirHeartbeats(): void {
+async function emitirHeartbeats(): Promise<void> {
   // Salud del bot ≠ salud del socket. Mientras el proceso esté vivo,
   // marcamos heartbeat para TODAS las cuentas no archivadas, aunque
   // su socket no haya conectado todavía. El estado del socket por
   // cuenta vive aparte en cuentas.estado.
   try {
-    const cuentas = listarCuentas();
+    const cuentas = await listarCuentas();
     for (const cuenta of cuentas) {
       try {
-        actualizarHeartbeatCuenta(cuenta.id);
+        await actualizarHeartbeatCuenta(cuenta.id);
       } catch (err) {
         console.error(`[bot] error en heartbeat cuenta ${cuenta.id}:`, err);
       }
@@ -293,7 +293,7 @@ export async function arrancarBotEnProceso(): Promise<void> {
     await gestor.iniciar();
     const activas = gestor.cuentasActivas();
     if (activas.length === 0) {
-      const cuentas = listarCuentas();
+      const cuentas = await listarCuentas();
       if (cuentas.length === 0) {
         console.log(
           "[bot] No hay cuentas creadas. Agregá la primera desde el panel.",
@@ -317,8 +317,10 @@ export async function arrancarBotEnProceso(): Promise<void> {
       }
     }, 2000);
 
-    emitirHeartbeats();
-    estado.intervaloHeartbeat = setInterval(emitirHeartbeats, 5000);
+    await emitirHeartbeats();
+    estado.intervaloHeartbeat = setInterval(() => {
+      void emitirHeartbeats();
+    }, 5000);
 
     estado.intervaloSincronizacion = setInterval(async () => {
       try {
@@ -330,20 +332,16 @@ export async function arrancarBotEnProceso(): Promise<void> {
 
     // Seguimientos programados: cada 30s revisa los que ya están due
     estado.intervaloSeguimientos = setInterval(() => {
-      try {
-        procesarSeguimientosPendientes();
-      } catch (err) {
+      void procesarSeguimientosPendientes().catch((err) => {
         console.error("[bot] error procesando seguimientos:", err);
-      }
+      });
     }, 30_000);
 
     // Recordatorios de citas: cada 60s revisa citas en la próxima hora
     estado.intervaloRecordatoriosCitas = setInterval(() => {
-      try {
-        procesarRecordatoriosCitas();
-      } catch (err) {
+      void procesarRecordatoriosCitas().catch((err) => {
         console.error("[bot] error recordatorios citas:", err);
-      }
+      });
     }, 60_000);
 
     estado.arrancado = true;

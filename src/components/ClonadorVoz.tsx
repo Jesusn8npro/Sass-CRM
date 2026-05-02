@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Cuenta } from "@/lib/baseDatos";
 
 interface Props {
-  idCuenta: number;
+  idCuenta: string;
   onClonada: (cuenta: Cuenta) => void;
 }
 

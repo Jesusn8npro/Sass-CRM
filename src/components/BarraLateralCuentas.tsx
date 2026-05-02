@@ -12,8 +12,8 @@ export interface CuentaConEstado extends Cuenta {
 
 interface Props {
   cuentas: CuentaConEstado[];
-  idSeleccionada: number | null;
-  onSeleccionar: (id: number) => void;
+  idSeleccionada: string | null;
+  onSeleccionar: (id: string) => void;
   onNueva: () => void;
 }
 

@@ -7,25 +7,12 @@ import {
   type EstadoLlamada,
 } from "@/lib/baseDatos";
 import { obtenerLlamada } from "@/lib/vapi";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
 interface Contexto {
   params: Promise<{ idCuenta: string; idLlamada: string }>;
-}
-
-function validarIds(ic: string, il: string) {
-  const idCuenta = Number(ic);
-  const idLlamada = Number(il);
-  if (
-    !Number.isFinite(idCuenta) ||
-    idCuenta <= 0 ||
-    !Number.isFinite(idLlamada) ||
-    idLlamada <= 0
-  ) {
-    return null;
-  }
-  return { idCuenta, idLlamada };
 }
 
 function mapearEstado(estadoVapi: string | undefined): EstadoLlamada {
@@ -49,17 +36,19 @@ function mapearEstado(estadoVapi: string | undefined): EstadoLlamada {
  * cuenta tiene API key, refresca contra Vapi para tener el último estado.
  */
 export async function GET(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idLlamada } = await params;
-  const ids = validarIds(idCuenta, idLlamada);
-  if (!ids) {
+  if (!idCuenta || !idLlamada) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  const cuenta = obtenerCuenta(ids.idCuenta);
-  if (!cuenta) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
-  const llamada = obtenerLlamadaPorId(ids.idLlamada);
-  if (!llamada || llamada.cuenta_id !== ids.idCuenta) {
+  const llamada = await obtenerLlamadaPorId(idLlamada);
+  if (!llamada || llamada.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "Llamada no encontrada" }, { status: 404 });
   }
 
@@ -71,14 +60,14 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
       const transcripcion = c.transcript ?? c.artifact?.transcript;
       const audio = c.recordingUrl ?? c.artifact?.recordingUrl;
       const resumen = c.summary ?? c.analysis?.summary;
-      actualizarLlamadaPorCallId(llamada.vapi_call_id, {
+      await actualizarLlamadaPorCallId(llamada.vapi_call_id, {
         estado: mapearEstado(c.status),
         transcripcion: transcripcion ?? undefined,
         audio_url: audio ?? undefined,
         resumen: resumen ?? undefined,
         costo_usd: typeof c.cost === "number" ? c.cost : undefined,
         terminada_en: c.endedAt
-          ? Math.floor(new Date(c.endedAt).getTime() / 1000)
+          ? new Date(c.endedAt).toISOString()
           : undefined,
         duracion_seg:
           c.startedAt && c.endedAt
@@ -97,20 +86,26 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
     }
   }
 
-  const fresca = obtenerLlamadaPorId(ids.idLlamada);
+  const fresca = await obtenerLlamadaPorId(idLlamada);
   return NextResponse.json({ llamada: fresca });
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idLlamada } = await params;
-  const ids = validarIds(idCuenta, idLlamada);
-  if (!ids) {
+  if (!idCuenta || !idLlamada) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  const llamada = obtenerLlamadaPorId(ids.idLlamada);
-  if (!llamada || llamada.cuenta_id !== ids.idCuenta) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const llamada = await obtenerLlamadaPorId(idLlamada);
+  if (!llamada || llamada.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "Llamada no encontrada" }, { status: 404 });
   }
-  borrarLlamada(ids.idLlamada);
+  await borrarLlamada(idLlamada);
   return NextResponse.json({ ok: true });
 }

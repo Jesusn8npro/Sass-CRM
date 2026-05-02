@@ -4,6 +4,7 @@ import {
   listarContactosTelefono,
   obtenerCuenta,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -20,23 +21,26 @@ function escapeCSV(s: string | null | undefined): string {
 }
 
 export async function GET(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
 
-  const contactos = listarContactosTelefono(id);
+  const contactos = await listarContactosTelefono(idCuenta);
   const formato = req.nextUrl.searchParams.get("formato");
   if (formato === "csv") {
     const lineas: string[] = [
       "telefono,nombre_contacto,telefono_conversacion,capturado_en",
     ];
     for (const c of contactos) {
-      const fecha = new Date(c.capturado_en * 1000).toISOString();
+      const fecha = new Date(c.capturado_en).toISOString();
       lineas.push(
         [
           escapeCSV(c.telefono),
@@ -49,7 +53,7 @@ export async function GET(req: NextRequest, { params }: Contexto) {
     return new NextResponse(lineas.join("\n"), {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="contactos_telefono_cuenta_${id}.csv"`,
+        "Content-Disposition": `attachment; filename="contactos_telefono_cuenta_${idCuenta}.csv"`,
       },
     });
   }
@@ -58,18 +62,24 @@ export async function GET(req: NextRequest, { params }: Contexto) {
 }
 
 export async function DELETE(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  const idContacto = Number(req.nextUrl.searchParams.get("id"));
-  if (!Number.isFinite(idContacto) || idContacto <= 0) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const idContacto = req.nextUrl.searchParams.get("id");
+  if (!idContacto) {
     return NextResponse.json(
       { error: "Falta ?id=<id_contacto>" },
       { status: 400 },
     );
   }
-  borrarContactoTelefono(idContacto);
+  await borrarContactoTelefono(idContacto);
   return NextResponse.json({ ok: true });
 }

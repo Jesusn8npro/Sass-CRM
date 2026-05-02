@@ -17,16 +17,16 @@ const MONEDAS = ["COP", "USD", "ARS", "MXN", "EUR", "PEN", "CLP"];
 
 export default function PaginaProductos() {
   const params = useParams<{ idCuenta: string }>();
-  const idCuenta = Number(params?.idCuenta);
+  const idCuenta = params?.idCuenta ?? "";
 
   const [cuenta, setCuenta] = useState<Cuenta | null>(null);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [creando, setCreando] = useState(false);
-  const [editando, setEditando] = useState<number | null>(null);
+  const [editando, setEditando] = useState<string | null>(null);
   const [modalAbierto, setModalAbierto] = useState(false);
 
   const cargar = useCallback(async () => {
-    if (!Number.isFinite(idCuenta)) return;
+    if (!idCuenta) return;
     try {
       const [resCuenta, resProds] = await Promise.all([
         fetch(`/api/cuentas/${idCuenta}`, { cache: "no-store" }),
@@ -54,7 +54,7 @@ export default function PaginaProductos() {
     setModalAbierto(true);
   }
 
-  function abrirEditar(id: number) {
+  function abrirEditar(id: string) {
     setEditando(id);
     setModalAbierto(true);
   }
@@ -63,12 +63,12 @@ export default function PaginaProductos() {
     await fetch(`/api/cuentas/${idCuenta}/productos/${p.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ esta_activo: p.esta_activo === 1 ? 0 : 1 }),
+      body: JSON.stringify({ esta_activo: !p.esta_activo }),
     });
     cargar();
   }
 
-  async function borrar(id: number) {
+  async function borrar(id: string) {
     if (!confirm("¿Borrar este producto? El historial de interés queda guardado."))
       return;
     await fetch(`/api/cuentas/${idCuenta}/productos/${id}`, {
@@ -187,7 +187,7 @@ function TarjetaProducto({
   onBorrar,
 }: {
   producto: Producto;
-  idCuenta: number;
+  idCuenta: string;
   onEditar: () => void;
   onAlternar: () => void;
   onBorrar: () => void;
@@ -214,7 +214,7 @@ function TarjetaProducto({
   return (
     <div
       className={`overflow-hidden rounded-2xl border bg-white transition-all dark:bg-zinc-900 ${
-        producto.esta_activo === 0
+        !producto.esta_activo
           ? "border-zinc-200 opacity-60 dark:border-zinc-800"
           : "border-zinc-200 dark:border-zinc-800"
       }`}
@@ -244,12 +244,12 @@ function TarjetaProducto({
             </svg>
           </div>
         )}
-        {producto.esta_activo === 0 && (
+        {!producto.esta_activo && (
           <span className="absolute left-2 top-2 rounded-full bg-zinc-900/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
             Pausado
           </span>
         )}
-        {sinStock && producto.esta_activo === 1 && (
+        {sinStock && producto.esta_activo && (
           <span className="absolute left-2 top-2 rounded-full bg-red-500/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
             Sin stock
           </span>
@@ -317,7 +317,7 @@ function TarjetaProducto({
             onClick={onAlternar}
             className="flex-1 rounded-lg border border-zinc-200 px-2 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
           >
-            {producto.esta_activo === 1 ? "Pausar" : "Activar"}
+            {producto.esta_activo ? "Pausar" : "Activar"}
           </button>
           <button
             type="button"
@@ -340,8 +340,8 @@ function ModalProducto({
   onCerrar,
   onGuardado,
 }: {
-  idCuenta: number;
-  idEditar: number | null;
+  idCuenta: string;
+  idEditar: string | null;
   productoActual: Producto | null;
   onCerrar: () => void;
   onGuardado: () => void;
@@ -401,7 +401,7 @@ function ModalProducto({
     : null;
 
   async function subirArchivo(
-    productoId: number,
+    productoId: string,
     tipo: "imagen" | "video",
     file: File,
   ): Promise<boolean> {

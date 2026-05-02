@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { actualizarCuenta, obtenerCuenta } from "@/lib/baseDatos";
 import { clonarVoz } from "@/lib/elevenlabs";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -17,13 +18,15 @@ const BYTES_MAX = 30 * 1024 * 1024; // 30MB — IVC acepta archivos grandes
  * Requiere plan Starter+ en ElevenLabs.
  */
 export async function POST(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  const cuenta = obtenerCuenta(id);
-  if (!cuenta) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   if (!process.env.ELEVENLABS_API_KEY) {
@@ -85,7 +88,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     );
 
     // Auto-asignamos la voz clonada como la voz de la cuenta.
-    const actualizada = actualizarCuenta(id, {
+    const actualizada = await actualizarCuenta(idCuenta, {
       voz_elevenlabs: resultado.voice_id,
     });
 

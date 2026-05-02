@@ -5,6 +5,7 @@ import {
   obtenerProducto,
 } from "@/lib/baseDatos";
 import { borrarImagenProducto, guardarImagenProducto } from "@/lib/productos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -14,31 +15,20 @@ interface Contexto {
 
 const BYTES_MAX = 8 * 1024 * 1024; // 8MB
 
-function validarIds(ic: string, ip: string) {
-  const idCuenta = Number(ic);
-  const idProducto = Number(ip);
-  if (
-    !Number.isFinite(idCuenta) ||
-    idCuenta <= 0 ||
-    !Number.isFinite(idProducto) ||
-    idProducto <= 0
-  ) {
-    return null;
-  }
-  return { idCuenta, idProducto };
-}
-
 export async function POST(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idProducto } = await params;
-  const ids = validarIds(idCuenta, idProducto);
-  if (!ids) {
+  if (!idCuenta || !idProducto) {
     return NextResponse.json({ error: "IDs inválidos" }, { status: 400 });
   }
-  if (!obtenerCuenta(ids.idCuenta)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
-  const prod = obtenerProducto(ids.idProducto);
-  if (!prod || prod.cuenta_id !== ids.idCuenta) {
+  const prod = await obtenerProducto(idProducto);
+  if (!prod || prod.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "Producto no encontrado" }, { status: 404 });
   }
 
@@ -80,30 +70,36 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   borrarImagenProducto(prod.imagen_path);
 
   const guardado = guardarImagenProducto(
-    ids.idCuenta,
+    idCuenta,
     buffer,
     nombreOriginal,
     mime,
   );
 
-  const actualizado = actualizarProducto(ids.idProducto, {
+  const actualizado = await actualizarProducto(idProducto, {
     imagen_path: guardado.rutaRelativa,
   });
   return NextResponse.json({ producto: actualizado });
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idProducto } = await params;
-  const ids = validarIds(idCuenta, idProducto);
-  if (!ids) {
+  if (!idCuenta || !idProducto) {
     return NextResponse.json({ error: "IDs inválidos" }, { status: 400 });
   }
-  const prod = obtenerProducto(ids.idProducto);
-  if (!prod || prod.cuenta_id !== ids.idCuenta) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const prod = await obtenerProducto(idProducto);
+  if (!prod || prod.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "Producto no encontrado" }, { status: 404 });
   }
   borrarImagenProducto(prod.imagen_path);
-  const actualizado = actualizarProducto(ids.idProducto, {
+  const actualizado = await actualizarProducto(idProducto, {
     imagen_path: null,
   });
   return NextResponse.json({ producto: actualizado });

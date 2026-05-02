@@ -2,18 +2,18 @@ import type { Mensaje } from "@/lib/baseDatos";
 
 interface Props {
   mensaje: Mensaje;
-  idCuenta: number;
+  idCuenta: string;
 }
 
-function formatearHora(unix: number): string {
-  const fecha = new Date(unix * 1000);
+function formatearHora(iso: string): string {
+  const fecha = new Date(iso);
   return fecha.toLocaleTimeString("es", {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-function urlMedia(idCuenta: number, mediaPath: string): string {
+function urlMedia(idCuenta: string, mediaPath: string): string {
   // Prefijo "biblio:" indica que el archivo está en data/biblioteca/, no en data/media/.
   // Lo enviamos a través del endpoint /api/biblioteca/[idCuenta]/[archivo].
   if (mediaPath.startsWith("biblio:")) {

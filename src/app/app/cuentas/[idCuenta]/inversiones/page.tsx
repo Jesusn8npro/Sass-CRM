@@ -28,8 +28,8 @@ const CATEGORIAS_SUGERIDAS = [
   "Otros",
 ];
 
-function formatearFecha(unix: number): string {
-  return new Date(unix * 1000).toLocaleDateString("es-ES", {
+function formatearFecha(iso: string): string {
+  return new Date(iso).toLocaleDateString("es-ES", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -42,7 +42,7 @@ function formatearMonto(monto: number, moneda: string): string {
 
 export default function PaginaInversiones() {
   const params = useParams<{ idCuenta: string }>();
-  const idCuenta = Number(params?.idCuenta);
+  const idCuenta = params?.idCuenta ?? "";
 
   const [cuenta, setCuenta] = useState<Cuenta | null>(null);
   const [inversiones, setInversiones] = useState<Inversion[]>([]);
@@ -51,7 +51,7 @@ export default function PaginaInversiones() {
   const [editando, setEditando] = useState<Inversion | null>(null);
 
   const cargar = useCallback(async () => {
-    if (!Number.isFinite(idCuenta)) return;
+    if (!idCuenta) return;
     const [resCuenta, resInv] = await Promise.all([
       fetch(`/api/cuentas/${idCuenta}`, { cache: "no-store" }),
       fetch(`/api/cuentas/${idCuenta}/inversiones`, { cache: "no-store" }),
@@ -71,7 +71,7 @@ export default function PaginaInversiones() {
     cargar();
   }, [cargar]);
 
-  async function borrar(id: number) {
+  async function borrar(id: string) {
     if (!confirm("¿Borrar esta inversión?")) return;
     await fetch(`/api/cuentas/${idCuenta}/inversiones/${id}`, {
       method: "DELETE",
@@ -263,7 +263,7 @@ function ModalInversion({
   onCerrar,
   onGuardado,
 }: {
-  idCuenta: number;
+  idCuenta: string;
   inversionActual: Inversion | null;
   onCerrar: () => void;
   onGuardado: () => void;
@@ -278,7 +278,7 @@ function ModalInversion({
   );
   const [fecha, setFecha] = useState<string>(
     inversionActual
-      ? new Date(inversionActual.fecha * 1000).toISOString().slice(0, 10)
+      ? new Date(inversionActual.fecha).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10),
   );
   const [notas, setNotas] = useState(inversionActual?.notas ?? "");
@@ -299,13 +299,12 @@ function ModalInversion({
         ? `/api/cuentas/${idCuenta}/inversiones/${inversionActual.id}`
         : `/api/cuentas/${idCuenta}/inversiones`;
       const metodo = inversionActual ? "PATCH" : "POST";
-      const fechaUnix = Math.floor(new Date(fecha + "T12:00:00").getTime() / 1000);
       const cuerpo = {
         concepto: concepto.trim(),
         monto: Number(monto),
         moneda,
         categoria: categoria.trim() || null,
-        fecha: fechaUnix,
+        fecha,
         notas: notas.trim() || null,
       };
       const res = await fetch(url, {

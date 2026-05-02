@@ -89,8 +89,8 @@ function resolverIdentidad(clave: ClaveMensajeExtendida): {
   return { jidParaEnviar, telefonoMostrable: telefonoDesdeJID(remoteJid) };
 }
 
-const timersBuffer = new Map<number, NodeJS.Timeout>();
-function cancelarTimer(conversacionId: number): void {
+const timersBuffer = new Map<string, NodeJS.Timeout>();
+function cancelarTimer(conversacionId: string): void {
   const t = timersBuffer.get(conversacionId);
   if (t) {
     clearTimeout(t);
@@ -107,11 +107,11 @@ function cancelarTimer(conversacionId: number): void {
 // (b) sí queremos guardarlo para que aparezca en el panel como humano.
 // (a) lo descartamos para no duplicar.
 // ============================================================
-const idsEnviadosPorBot = new Map<number, Set<string>>();
+const idsEnviadosPorBot = new Map<string, Set<string>>();
 const TTL_TRACKING_MS = 10 * 60 * 1000;
 
 export function recordarEnvioBot(
-  cuentaId: number,
+  cuentaId: string,
   msgId: string | null | undefined,
 ): void {
   if (!msgId) return;
@@ -125,7 +125,7 @@ export function recordarEnvioBot(
 }
 
 function fueEnviadoPorNosotros(
-  cuentaId: number,
+  cuentaId: string,
   msgId: string | null | undefined,
 ): boolean {
   if (!msgId) return false;
@@ -140,7 +140,7 @@ function fueEnviadoPorNosotros(
 async function procesarMediaEntrante(
   sock: WASocket,
   msg: WAMessage,
-  cuentaId: number,
+  cuentaId: string,
   prefijo: string,
 ): Promise<{
   tipo: TipoMensaje;
@@ -204,7 +204,7 @@ async function generarYEnviarRespuesta(
   jidParaEnviar: string,
   prefijo: string,
 ): Promise<void> {
-  const historial = obtenerHistorialReciente(conversacion.id, 20);
+  const historial = await obtenerHistorialReciente(conversacion.id, 20);
   console.log(`${prefijo} llamando LLM con ${historial.length} mensajes...`);
 
   try {
@@ -214,9 +214,9 @@ async function generarYEnviarRespuesta(
     await sock.sendPresenceUpdate("composing", jidParaEnviar);
   } catch {}
 
-  const conocimiento = listarConocimientoDeCuenta(cuenta.id);
-  const biblioteca = listarBiblioteca(cuenta.id);
-  const productos = listarProductosActivos(cuenta.id);
+  const conocimiento = await listarConocimientoDeCuenta(cuenta.id);
+  const biblioteca = await listarBiblioteca(cuenta.id);
+  const productos = await listarProductosActivos(cuenta.id);
   const promptCompleto = construirPromptSistema(
     cuenta,
     conocimiento,
@@ -262,7 +262,7 @@ async function generarYEnviarRespuesta(
       if (!idRaw) {
         console.warn(`${prefijo} parte ${numParte} media con id vacío, ignorada`);
       } else {
-        const medio = obtenerMedioPorIdentificador(cuenta.id, idRaw);
+        const medio = await obtenerMedioPorIdentificador(cuenta.id, idRaw);
         if (!medio) {
           console.warn(
             `${prefijo} parte ${numParte} media id="${idRaw}" no existe en biblioteca, ignorada`,
@@ -338,12 +338,12 @@ async function generarYEnviarRespuesta(
     respuesta.productos_de_interes.length > 0
   ) {
     for (const idRaw of respuesta.productos_de_interes) {
-      const id = Number(idRaw);
-      if (!Number.isFinite(id) || id <= 0) continue;
-      const prod = obtenerProducto(id);
+      const id = typeof idRaw === "string" ? idRaw.trim() : "";
+      if (!id) continue;
+      const prod = await obtenerProducto(id);
       if (!prod || prod.cuenta_id !== cuenta.id) continue;
       try {
-        registrarInteresEnProducto(conversacion.id, prod.id, cuenta.id);
+        await registrarInteresEnProducto(conversacion.id, prod.id, cuenta.id);
         console.log(
           `${prefijo} 🛍 interés registrado: producto "${prod.nombre}" (id ${prod.id})`,
         );
@@ -358,7 +358,7 @@ async function generarYEnviarRespuesta(
     const razon =
       respuesta.transferir_a_humano.razon?.trim() || "Sin razón provista";
     console.log(`${prefijo} 🤝 HANDOFF a humano: ${razon}`);
-    marcarConversacionNecesitaHumano(conversacion.id, razon);
+    await marcarConversacionNecesitaHumano(conversacion.id, razon);
   }
 
   // Si el LLM decidió iniciar una llamada Vapi, dispararla con el
@@ -385,7 +385,7 @@ async function generarYEnviarRespuesta(
         // entienda en el panel por qué la IA no llamó.
         if (r.motivoBloqueo === "cooldown") {
           try {
-            insertarMensaje(
+            await insertarMensaje(
               cuenta.id,
               conversacion.id,
               "sistema",
@@ -412,7 +412,7 @@ async function generarYEnviarRespuesta(
       console.warn(`${prefijo} ⚠ programar_seguimiento sin contenido, ignorado`);
     } else {
       try {
-        const s = crearSeguimiento(
+        const s = await crearSeguimiento(
           cuenta.id,
           conversacion.id,
           ps.contenido.trim(),
@@ -420,7 +420,7 @@ async function generarYEnviarRespuesta(
           "ia",
         );
         console.log(
-          `${prefijo} ⏰ seguimiento ${s.id} programado para ${new Date(fecha * 1000).toISOString()}: ${ps.razon ?? ""}`,
+          `${prefijo} ⏰ seguimiento ${s.id} programado para ${new Date(fecha).toISOString()}: ${ps.razon ?? ""}`,
         );
       } catch (err) {
         console.error(`${prefijo} error programando seguimiento:`, err);
@@ -438,7 +438,7 @@ async function generarYEnviarRespuesta(
       );
     } else {
       try {
-        const c = crearCita(cuenta.id, {
+        const c = await crearCita(cuenta.id, {
           conversacion_id: conversacion.id,
           cliente_nombre: conversacion.nombre ?? `+${conversacion.telefono}`,
           cliente_telefono: conversacion.telefono,
@@ -448,15 +448,15 @@ async function generarYEnviarRespuesta(
           notas: ac.notas?.trim() || null,
         });
         console.log(
-          `${prefijo} 📅 cita ${c.id} agendada: ${new Date(fecha * 1000).toISOString()} (${ac.tipo})`,
+          `${prefijo} 📅 cita ${c.id} agendada: ${new Date(fecha).toISOString()} (${ac.tipo})`,
         );
         // Mensaje sistema visible en el panel
         try {
-          insertarMensaje(
+          await insertarMensaje(
             cuenta.id,
             conversacion.id,
             "sistema",
-            `📅 Cita agendada: ${ac.tipo || "(sin tipo)"} el ${new Date(fecha * 1000).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}${ac.notas ? ` — ${ac.notas}` : ""}`,
+            `📅 Cita agendada: ${ac.tipo || "(sin tipo)"} el ${new Date(fecha).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}${ac.notas ? ` — ${ac.notas}` : ""}`,
             { tipo: "sistema" },
           );
         } catch {}
@@ -467,7 +467,7 @@ async function generarYEnviarRespuesta(
   }
 }
 
-function parseFechaIso(iso: string | undefined): number | null {
+function parseFechaIso(iso: string | undefined): string | null {
   if (!iso || typeof iso !== "string") return null;
   const ms = new Date(iso).getTime();
   if (!Number.isFinite(ms)) return null;
@@ -475,7 +475,7 @@ function parseFechaIso(iso: string | undefined): number | null {
   // Solo aceptamos fechas futuras (entre 5 min y 1 año adelante)
   if (ms < ahora + 5 * 60 * 1000) return null;
   if (ms > ahora + 365 * 86400 * 1000) return null;
-  return Math.floor(ms / 1000);
+  return new Date(ms).toISOString();
 }
 
 function dormir(ms: number): Promise<void> {
@@ -489,8 +489,8 @@ function dormir(ms: number): Promise<void> {
  */
 async function enviarParteTexto(
   sock: WASocket,
-  cuentaId: number,
-  conversacionId: number,
+  cuentaId: string,
+  conversacionId: string,
   jid: string,
   contenido: string,
   prefijo: string,
@@ -503,7 +503,7 @@ async function enviarParteTexto(
   );
   await dormir(delayMs);
 
-  insertarMensaje(cuentaId, conversacionId, "asistente", contenido);
+  await insertarMensaje(cuentaId, conversacionId, "asistente", contenido);
   try {
     const enviado = await sock.sendMessage(jid, { text: contenido });
     recordarEnvioBot(cuentaId, enviado?.key?.id);
@@ -522,7 +522,7 @@ async function enviarParteTexto(
 async function enviarParteAudio(
   sock: WASocket,
   cuenta: Cuenta,
-  conversacionId: number,
+  conversacionId: string,
   jid: string,
   texto: string,
   prefijo: string,
@@ -556,7 +556,7 @@ async function enviarParteAudio(
       console.warn(`${prefijo} no se pudo convertir TTS:`, errConv);
     }
 
-    insertarMensaje(cuenta.id, conversacionId, "asistente", texto, {
+    await insertarMensaje(cuenta.id, conversacionId, "asistente", texto, {
       tipo: "audio",
       media_path: mediaPathTTS,
     });
@@ -582,7 +582,7 @@ async function enviarParteAudio(
       detalle,
     );
     try {
-      insertarMensaje(
+      await insertarMensaje(
         cuenta.id,
         conversacionId,
         "sistema",
@@ -603,8 +603,8 @@ async function enviarMedioBiblioteca(
   sock: WASocket,
   jid: string,
   medio: MedioBiblioteca,
-  cuentaId: number,
-  conversacionId: number,
+  cuentaId: string,
+  conversacionId: string,
   prefijo: string,
 ): Promise<void> {
   const ruta = rutaAbsolutaDeBiblioteca(medio.ruta_archivo);
@@ -613,7 +613,7 @@ async function enviarMedioBiblioteca(
   const mediaPathPanel = `biblio:${medio.ruta_archivo}`;
 
   // Insertar mensaje en DB para que aparezca en el panel
-  insertarMensaje(cuentaId, conversacionId, "asistente", "", {
+  await insertarMensaje(cuentaId, conversacionId, "asistente", "", {
     tipo: medio.tipo,
     media_path: mediaPathPanel,
   });
@@ -679,7 +679,7 @@ async function obtenerMetadataAudio(
 
 export function registrarManejadores(
   sock: WASocket,
-  cuentaId: number,
+  cuentaId: string,
   etiquetaCuenta: string,
 ): void {
   const prefijo = `[bot:${etiquetaCuenta}]`;
@@ -709,7 +709,7 @@ export function registrarManejadores(
         const { jidParaEnviar, telefonoMostrable } = identidad;
         if (!telefonoMostrable) continue;
 
-        const cuenta = obtenerCuenta(cuentaId);
+        const cuenta = await obtenerCuenta(cuentaId);
         if (!cuenta || cuenta.esta_archivada) continue;
 
         // ---- Procesar contenido del mensaje ----
@@ -745,7 +745,7 @@ export function registrarManejadores(
 
         if (!contenido && !mediaPath) continue;
 
-        const conversacion = obtenerOCrearConversacion(
+        const conversacion = await obtenerOCrearConversacion(
           cuentaId,
           telefonoMostrable,
           msg.pushName ?? null,
@@ -765,7 +765,7 @@ export function registrarManejadores(
         // como rol=humano para que aparezca en el panel y NO disparamos
         // la IA (ya respondió la persona).
         if (desdeMi) {
-          insertarMensaje(cuentaId, conversacion.id, "humano", contenido, {
+          await insertarMensaje(cuentaId, conversacion.id, "humano", contenido, {
             tipo,
             media_path: mediaPath,
           });
@@ -774,7 +774,7 @@ export function registrarManejadores(
           continue;
         }
 
-        insertarMensaje(cuentaId, conversacion.id, "usuario", contenido, {
+        await insertarMensaje(cuentaId, conversacion.id, "usuario", contenido, {
           tipo,
           media_path: mediaPath,
         });
@@ -785,7 +785,7 @@ export function registrarManejadores(
         try {
           const emails = extraerEmailsDelTexto(contenido);
           if (emails.length > 0) {
-            const { nuevos, sospechosos } = guardarContactosEmail(
+            const { nuevos, sospechosos } = await guardarContactosEmail(
               cuentaId,
               conversacion.id,
               emails,
@@ -810,7 +810,7 @@ export function registrarManejadores(
         try {
           const tels = extraerTelefonosDelTexto(contenido);
           if (tels.length > 0) {
-            const nuevos = guardarContactosTelefono(
+            const nuevos = await guardarContactosTelefono(
               cuentaId,
               conversacion.id,
               tels,
@@ -826,7 +826,7 @@ export function registrarManejadores(
           console.error(`${prefijo} error extrayendo teléfonos:`, err);
         }
 
-        const fresca = obtenerConversacionPorId(conversacion.id);
+        const fresca = await obtenerConversacionPorId(conversacion.id);
         if (!fresca || fresca.modo !== "IA") {
           console.log(
             `${prefijo} conversación ${conversacion.id} en modo HUMANO, no respondo automáticamente.`,
@@ -841,9 +841,9 @@ export function registrarManejadores(
           const idConv = conversacion.id;
           const timer = setTimeout(async () => {
             timersBuffer.delete(idConv);
-            const cuentaFresca = obtenerCuenta(cuentaId);
+            const cuentaFresca = await obtenerCuenta(cuentaId);
             if (!cuentaFresca || cuentaFresca.esta_archivada) return;
-            const convFresca = obtenerConversacionPorId(idConv);
+            const convFresca = await obtenerConversacionPorId(idConv);
             if (!convFresca || convFresca.modo !== "IA") return;
             try {
               await generarYEnviarRespuesta(
@@ -947,19 +947,19 @@ async function enviarItemBandeja(
 
 export async function procesarBandejaSalidaDeCuenta(
   sock: WASocket,
-  cuentaId: number,
+  cuentaId: string,
   etiquetaCuenta: string,
 ): Promise<void> {
-  const pendientes = obtenerPendientesBandejaDeCuenta(cuentaId, 20);
+  const pendientes = await obtenerPendientesBandejaDeCuenta(cuentaId, 20);
   if (pendientes.length === 0) return;
 
   const prefijo = `[bot:${etiquetaCuenta}]`;
   for (const item of pendientes) {
-    const conv = obtenerConversacionPorId(item.conversacion_id);
+    const conv = await obtenerConversacionPorId(item.conversacion_id);
     const jid = conv?.jid_wa ?? `${item.telefono}@s.whatsapp.net`;
     try {
       await enviarItemBandeja(sock, jid, item);
-      marcarBandejaEnviado(item.id);
+      await marcarBandejaEnviado(item.id);
       console.log(
         `${prefijo} → ${item.tipo} humano enviado a ${item.telefono}`,
       );

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   actualizarLlamadaPorCallId,
   insertarMensaje,
-  listarCuentas,
+  obtenerCuenta,
   obtenerLlamadaPorCallId,
   type EstadoLlamada,
 } from "@/lib/baseDatos";
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Buscamos la llamada en DB
-  const llamada = obtenerLlamadaPorCallId(callId);
+  const llamada = await obtenerLlamadaPorCallId(callId);
   if (!llamada) {
     // Llamada que no iniciamos nosotros (ej: inbound directa) — la
     // guardamos como "huérfana" sería complejo, mejor reportamos.
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Validar secret contra el de la cuenta dueña
-  const cuentaDueña = listarCuentas().find((c) => c.id === llamada.cuenta_id);
+  const cuentaDueña = await obtenerCuenta(llamada.cuenta_id);
   if (cuentaDueña?.vapi_webhook_secret) {
     const ok = verificarSecretWebhook(
       headerSecret,
@@ -140,8 +140,8 @@ export async function POST(req: NextRequest) {
       : null;
     const duracion =
       inicio && fin ? Math.max(0, Math.floor((fin - inicio) / 1000)) : null;
-    const terminadaEn = fin ? Math.floor(fin / 1000) : null;
-    actualizarLlamadaPorCallId(callId, {
+    const terminadaEn = fin ? new Date(fin).toISOString() : null;
+    await actualizarLlamadaPorCallId(callId, {
       estado: mapearEstado(message.call?.status, message.call?.endedReason),
       transcripcion: transcript ?? undefined,
       audio_url: audio ?? undefined,
@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
       if (resumen) lineas.push(`Resumen: ${resumen.slice(0, 500)}`);
       if (audio) lineas.push(`Grabación: ${audio}`);
       try {
-        insertarMensaje(
+        await insertarMensaje(
           llamada.cuenta_id,
           llamada.conversacion_id,
           "sistema",
@@ -179,7 +179,7 @@ export async function POST(req: NextRequest) {
 
   // Manejo de status-update (cambios de estado durante la llamada)
   if (tipo === "status-update") {
-    actualizarLlamadaPorCallId(callId, {
+    await actualizarLlamadaPorCallId(callId, {
       estado: mapearEstado(message.call?.status, message.call?.endedReason),
     });
     return NextResponse.json({ ok: true });

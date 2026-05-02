@@ -6,6 +6,7 @@ import {
   obtenerCuenta,
   obtenerOCrearConversacion,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -14,26 +15,31 @@ interface Contexto {
 }
 
 export async function GET(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
-  const conversaciones = listarConversaciones(id);
+  const conversaciones = await listarConversaciones(idCuenta);
   return NextResponse.json({ conversaciones });
 }
 
 export async function POST(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  const cuenta = obtenerCuenta(id);
-  if (!cuenta) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   if (cuenta.estado !== "conectado") {
@@ -74,9 +80,9 @@ export async function POST(req: NextRequest, { params }: Contexto) {
       ? payload.nombre.trim()
       : null;
 
-  const conv = obtenerOCrearConversacion(id, telefono, nombre);
-  insertarMensaje(id, conv.id, "humano", mensaje);
-  encolarBandejaSalida(id, conv.id, telefono, mensaje);
+  const conv = await obtenerOCrearConversacion(idCuenta, telefono, nombre);
+  await insertarMensaje(idCuenta, conv.id, "humano", mensaje);
+  await encolarBandejaSalida(idCuenta, conv.id, telefono, mensaje);
 
   return NextResponse.json({ conversacion: conv }, { status: 201 });
 }

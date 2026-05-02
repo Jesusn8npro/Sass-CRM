@@ -3,8 +3,10 @@ import {
   borrarConversacion,
   cambiarEtapaConversacion,
   obtenerConversacionPorId,
+  obtenerCuenta,
   obtenerEtapa,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -12,28 +14,20 @@ interface Contexto {
   params: Promise<{ idCuenta: string; idConversacion: string }>;
 }
 
-function validarIds(ic: string, iconv: string) {
-  const cuentaId = Number(ic);
-  const convId = Number(iconv);
-  if (
-    !Number.isFinite(cuentaId) ||
-    cuentaId <= 0 ||
-    !Number.isFinite(convId) ||
-    convId <= 0
-  ) {
-    return null;
-  }
-  return { cuentaId, convId };
-}
-
 export async function PATCH(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idConversacion } = await params;
-  const ids = validarIds(idCuenta, idConversacion);
-  if (!ids) {
+  if (!idCuenta || !idConversacion) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  const conv = obtenerConversacionPorId(ids.convId);
-  if (!conv || conv.cuenta_id !== ids.cuentaId) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const conv = await obtenerConversacionPorId(idConversacion);
+  if (!conv || conv.cuenta_id !== idCuenta) {
     return NextResponse.json(
       { error: "Conversación no encontrada" },
       { status: 404 },
@@ -49,45 +43,45 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
 
   // Permitimos null para sacar la conversación de cualquier etapa.
   if (payload.etapa_id === null) {
-    cambiarEtapaConversacion(ids.convId, null);
+    await cambiarEtapaConversacion(idConversacion, null);
     return NextResponse.json({ ok: true, etapa_id: null });
   }
-  if (typeof payload.etapa_id !== "number" || !Number.isFinite(payload.etapa_id)) {
+  if (typeof payload.etapa_id !== "string" || !payload.etapa_id) {
     return NextResponse.json(
-      { error: "etapa_id debe ser número o null" },
+      { error: "etapa_id debe ser string o null" },
       { status: 400 },
     );
   }
-  const etapa = obtenerEtapa(payload.etapa_id);
-  if (!etapa || etapa.cuenta_id !== ids.cuentaId) {
+  const etapa = await obtenerEtapa(payload.etapa_id);
+  if (!etapa || etapa.cuenta_id !== idCuenta) {
     return NextResponse.json(
       { error: "Etapa inválida para esta cuenta" },
       { status: 400 },
     );
   }
-  cambiarEtapaConversacion(ids.convId, payload.etapa_id);
+  await cambiarEtapaConversacion(idConversacion, payload.etapa_id);
   return NextResponse.json({ ok: true, etapa_id: payload.etapa_id });
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idConversacion } = await params;
-  const ids = validarIds(idCuenta, idConversacion);
-  if (!ids) {
+  if (!idCuenta || !idConversacion) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  const conv = obtenerConversacionPorId(ids.convId);
-  if (!conv) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const conv = await obtenerConversacionPorId(idConversacion);
+  if (!conv || conv.cuenta_id !== idCuenta) {
     return NextResponse.json(
       { error: "Conversación no encontrada" },
       { status: 404 },
     );
   }
-  if (conv.cuenta_id !== ids.cuentaId) {
-    return NextResponse.json(
-      { error: "La conversación no pertenece a esta cuenta" },
-      { status: 403 },
-    );
-  }
-  borrarConversacion(ids.convId);
+  await borrarConversacion(idConversacion);
   return NextResponse.json({ ok: true });
 }

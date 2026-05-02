@@ -1,9 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
-  actualizarEntradaConocimiento,
-  borrarEntradaConocimiento,
-  obtenerEntradaConocimiento,
+  actualizarConocimiento,
+  borrarConocimiento,
+  listarConocimientoDeCuenta,
+  obtenerCuenta,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -11,38 +13,25 @@ interface Contexto {
   params: Promise<{ idCuenta: string; idEntrada: string }>;
 }
 
-function validarIds(idCuenta: string, idEntrada: string) {
-  const cuentaId = Number(idCuenta);
-  const entradaId = Number(idEntrada);
-  if (
-    !Number.isFinite(cuentaId) ||
-    cuentaId <= 0 ||
-    !Number.isFinite(entradaId) ||
-    entradaId <= 0
-  ) {
-    return null;
-  }
-  return { cuentaId, entradaId };
-}
-
 export async function PATCH(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idEntrada } = await params;
-  const ids = validarIds(idCuenta, idEntrada);
-  if (!ids) {
+  if (!idCuenta || !idEntrada) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
 
-  const entrada = obtenerEntradaConocimiento(ids.entradaId);
+  const entradas = await listarConocimientoDeCuenta(idCuenta);
+  const entrada = entradas.find((e) => e.id === idEntrada);
   if (!entrada) {
     return NextResponse.json(
       { error: "Entrada no encontrada" },
       { status: 404 },
-    );
-  }
-  if (entrada.cuenta_id !== ids.cuentaId) {
-    return NextResponse.json(
-      { error: "La entrada no pertenece a esta cuenta" },
-      { status: 403 },
     );
   }
 
@@ -60,7 +49,7 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
   const orden =
     typeof payload.orden === "number" ? payload.orden : undefined;
 
-  const actualizada = actualizarEntradaConocimiento(ids.entradaId, {
+  const actualizada = await actualizarConocimiento(idEntrada, {
     titulo,
     contenido,
     orden,
@@ -75,24 +64,25 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idEntrada } = await params;
-  const ids = validarIds(idCuenta, idEntrada);
-  if (!ids) {
+  if (!idCuenta || !idEntrada) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  const entrada = obtenerEntradaConocimiento(ids.entradaId);
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const entradas = await listarConocimientoDeCuenta(idCuenta);
+  const entrada = entradas.find((e) => e.id === idEntrada);
   if (!entrada) {
     return NextResponse.json(
       { error: "Entrada no encontrada" },
       { status: 404 },
     );
   }
-  if (entrada.cuenta_id !== ids.cuentaId) {
-    return NextResponse.json(
-      { error: "La entrada no pertenece a esta cuenta" },
-      { status: 403 },
-    );
-  }
-  borrarEntradaConocimiento(ids.entradaId);
+  await borrarConocimiento(idEntrada);
   return NextResponse.json({ ok: true });
 }

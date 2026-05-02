@@ -1,11 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
-  asignarEtiquetaAConversacion,
+  asignarEtiqueta,
+  desasignarEtiqueta,
+  listarEtiquetas,
+  listarEtiquetasDeConversacion,
   obtenerConversacionPorId,
-  obtenerEtiqueta,
-  obtenerEtiquetasDeConversacion,
-  quitarEtiquetaDeConversacion,
+  obtenerCuenta,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -13,54 +15,44 @@ interface Contexto {
   params: Promise<{ idCuenta: string; idConversacion: string }>;
 }
 
-function validar(idCuenta: string, idConv: string) {
-  const cuentaId = Number(idCuenta);
-  const convId = Number(idConv);
-  if (
-    !Number.isFinite(cuentaId) ||
-    cuentaId <= 0 ||
-    !Number.isFinite(convId) ||
-    convId <= 0
-  ) {
-    return null;
+async function verificarAcceso(
+  idCuenta: string,
+  idConversacion: string,
+  usuarioId: string,
+): Promise<NextResponse | null> {
+  if (!idCuenta || !idConversacion) {
+    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  return { cuentaId, convId };
-}
-
-function verificarConvPerteneceACuenta(
-  convId: number,
-  cuentaId: number,
-): { ok: true } | { ok: false; status: number; error: string } {
-  const conv = obtenerConversacionPorId(convId);
-  if (!conv)
-    return { ok: false, status: 404, error: "Conversación no encontrada" };
-  if (conv.cuenta_id !== cuentaId)
-    return {
-      ok: false,
-      status: 403,
-      error: "La conversación no pertenece a esta cuenta",
-    };
-  return { ok: true };
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== usuarioId) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const conv = await obtenerConversacionPorId(idConversacion);
+  if (!conv || conv.cuenta_id !== idCuenta) {
+    return NextResponse.json(
+      { error: "Conversación no encontrada" },
+      { status: 404 },
+    );
+  }
+  return null;
 }
 
 export async function GET(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
   const { idCuenta, idConversacion } = await params;
-  const ids = validar(idCuenta, idConversacion);
-  if (!ids) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  const v = verificarConvPerteneceACuenta(ids.convId, ids.cuentaId);
-  if (!v.ok)
-    return NextResponse.json({ error: v.error }, { status: v.status });
-  const etiquetas = obtenerEtiquetasDeConversacion(ids.convId);
+  const err = await verificarAcceso(idCuenta, idConversacion, auth.id);
+  if (err) return err;
+  const etiquetas = await listarEtiquetasDeConversacion(idConversacion);
   return NextResponse.json({ etiquetas });
 }
 
 export async function POST(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
   const { idCuenta, idConversacion } = await params;
-  const ids = validar(idCuenta, idConversacion);
-  if (!ids) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  const v = verificarConvPerteneceACuenta(ids.convId, ids.cuentaId);
-  if (!v.ok)
-    return NextResponse.json({ error: v.error }, { status: v.status });
+  const err = await verificarAcceso(idCuenta, idConversacion, auth.id);
+  if (err) return err;
 
   let payload: { etiqueta_id?: unknown };
   try {
@@ -69,42 +61,42 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
-  const etiquetaId = Number(payload.etiqueta_id);
-  if (!Number.isFinite(etiquetaId) || etiquetaId <= 0) {
+  const etiquetaId =
+    typeof payload.etiqueta_id === "string" ? payload.etiqueta_id : "";
+  if (!etiquetaId) {
     return NextResponse.json(
       { error: "etiqueta_id inválido" },
       { status: 400 },
     );
   }
-  const etiqueta = obtenerEtiqueta(etiquetaId);
-  if (!etiqueta || etiqueta.cuenta_id !== ids.cuentaId) {
+  const etiquetasCuenta = await listarEtiquetas(idCuenta);
+  if (!etiquetasCuenta.some((e) => e.id === etiquetaId)) {
     return NextResponse.json(
       { error: "Etiqueta no pertenece a esta cuenta" },
       { status: 400 },
     );
   }
 
-  asignarEtiquetaAConversacion(ids.convId, etiquetaId);
+  await asignarEtiqueta(idConversacion, etiquetaId);
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
   const { idCuenta, idConversacion } = await params;
-  const ids = validar(idCuenta, idConversacion);
-  if (!ids) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  const v = verificarConvPerteneceACuenta(ids.convId, ids.cuentaId);
-  if (!v.ok)
-    return NextResponse.json({ error: v.error }, { status: v.status });
+  const err = await verificarAcceso(idCuenta, idConversacion, auth.id);
+  if (err) return err;
 
   const url = new URL(req.url);
-  const etiquetaId = Number(url.searchParams.get("etiqueta_id"));
-  if (!Number.isFinite(etiquetaId) || etiquetaId <= 0) {
+  const etiquetaId = url.searchParams.get("etiqueta_id");
+  if (!etiquetaId) {
     return NextResponse.json(
       { error: "Pasá ?etiqueta_id=<id>" },
       { status: 400 },
     );
   }
 
-  quitarEtiquetaDeConversacion(ids.convId, etiquetaId);
+  await desasignarEtiqueta(idConversacion, etiquetaId);
   return NextResponse.json({ ok: true });
 }

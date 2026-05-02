@@ -11,8 +11,8 @@ interface RespuestaInteresados {
   interesados: InteresadoEnProducto[];
 }
 
-function tiempoRelativo(unix: number): string {
-  const diff = Math.floor(Date.now() / 1000) - unix;
+function tiempoRelativo(iso: string): string {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
   if (diff < 60) return "ahora";
   if (diff < 3600) return `${Math.floor(diff / 60)}m`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
@@ -21,13 +21,13 @@ function tiempoRelativo(unix: number): string {
 
 export default function PaginaInteresados() {
   const params = useParams<{ idCuenta: string; idProducto: string }>();
-  const idCuenta = Number(params?.idCuenta);
-  const idProducto = Number(params?.idProducto);
+  const idCuenta = params?.idCuenta ?? "";
+  const idProducto = params?.idProducto ?? "";
 
   const [data, setData] = useState<RespuestaInteresados | null>(null);
 
   const cargar = useCallback(async () => {
-    if (!Number.isFinite(idCuenta) || !Number.isFinite(idProducto)) return;
+    if (!idCuenta || !idProducto) return;
     const res = await fetch(
       `/api/cuentas/${idCuenta}/productos/${idProducto}/clientes-interesados`,
       { cache: "no-store" },
@@ -106,7 +106,7 @@ export default function PaginaInteresados() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {i.necesita_humano === 1 && (
+                    {i.necesita_humano && (
                       <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-red-700 dark:bg-red-500/20 dark:text-red-300">
                         Atención
                       </span>

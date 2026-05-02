@@ -39,8 +39,8 @@ const COLOR_DOT: Record<string, string> = {
   rosa: "bg-pink-500",
 };
 
-function formatearFecha(unix: number): string {
-  return new Date(unix * 1000).toLocaleString("es-ES", {
+function formatearFecha(iso: string): string {
+  return new Date(iso).toLocaleString("es-ES", {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
@@ -48,8 +48,8 @@ function formatearFecha(unix: number): string {
   });
 }
 
-function tiempoRelativo(unix: number): string {
-  const diff = Math.floor(Date.now() / 1000) - unix;
+function tiempoRelativo(iso: string): string {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
   if (diff < 60) return "ahora";
   if (diff < 3600) return `${Math.floor(diff / 60)}m`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
@@ -58,13 +58,13 @@ function tiempoRelativo(unix: number): string {
 
 export default function PaginaCliente360() {
   const params = useParams<{ idCuenta: string; idConv: string }>();
-  const idCuenta = Number(params?.idCuenta);
-  const idConv = Number(params?.idConv);
+  const idCuenta = params?.idCuenta ?? "";
+  const idConv = params?.idConv ?? "";
 
   const [data, setData] = useState<RespuestaCliente360 | null>(null);
 
   const cargar = useCallback(async () => {
-    if (!Number.isFinite(idCuenta) || !Number.isFinite(idConv)) return;
+    if (!idCuenta || !idConv) return;
     const res = await fetch(
       `/api/cuentas/${idCuenta}/conversaciones/${idConv}/cliente-360`,
       { cache: "no-store" },
@@ -186,7 +186,7 @@ export default function PaginaCliente360() {
                   {data.etapa.nombre}
                 </span>
               )}
-              {c.necesita_humano === 1 && (
+              {c.necesita_humano && (
                 <span className="rounded-full bg-red-100 px-2 py-0.5 font-semibold text-red-700 dark:bg-red-500/20 dark:text-red-300">
                   Necesita atención
                 </span>

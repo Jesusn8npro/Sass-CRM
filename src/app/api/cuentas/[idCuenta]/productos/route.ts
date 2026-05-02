@@ -4,6 +4,7 @@ import {
   listarProductos,
   obtenerCuenta,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -11,31 +12,32 @@ interface Contexto {
   params: Promise<{ idCuenta: string }>;
 }
 
-function validarId(s: string): number | null {
-  const n = Number(s);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
 export async function GET(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = validarId(idCuenta);
-  if (id === null) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
-  const productos = listarProductos(id);
+  const productos = await listarProductos(idCuenta);
   return NextResponse.json({ productos });
 }
 
 export async function POST(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = validarId(idCuenta);
-  if (id === null) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
 
@@ -91,7 +93,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
       ? payload.categoria.trim()
       : null;
 
-  const producto = crearProducto(id, {
+  const producto = await crearProducto(idCuenta, {
     nombre,
     descripcion,
     precio,

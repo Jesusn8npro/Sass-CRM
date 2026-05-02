@@ -28,16 +28,16 @@ export function PuertaConexion() {
   const searchParams = useSearchParams();
   const [cuentas, setCuentas] = useState<CuentaConEstado[]>([]);
   const [cargandoCuentas, setCargandoCuentas] = useState(true);
-  const [idCuentaSeleccionada, setIdCuentaSeleccionada] = useState<number | null>(null);
+  const [idCuentaSeleccionada, setIdCuentaSeleccionada] = useState<string | null>(null);
   const [conversaciones, setConversaciones] = useState<ConversacionConPreview[]>([]);
-  const [idConvSeleccionada, setIdConvSeleccionada] = useState<number | null>(null);
+  const [idConvSeleccionada, setIdConvSeleccionada] = useState<string | null>(null);
   const [modalNueva, setModalNueva] = useState(false);
   const [modalNuevaConv, setModalNuevaConv] = useState(false);
   const [drawerCuentasAbierto, setDrawerCuentasAbierto] = useState(false);
   // Marca la última cuenta para la que ya hicimos auto-select de conversación.
   // Sin esto, el botón "Volver" en móvil quedaba pisado: limpiabas idConv y
   // el effect lo volvía a setear instantáneamente.
-  const refCuentaAutoSeleccionada = useRef<number | null>(null);
+  const refCuentaAutoSeleccionada = useRef<string | null>(null);
   // Deep-link ?cuenta=X&conv=Y solo se aplica una vez al montar.
   const refDeepLinkAplicado = useRef(false);
 
@@ -45,7 +45,7 @@ export function PuertaConexion() {
   // Llamamos esto desde el handler del click en la sidebar Y también
   // desde los effects de auto-selección. Así evitamos que un idConv viejo
   // de la cuenta anterior se mezcle con la nueva (causaba 403 spam).
-  const seleccionarCuenta = useCallback((id: number | null) => {
+  const seleccionarCuenta = useCallback((id: string | null) => {
     setIdCuentaSeleccionada(id);
     setIdConvSeleccionada(null);
     setConversaciones([]);
@@ -80,15 +80,14 @@ export function PuertaConexion() {
   useEffect(() => {
     if (refDeepLinkAplicado.current) return;
     if (cuentas.length === 0) return;
-    const idCuentaParam = Number(searchParams?.get("cuenta") ?? "");
+    const idCuentaParam = searchParams?.get("cuenta") ?? "";
     if (
-      Number.isFinite(idCuentaParam) &&
-      idCuentaParam > 0 &&
+      idCuentaParam &&
       cuentas.some((c) => c.id === idCuentaParam)
     ) {
       seleccionarCuenta(idCuentaParam);
-      const idConvParam = Number(searchParams?.get("conv") ?? "");
-      if (Number.isFinite(idConvParam) && idConvParam > 0) {
+      const idConvParam = searchParams?.get("conv") ?? "";
+      if (idConvParam) {
         // Esperamos al próximo effect (cuando carguen conversaciones)
         // a que setee la conv. Para que no la pise el auto-select.
         setIdConvSeleccionada(idConvParam);
@@ -164,7 +163,7 @@ export function PuertaConexion() {
     setIdConvSeleccionada(conversaciones[0]!.id);
   }, [conversaciones, idConvSeleccionada, idCuentaSeleccionada]);
 
-  const conversacionBorrada = useCallback((id: number) => {
+  const conversacionBorrada = useCallback((id: string) => {
     setConversaciones((prev) => prev.filter((c) => c.id !== id));
     setIdConvSeleccionada((prev) => (prev === id ? null : prev));
   }, []);

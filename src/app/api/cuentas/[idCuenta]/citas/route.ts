@@ -4,6 +4,7 @@ import {
   listarCitasDeCuenta,
   obtenerCuenta,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -12,25 +13,31 @@ interface Contexto {
 }
 
 export async function GET(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
-  const citas = listarCitasDeCuenta(id);
+  const citas = await listarCitasDeCuenta(idCuenta);
   return NextResponse.json({ citas });
 }
 
 export async function POST(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
 
@@ -61,35 +68,35 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     );
   }
 
-  let fecha_hora: number;
-  if (typeof payload.fecha_hora === "number") {
-    fecha_hora = Math.floor(payload.fecha_hora);
-  } else if (typeof payload.fecha_iso === "string") {
-    const ms = new Date(payload.fecha_iso).getTime();
-    if (!Number.isFinite(ms)) {
-      return NextResponse.json(
-        { error: "fecha_iso inválida" },
-        { status: 400 },
-      );
-    }
-    fecha_hora = Math.floor(ms / 1000);
-  } else {
+  // Acepta fecha_hora o fecha_iso como ISO string del cliente.
+  const fechaRaw =
+    typeof payload.fecha_hora === "string"
+      ? payload.fecha_hora
+      : typeof payload.fecha_iso === "string"
+      ? payload.fecha_iso
+      : null;
+  if (!fechaRaw) {
     return NextResponse.json({ error: "Falta fecha" }, { status: 400 });
   }
-
-  const ahora = Math.floor(Date.now() / 1000);
-  if (fecha_hora < ahora - 86400) {
+  const ms = new Date(fechaRaw).getTime();
+  if (!Number.isFinite(ms)) {
+    return NextResponse.json({ error: "Fecha inválida" }, { status: 400 });
+  }
+  if (ms < Date.now() - 86400 * 1000) {
     return NextResponse.json(
       { error: "La fecha no puede ser anterior a ayer" },
       { status: 400 },
     );
   }
+  const fecha_hora = new Date(ms).toISOString();
 
-  const cita = crearCita(id, {
-    conversacion_id:
-      typeof payload.conversacion_id === "number"
-        ? payload.conversacion_id
-        : null,
+  const conversacion_id =
+    typeof payload.conversacion_id === "string" && payload.conversacion_id
+      ? payload.conversacion_id
+      : null;
+
+  const cita = await crearCita(idCuenta, {
+    conversacion_id,
     cliente_nombre,
     cliente_telefono:
       typeof payload.cliente_telefono === "string" &&

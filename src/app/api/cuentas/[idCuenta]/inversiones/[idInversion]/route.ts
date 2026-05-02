@@ -2,8 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   actualizarInversion,
   borrarInversion,
+  obtenerCuenta,
   obtenerInversion,
 } from "@/lib/baseDatos";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -11,28 +13,20 @@ interface Contexto {
   params: Promise<{ idCuenta: string; idInversion: string }>;
 }
 
-function validarIds(ic: string, ii: string) {
-  const idCuenta = Number(ic);
-  const idInversion = Number(ii);
-  if (
-    !Number.isFinite(idCuenta) ||
-    idCuenta <= 0 ||
-    !Number.isFinite(idInversion) ||
-    idInversion <= 0
-  ) {
-    return null;
-  }
-  return { idCuenta, idInversion };
-}
-
 export async function PATCH(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idInversion } = await params;
-  const ids = validarIds(idCuenta, idInversion);
-  if (!ids) {
+  if (!idCuenta || !idInversion) {
     return NextResponse.json({ error: "IDs inválidos" }, { status: 400 });
   }
-  const inv = obtenerInversion(ids.idInversion);
-  if (!inv || inv.cuenta_id !== ids.idCuenta) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const inv = await obtenerInversion(idInversion);
+  if (!inv || inv.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "Inversión no encontrada" }, { status: 404 });
   }
 
@@ -60,27 +54,33 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
   if (typeof payload.categoria === "string") {
     cambios.categoria = payload.categoria.trim() || null;
   }
-  if (typeof payload.fecha === "number" && Number.isFinite(payload.fecha)) {
-    cambios.fecha = Math.floor(payload.fecha);
+  if (typeof payload.fecha === "string" && payload.fecha.trim()) {
+    cambios.fecha = payload.fecha;
   }
   if (typeof payload.notas === "string") {
     cambios.notas = payload.notas.trim() || null;
   }
 
-  const actualizada = actualizarInversion(ids.idInversion, cambios);
+  const actualizada = await actualizarInversion(idInversion, cambios);
   return NextResponse.json({ inversion: actualizada });
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta, idInversion } = await params;
-  const ids = validarIds(idCuenta, idInversion);
-  if (!ids) {
+  if (!idCuenta || !idInversion) {
     return NextResponse.json({ error: "IDs inválidos" }, { status: 400 });
   }
-  const inv = obtenerInversion(ids.idInversion);
-  if (!inv || inv.cuenta_id !== ids.idCuenta) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  const inv = await obtenerInversion(idInversion);
+  if (!inv || inv.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "Inversión no encontrada" }, { status: 404 });
   }
-  borrarInversion(ids.idInversion);
+  await borrarInversion(idInversion);
   return NextResponse.json({ ok: true });
 }

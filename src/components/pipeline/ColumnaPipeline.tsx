@@ -11,11 +11,11 @@ interface ColorOpcion {
 }
 
 interface Props {
-  idEtapa: number | "sin";
+  idEtapa: string | "sin";
   titulo: string;
   color: string;
   conversaciones: ConversacionConPreview[];
-  idCuenta: number;
+  idCuenta: string;
   onRenombrar?: (nuevo: string) => void;
   onBorrar?: () => void;
   onCambiarColor?: (color: string) => void;

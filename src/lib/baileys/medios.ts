@@ -31,7 +31,7 @@ function asegurarDirectorio(ruta: string): void {
   }
 }
 
-function rutaMediaCuenta(cuentaId: number): string {
+function rutaMediaCuenta(cuentaId: string): string {
   const dir = path.join(directorioMediaBase, String(cuentaId));
   asegurarDirectorio(dir);
   return dir;
@@ -130,7 +130,7 @@ export function detectarTipoMedia(msg: WAMessage): {
 export async function descargarYGuardarMedia(
   sock: WASocket,
   msg: WAMessage,
-  cuentaId: number,
+  cuentaId: string,
   tipo: TipoMensaje,
   mime: string | null,
 ): Promise<MediaDescargado | null> {
@@ -208,7 +208,7 @@ export function rutaAbsolutaDeMedia(mediaPath: string): string {
 }
 
 export function guardarMediaSubido(
-  cuentaId: number,
+  cuentaId: string,
   buffer: Buffer,
   extension: string,
 ): MediaDescargado {
@@ -229,14 +229,14 @@ export function guardarMediaSubido(
 // ============================================================
 // Biblioteca de medios reutilizables (separada de chats)
 // ============================================================
-function rutaBibliotecaCuenta(cuentaId: number): string {
+function rutaBibliotecaCuenta(cuentaId: string): string {
   const dir = path.join(directorioBibliotecaBase, String(cuentaId));
   asegurarDirectorio(dir);
   return dir;
 }
 
 export function guardarEnBiblioteca(
-  cuentaId: number,
+  cuentaId: string,
   buffer: Buffer,
   extension: string,
 ): MediaDescargado {

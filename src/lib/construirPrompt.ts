@@ -56,7 +56,7 @@ export function construirPromptSistema(
     partes.push("\n");
   }
 
-  const productosActivos = productos.filter((p) => p.esta_activo === 1);
+  const productosActivos = productos.filter((p) => p.esta_activo);
   if (productosActivos.length > 0) {
     partes.push(
       "\n\n# Catálogo de productos\n\n" +

@@ -4,6 +4,7 @@ import {
   obtenerOCrearConversacion,
 } from "@/lib/baseDatos";
 import { iniciarLlamadaConContexto } from "@/lib/llamadas";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -18,13 +19,15 @@ interface Contexto {
  * sin depender de un cliente real.
  */
 export async function POST(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = Number(idCuenta);
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  const cuenta = obtenerCuenta(id);
-  if (!cuenta) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
 
@@ -44,8 +47,8 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     );
   }
 
-  const conv = obtenerOCrearConversacion(
-    id,
+  const conv = await obtenerOCrearConversacion(
+    idCuenta,
     soloDigitos,
     "Prueba (test-call)",
   );

@@ -9,11 +9,11 @@ Este documento cubre **qué se hizo en la sub-fase 6.A.1**, **cómo probarlo**, 
 | Sub-fase | Estado | Qué incluye |
 |---|---|---|
 | **6.A.1 — Auth + Landing + Schema** | ✅ Completada | Schema Supabase, login/signup, panel protegido |
-| 6.A.2 — Migración DB SQLite → Postgres | ⏳ Pendiente | Reescribir `baseDatos.ts` con Supabase, script de migración de datos |
-| 6.A.3 — Multi-tenant + RLS por relación | ⏳ Pendiente | Cada usuario solo ve SUS cuentas, policies en todas las tablas |
-| 6.A.4 — Landing PRO + Storage | ⏳ Pendiente | Landing tipo Zolutium, archivos a Supabase Storage |
+| **6.A.2 — Migración DB SQLite → Postgres + multi-tenant** | ✅ Completada | `baseDatos.ts` 100% Supabase, IDs UUID, todas las APIs verifican propiedad de cuenta, RLS por relación |
+| 6.A.3 — Storage migration + UI mejoras | ⏳ Pendiente | Mover medios/auth a Supabase Storage, cleanup local |
+| 6.A.4 — Landing PRO | ⏳ Pendiente | Landing tipo Zolutium con copy de ventas |
 
-> **Importante**: en 6.A.1 la app funciona en modo "híbrido" — el bot sigue usando SQLite local, pero el panel ya tiene Auth y todo está preparado para la migración. **Tu vecino puede crear cuenta y entrar al panel, pero por ahora ve los mismos datos que vos** (eso lo aislamos en 6.A.3).
+> **6.A.2 logrado**: cada usuario nuevo arranca de cero (0 cuentas, 0 conversaciones). Las APIs verifican `cuenta.usuario_id === auth.uid()` antes de devolver/mutar nada, y RLS por relación protege a nivel DB como segunda capa.
 
 ---
 
@@ -185,11 +185,15 @@ SELECT * FROM public.cuentas;
 - **Middleware refresca sesión** en cada request → cookies siempre válidas.
 - **CSRF**: server actions de Next usan headers que el browser solo envía same-origin.
 
-### ⚠️ Pendiente (se cierra en 6.A.2 / 6.A.3)
+### ✅ Cerrado en 6.A.2
 
-- **Las APIs `/api/cuentas/*`** todavía están abiertas (sin verificar que el `idCuenta` pertenezca al usuario). Esto se cierra cuando migremos baseDatos.ts a Supabase y agreguemos chequeo de propietario en cada handler.
-- **Las tablas que no son `usuarios` ni `cuentas`** tienen RLS pero sin policies → solo accesibles vía service_role. Esto es seguro (deny-all) pero requiere que migremos baseDatos.ts a usar el cliente admin (lo que vamos a hacer).
-- **`mensajes`, `productos`, etc.** todavía viven en SQLite. Cualquier usuario logueado ve los mismos datos hasta 6.A.2/6.A.3.
+- **Todas las APIs `/api/cuentas/*`** ahora exigen sesión vía `requerirSesion()` y verifican que `cuenta.usuario_id === auth.id`. Devuelven 401 sin sesión y 404 si la cuenta es de otro usuario (no filtran existencia).
+- **RLS por relación** en las 17 tablas restantes via helper `cuenta_es_mia(uuid)` y policies `FOR ALL TO authenticated`. Defense in depth: el admin client del bot bypasea RLS, pero si en el futuro algún path usa cliente normal, RLS lo protege.
+- **Datos en Supabase**: `mensajes`, `productos`, `conversaciones`, todo. Cada usuario nuevo arranca con 0 cuentas, 0 mensajes. SQLite local desactivado.
+
+### ⚠️ Pendiente (6.A.3)
+
+- **Storage local** — `auth/<id>/` (sesiones Baileys) y `data/media/` (archivos de chat) siguen en disco. Para SaaS multi-instancia hay que mover a Supabase Storage o S3.
 
 ### 💡 Recomendaciones extra
 
@@ -231,41 +235,62 @@ SELECT * FROM public.cuentas;
 2. `SELECT * FROM public.usuarios WHERE email = 'tu@email.com';`
 3. **Esperado**: 1 row con tu email, nombre (lo que pusiste), plan='free', rol='owner'
 
-### Test 5 — Tu vecino puede entrar (con limitación)
-1. Le mandás http://app-contabilidad-sass-crm.lnrubg.easypanel.host
-2. Él hace signup con su email
-3. **Esperado**: entra al panel y ve TUS cuentas WhatsApp (porque la migración de datos a Supabase es 6.A.2 — por ahora todo viene de SQLite local sin filtrar por usuario)
-
-> Esto último cambia en **6.A.2 + 6.A.3**: ahí los datos viven en Supabase con RLS, y cada usuario ve solo lo suyo.
+### Test 5 — Aislamiento multi-tenant (6.A.2)
+1. Crear usuario A → conectar 1 cuenta WhatsApp → crear conversaciones / productos.
+2. Cerrar sesión, crear usuario B con otro email.
+3. **Esperado**: usuario B ve panel **vacío** (0 cuentas). No ve nada del usuario A.
+4. Si intenta acceder a `/app/cuentas/<uuid-de-A>/dashboard` directamente: 404 desde la API.
+5. En SQL Editor de Supabase: `SELECT count(*) FROM cuentas;` muestra ambas, pero `SELECT * FROM cuentas;` con sesión authenticated solo devuelve la del usuario actual (RLS).
 
 ---
 
-## 📋 Lo que viene en 6.A.2 (próxima sub-fase)
+## 📋 Resumen 6.A.2 — qué cambió
 
-### Refactor `baseDatos.ts` → Supabase
+### Archivos nuevos
+- `src/lib/auth/sesion.ts` — `obtenerUsuarioActual()` y `requerirSesion()` (devuelve 401 NextResponse si no hay sesión).
 
-Hoy `src/lib/baseDatos.ts` usa `better-sqlite3`. Reemplazo:
+### `baseDatos.ts` reescrito completo
+- Cliente admin (service_role) singleton lazy vía `crearClienteAdmin()`.
+- Toda función ahora `async`, IDs `string` (UUID), timestamps `string` ISO timestamptz, booleans reales.
+- `Cuenta.usuario_id: string` agregado. `crearCuenta(usuarioId, etiqueta, ...)` exige el UUID.
+- `listarCuentas(usuarioId?)` filtra por usuario si se pasa el arg; sin arg, lista todas (uso interno del bot).
 
-- `import Database from "better-sqlite3"` → `import { crearClienteAdmin } from "@/lib/supabase/cliente-servidor"`
-- `db.prepare("SELECT * FROM cuentas WHERE id = ?").get(id)` → `await supabase.from("cuentas").select("*").eq("id", id).single()`
-- IDs `number` → `string` (UUIDs)
-- Timestamps `unixepoch()` → ISO strings o `Date`
+### APIs (~40 routes adaptados)
+- Todos los handlers (excepto `/api/vapi/webhook`) empiezan con:
+  ```ts
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+  ```
+- Verifican `cuenta.usuario_id === auth.id` antes de leer/mutar.
+- Eliminado `Number(idCuenta)` — los UUIDs son strings.
 
-### Script de migración de datos
+### Bot core (gestor, manejador, cicloVida, llamadas)
+- Maps/Sets ahora indexados por `string`.
+- Toda llamada a `baseDatos` `await`-eada.
+- Timestamps en ISO: `parseFechaIso` retorna ISO string, `listarCitasParaRecordar` recibe ISO.
+- Booleans directos: `!cuenta.esta_archivada` en vez de `=== 0`.
 
-`npm run migrar:sqlite-a-supabase`:
-1. Lee tu `data/messages.db` actual
-2. Para cada cuenta: la asigna a TU `usuario_id` (admin)
-3. Inserta todo en Supabase preservando relaciones (mapeando integer IDs a UUIDs)
-4. Reporta resumen: "X cuentas, Y conversaciones, Z mensajes migrados"
+### Componentes (~25)
+- `useState<string | null>`, `Map<string, ...>` en pipeline/pages.
+- Helpers de fecha leen ISO directamente: `new Date(msg.creado_en)` (sin `* 1000`).
+- Forms envían boolean a las APIs (no 0/1).
 
-### Cutover
+### Migración SQL `10_rls_por_relacion_cuenta`
+- Helper `cuenta_es_mia(uuid)` SECURITY DEFINER, search_path fijo, EXECUTE solo para `authenticated`.
+- Policy `FOR ALL TO authenticated USING (cuenta_es_mia(cuenta_id))` en 15 tablas.
+- `conversacion_etiquetas` joinea via `conversaciones.cuenta_id`.
 
-1. Domingo a la noche, ~30min de downtime.
-2. Pausamos el bot.
-3. Corremos el script de migración.
-4. Redeploy con la nueva versión que usa Supabase.
-5. Verificamos que los mensajes lleguen.
+## 📋 Lo que viene en 6.A.3
+
+### Storage migration
+- Mover `auth/<uuid>/` (sesiones Baileys multi-archivo) a Supabase Storage o adapter custom.
+- Mover `data/media/` y `data/biblioteca/` a Storage con rutas firmadas.
+- Mover `data/productos/` (imágenes/videos de catálogo) a Storage.
+- Beneficio: el bot puede correr en N instancias sin sticky storage.
+
+### Cleanup local
+- Borrar `data/messages.db*` (después de detener Next con Ctrl+C; los archivos están lockeados mientras el dev server corre).
+- Borrar `auth/<id>/` con IDs numéricos legacy si aparecen — los nuevos son UUIDs.
 
 ---
 
@@ -295,8 +320,15 @@ Hoy `src/lib/baseDatos.ts` usa `better-sqlite3`. Reemplazo:
 ### "Cannot find module @supabase/ssr"
 - Falta `npm install`. Corré `npm install` y reiniciá Next.
 
-### Las APIs viejas no encuentran cuentas
-- Eso es porque **el código sigue usando SQLite** (Fase 6.A.1 es híbrida). En 6.A.2 migramos baseDatos.ts a Supabase y desaparece el problema.
+### "No autenticado" (401) en las APIs
+- Falta sesión. Iniciá sesión en `/login`. Las APIs ahora exigen cookie de Supabase Auth.
+
+### "Cuenta no encontrada" (404) cuando claramente existe
+- Esa cuenta es de otro usuario. Multi-tenant: cada usuario solo ve las suyas.
+
+### El bot no procesa mensajes / heartbeat 0
+- Verificá que `SUPABASE_SERVICE_ROLE_KEY` está pegada en `.env.local` (sin esa key el admin client no arranca).
+- Reiniciá Next: `Ctrl+C && npm run dev`.
 
 ---
 
@@ -309,4 +341,4 @@ Hoy `src/lib/baseDatos.ts` usa `better-sqlite3`. Reemplazo:
 
 ---
 
-*Fase 6.A.1 completada. Próximo paso: 6.A.2 — migrar el código a usar Supabase en lugar de SQLite.*
+*Fases 6.A.1 + 6.A.2 completadas. Multi-tenant operativo en producción. Próximo: 6.A.3 — Storage y landing PRO.*

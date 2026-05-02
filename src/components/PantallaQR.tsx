@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { EstadoConexion } from "@/lib/baseDatos";
 
 interface Props {
-  idCuenta: number;
+  idCuenta: string;
   etiquetaCuenta: string;
   estado: EstadoConexion;
   qrPng: string | null;

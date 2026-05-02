@@ -5,6 +5,7 @@ import {
   obtenerOCrearConversacion,
 } from "@/lib/baseDatos";
 import { iniciarLlamadaConContexto } from "@/lib/llamadas";
+import { requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -12,32 +13,32 @@ interface Contexto {
   params: Promise<{ idCuenta: string }>;
 }
 
-function validarId(s: string): number | null {
-  const n = Number(s);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
 export async function GET(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = validarId(idCuenta);
-  if (id === null) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  if (!obtenerCuenta(id)) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
-  const llamadas = listarLlamadasDeCuenta(id);
+  const llamadas = await listarLlamadasDeCuenta(idCuenta);
   return NextResponse.json({ llamadas });
 }
 
 export async function POST(req: NextRequest, { params }: Contexto) {
+  const auth = await requerirSesion();
+  if (auth instanceof NextResponse) return auth;
+
   const { idCuenta } = await params;
-  const id = validarId(idCuenta);
-  if (id === null) {
+  if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
-  const cuenta = obtenerCuenta(id);
-  if (!cuenta) {
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
 
@@ -67,7 +68,11 @@ export async function POST(req: NextRequest, { params }: Contexto) {
       : null;
 
   // Crear o recuperar conversación local — el contexto sale de su historial.
-  const conversacion = obtenerOCrearConversacion(id, soloDigitos, nombre);
+  const conversacion = await obtenerOCrearConversacion(
+    idCuenta,
+    soloDigitos,
+    nombre,
+  );
 
   const resultado = await iniciarLlamadaConContexto({
     cuenta,
