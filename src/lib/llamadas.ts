@@ -23,6 +23,7 @@ import {
   type Mensaje,
 } from "./baseDatos";
 import { iniciarLlamada } from "./vapi";
+import { resolverCredencialesVapi } from "./vapi-credenciales";
 
 const COOLDOWN_MS = 60 * 60 * 1000; // 1 hora
 
@@ -150,17 +151,21 @@ export async function iniciarLlamadaConContexto(
 ): Promise<ResultadoIniciar> {
   const { cuenta, conversacion, motivo, origen } = opciones;
 
-  if (!cuenta.vapi_api_key?.trim()) {
+  // Resolver credenciales: la cuenta gana si las setea, sino fallback al .env
+  const cred = resolverCredencialesVapi(cuenta);
+  if (!cred.apiKey) {
     return {
       ok: false,
-      error: "Falta API key de Vapi en la cuenta.",
+      error:
+        "Falta API key de Vapi (ni en la cuenta ni en VAPI_API_KEY del entorno).",
       motivoBloqueo: "vapi_no_configurado",
     };
   }
-  if (!cuenta.vapi_phone_id?.trim()) {
+  if (!cred.phoneNumberId) {
     return {
       ok: false,
-      error: "Falta Phone Number ID de Vapi.",
+      error:
+        "Falta Phone Number ID de Vapi (ni en la cuenta ni en VAPI_PHONE_NUMBER_ID del entorno).",
       motivoBloqueo: "vapi_no_configurado",
     };
   }
@@ -213,9 +218,9 @@ export async function iniciarLlamadaConContexto(
   const primerMensaje = construirPrimerMensaje(cuenta, conversacion);
 
   try {
-    const respuesta = await iniciarLlamada(cuenta.vapi_api_key, {
+    const respuesta = await iniciarLlamada(cred.apiKey, {
       assistantId: assistantIdAUsar,
-      phoneNumberId: cuenta.vapi_phone_id,
+      phoneNumberId: cred.phoneNumberId,
       numeroCliente: telefonoE164,
       nombreCliente: conversacion.nombre ?? undefined,
       metadata: {

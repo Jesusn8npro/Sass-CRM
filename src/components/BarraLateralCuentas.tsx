@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Cuenta, EstadoConexion } from "@/lib/baseDatos";
 import { InterruptorTema } from "./InterruptorTema";
+import { BadgeNotificaciones } from "./BadgeNotificaciones";
 
 interface InfoUsuario {
   usuario: { id: string; email: string; nombre: string | null; plan: string };
@@ -120,7 +121,8 @@ export function BarraLateralCuentas({
           </svg>
           Nueva cuenta
         </button>
-        <div className="mt-3 flex items-center justify-end">
+        <div className="mt-3 flex items-center justify-end gap-1">
+          <BadgeNotificaciones />
           <InterruptorTema />
         </div>
       </div>

@@ -16,6 +16,7 @@ Este documento cubre **qué se hizo en la sub-fase 6.A.1**, **cómo probarlo**, 
 | **6.B.1 — Planes + Mi Cuenta** | ✅ Completada | Free/Pro/Business con límites enforced en POST /api/cuentas (402). Página /app/mi-cuenta con perfil + plan + uso. Badge en sidebar con uso vs límite. |
 | **6.C.1 — Vapi pro: multi-assistants + llamadas programadas + Web SDK** | ✅ Completada | N assistants Vapi por cuenta (vendedor/soporte/cobranza). Llamadas programadas a futuro con scheduler. IA puede agendar llamadas con `agendar_llamada`. Test desde browser con `@vapi-ai/web`. |
 | **6.C.2 — Auth Baileys en Supabase Postgres** | ✅ Completada | Reemplaza `useMultiFileAuthState` (disco) por `useSupabaseAuthState` (DB). Sesión sobrevive reinicios del contenedor y permite multi-instancia. |
+| **6.C.3 — Vapi del .env (modelo SaaS) + notificaciones de desconexión** | ✅ Completada | Vapi keys en `.env` se usan como default para todas las cuentas; cada cuenta puede override. Notificaciones in-app + email (Resend) cuando una cuenta WhatsApp se desconecta. |
 
 > **6.A.2 logrado**: cada usuario nuevo arranca de cero (0 cuentas, 0 conversaciones). Las APIs verifican `cuenta.usuario_id === auth.uid()` antes de devolver/mutar nada, y RLS por relación protege a nivel DB como segunda capa.
 
@@ -312,6 +313,55 @@ Buckets creados con migración SQL `11_storage_buckets_y_policies`:
 ### Cleanup local pendiente
 - Detener Next con Ctrl+C y borrar `data/messages.db*` (lockeados mientras corre).
 - Borrar `auth/<id-numerico>/` (legacy) — los nuevos son UUIDs.
+
+## 📋 Resumen 6.C.3 — Vapi global + notificaciones
+
+### Vapi credenciales del sistema (modelo SaaS real)
+**Antes**: cada cuenta del SaaS tenía que pegar SU propia API key de Vapi en /configuracion.
+**Ahora**: pegás tus keys una sola vez en `.env.local` (`VAPI_API_KEY`, `VAPI_PUBLIC_KEY`, `VAPI_PHONE_NUMBER_ID`) y por default todas las cuentas las usan. Sus assistants se crean en TU cuenta de Vapi, las llamadas se cobran a TU billing — vos cobrás a tus clientes lo que quieras.
+
+Si una cuenta puntual quiere usar OTRA cuenta de Vapi (caso edge), puede pegar sus propias keys en /configuracion y override.
+
+**Helper nuevo `src/lib/vapi-credenciales.ts`**:
+- `resolverCredencialesVapi(cuenta)` → `{ apiKey, publicKey, phoneNumberId, origenes }`. Cuenta gana > env > nada.
+- `credencialesParaCliente(cuenta)` → solo lo safe-to-expose (NUNCA api_key) para mandar al browser.
+
+**Endpoint nuevo `GET /api/cuentas/[idCuenta]/vapi/estado`**:
+Devuelve `{ publicKey, phoneNumberId, configurado, origenes }` para que el frontend sepa si Vapi está listo (sin exponer la api_key privada).
+
+**Adaptados** para usar el helper en lugar de leer `cuenta.vapi_api_key` directo:
+- `iniciarLlamadaConContexto` (llamadas.ts)
+- `POST /api/cuentas/[idCuenta]/vapi/sincronizar`
+- `POST /api/cuentas/[idCuenta]/vapi/phones`
+- `POST /api/cuentas/[idCuenta]/assistants/[idAssistant]/sincronizar`
+- `GET /api/cuentas/[idCuenta]/llamadas/[idLlamada]` (refresh activo)
+- Componente `BotonLlamar` ahora consulta `/vapi/estado` para decidir si habilita el botón
+- Componente `AdminAssistantsVapi` ahora consulta `/vapi/estado` para resolver la public key efectiva (cuenta o env)
+
+**Voz ElevenLabs**: ya se reutiliza automático — el assistant se sincroniza con `cuenta.voz_elevenlabs` (el voice ID que cargaste en /configuracion → Voz). Sin cambios.
+
+### Notificaciones de desconexión
+
+**Migración SQL `16_notificaciones_sistema`**: tabla `notificaciones_sistema` con tipo, título, mensaje, metadata, leida, email_enviado. RLS por `usuario_id = auth.uid()`.
+
+**Helper central `src/lib/notificaciones.ts`**:
+- `notificarCuenta({cuentaId, tipo, titulo, mensaje, metadata})` — crea notif in-app + manda email vía Resend (si `RESEND_API_KEY` está set).
+- Rate-limit por `(usuario, cuenta, tipo)` cada 15 min para evitar spam.
+- `notificarCuentaDesconectada(cuentaId, etiqueta, motivo)` shorthand.
+- Email HTML responsive con CTA al panel.
+
+**Trigger en `gestor.ts`**: cuando `connection.update` con `DisconnectReason.loggedOut` → notifica al dueño con motivo (4 dispositivos vinculados / 14 días sin móvil / cerró manualmente).
+
+**APIs nuevas**:
+- `GET /api/notificaciones` → últimas 50 + count no leídas.
+- `PATCH /api/notificaciones/[id]` → marca leída.
+- `POST /api/notificaciones/marcar-todas` → batch.
+
+**UI**:
+- Componente `BadgeNotificaciones` (campanita con badge rojo) en sidebar, polling cada 30s.
+- Página `/app/notificaciones` con lista, colores por tipo (rojo/ámbar/púrpura/zinc), iconos, deep-link a la cuenta, marcar leída individual o todas.
+
+**Email opcional**: si tenés `RESEND_API_KEY` en `.env`, automáticamente manda email cuando se crea la notif. Si no, solo in-app. Free tier de Resend = 3K emails/mes (suficiente para ~1000 desconexiones/mes).
 
 ## 📋 Resumen 6.C.2 — Auth Baileys en Supabase Postgres
 

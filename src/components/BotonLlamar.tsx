@@ -1,7 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Cuenta, LlamadaVapi } from "@/lib/baseDatos";
+
+interface EstadoVapi {
+  configurado: boolean;
+  publicKey: string | null;
+  phoneNumberId: string | null;
+}
 
 interface Props {
   cuenta: Cuenta;
@@ -26,11 +32,20 @@ export function BotonLlamar({
     | { tipo: "error"; texto: string }
     | null
   >(null);
+  // Estado Vapi efectivo (cuenta + fallback al .env del sistema).
+  const [estadoVapi, setEstadoVapi] = useState<EstadoVapi | null>(null);
 
-  const tieneTodo =
-    !!cuenta.vapi_api_key?.trim() &&
-    !!cuenta.vapi_assistant_id?.trim() &&
-    !!cuenta.vapi_phone_id?.trim();
+  useEffect(() => {
+    fetch(`/api/cuentas/${cuenta.id}/vapi/estado`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: EstadoVapi | null) => d && setEstadoVapi(d))
+      .catch(() => {});
+  }, [cuenta.id]);
+
+  // tieneTodo: configurado (api_key + phone_id efectivos) + assistant
+  // (puede venir del campo legacy de la cuenta o del default de
+  // assistants_vapi — eso lo resuelve el server al crear la llamada).
+  const tieneTodo = !!estadoVapi?.configurado;
 
   async function llamar() {
     if (llamando) return;

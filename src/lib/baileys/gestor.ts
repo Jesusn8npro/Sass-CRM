@@ -21,6 +21,7 @@ import {
   borrarSesionBaileysDeCuenta,
   useSupabaseAuthState,
 } from "./auth-supabase";
+import { notificarCuentaDesconectada } from "../notificaciones";
 
 interface ErrorConCodigo {
   output?: { statusCode?: number };
@@ -182,6 +183,14 @@ class GestorCuentas {
           // Borrar la sesión de Supabase para que el siguiente arranque
           // genere QR limpio.
           void borrarSesionBaileysDeCuenta(cuenta.id).catch(() => {});
+          // Notificar al dueño (in-app + email si está Resend).
+          void notificarCuentaDesconectada(
+            cuenta.id,
+            cuenta.etiqueta,
+            `WhatsApp cerró la sesión (código ${DisconnectReason.loggedOut}). Posibles causas: superaste 4 dispositivos vinculados, 14+ días sin abrir WhatsApp en el móvil, o cerraste sesión manualmente desde "Dispositivos vinculados".`,
+          ).catch((err) => {
+            console.error(`${prefijo} error notificando desconexión:`, err);
+          });
           return;
         }
 

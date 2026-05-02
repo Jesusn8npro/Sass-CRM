@@ -8,6 +8,7 @@ import {
 } from "@/lib/baseDatos";
 import { obtenerLlamada } from "@/lib/vapi";
 import { requerirSesion } from "@/lib/auth/sesion";
+import { resolverCredencialesVapi } from "@/lib/vapi-credenciales";
 
 export const dynamic = "force-dynamic";
 
@@ -52,11 +53,12 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
     return NextResponse.json({ error: "Llamada no encontrada" }, { status: 404 });
   }
 
-  // Si la llamada está activa y tenemos API key, intentamos refrescar.
+  // Si la llamada está activa y tenemos API key (cuenta o env), intentamos refrescar.
   const activos: EstadoLlamada[] = ["iniciando", "sonando", "en_curso"];
-  if (activos.includes(llamada.estado) && cuenta.vapi_api_key) {
+  const cred = resolverCredencialesVapi(cuenta);
+  if (activos.includes(llamada.estado) && cred.apiKey) {
     try {
-      const c = await obtenerLlamada(cuenta.vapi_api_key, llamada.vapi_call_id);
+      const c = await obtenerLlamada(cred.apiKey, llamada.vapi_call_id);
       const transcripcion = c.transcript ?? c.artifact?.transcript;
       const audio = c.recordingUrl ?? c.artifact?.recordingUrl;
       const resumen = c.summary ?? c.analysis?.summary;

@@ -14,6 +14,7 @@ import {
 } from "@/lib/vapi";
 import { construirPromptSistema } from "@/lib/construirPrompt";
 import { requerirSesion } from "@/lib/auth/sesion";
+import { resolverCredencialesVapi } from "@/lib/vapi-credenciales";
 
 export const dynamic = "force-dynamic";
 
@@ -67,9 +68,13 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
-  if (!cuenta.vapi_api_key?.trim()) {
+  const cred = resolverCredencialesVapi(cuenta);
+  if (!cred.apiKey) {
     return NextResponse.json(
-      { error: "Falta API key de Vapi en esta cuenta." },
+      {
+        error:
+          "Falta API key de Vapi (ni en la cuenta ni en VAPI_API_KEY del entorno).",
+      },
       { status: 400 },
     );
   }
@@ -131,7 +136,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     if (assistantId) {
       // Si el ID guardado ya no existe en Vapi (la borraron), creamos uno nuevo.
       try {
-        await obtenerAssistant(cuenta.vapi_api_key, assistantId);
+        await obtenerAssistant(cred.apiKey, assistantId);
       } catch {
         assistantId = null;
       }
@@ -139,13 +144,13 @@ export async function POST(req: NextRequest, { params }: Contexto) {
 
     if (assistantId) {
       const r = await actualizarAssistant(
-        cuenta.vapi_api_key,
+        cred.apiKey,
         assistantId,
         opciones,
       );
       assistantId = r.id;
     } else {
-      const r = await crearAssistant(cuenta.vapi_api_key, opciones);
+      const r = await crearAssistant(cred.apiKey, opciones);
       assistantId = r.id;
       creado = true;
     }

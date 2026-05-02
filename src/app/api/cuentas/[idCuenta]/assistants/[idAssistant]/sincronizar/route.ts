@@ -16,6 +16,7 @@ import {
 } from "@/lib/vapi";
 import { construirPromptSistema } from "@/lib/construirPrompt";
 import { requerirSesion } from "@/lib/auth/sesion";
+import { resolverCredencialesVapi } from "@/lib/vapi-credenciales";
 
 export const dynamic = "force-dynamic";
 
@@ -68,9 +69,13 @@ export async function POST(req: NextRequest, { params }: Contexto) {
       { status: 404 },
     );
   }
-  if (!cuenta.vapi_api_key?.trim()) {
+  const credVapi = resolverCredencialesVapi(cuenta);
+  if (!credVapi.apiKey) {
     return NextResponse.json(
-      { error: "Falta API key de Vapi en esta cuenta." },
+      {
+        error:
+          "Falta API key de Vapi (ni en la cuenta ni en VAPI_API_KEY del entorno).",
+      },
       { status: 400 },
     );
   }
@@ -130,17 +135,17 @@ export async function POST(req: NextRequest, { params }: Contexto) {
 
     if (vapiId) {
       try {
-        await obtenerAssistantVapi(cuenta.vapi_api_key, vapiId);
+        await obtenerAssistantVapi(credVapi.apiKey, vapiId);
       } catch {
         vapiId = null; // ya no existe en Vapi
       }
     }
 
     if (vapiId) {
-      const r = await actualizarAssistant(cuenta.vapi_api_key, vapiId, opciones);
+      const r = await actualizarAssistant(credVapi.apiKey, vapiId, opciones);
       vapiId = r.id;
     } else {
-      const r = await crearAssistant(cuenta.vapi_api_key, opciones);
+      const r = await crearAssistant(credVapi.apiKey, opciones);
       vapiId = r.id;
       creado = true;
     }

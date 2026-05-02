@@ -6,9 +6,15 @@ import { PruebaAssistantVapi } from "./PruebaAssistantVapi";
 
 interface Props {
   idCuenta: string;
-  /** Public key de Vapi de la cuenta — pasada del padre para no
-   *  re-fetchear. Si null, ocultamos el botón "Probar". */
+  /** Public key de Vapi inicial de la cuenta — el componente igual
+   *  consulta /vapi/estado para resolver el fallback al .env. */
   vapiPublicKey: string | null;
+}
+
+interface EstadoVapi {
+  publicKey: string | null;
+  phoneNumberId: string | null;
+  configurado: boolean;
 }
 
 /**
@@ -25,6 +31,9 @@ export function AdminAssistantsVapi({ idCuenta, vapiPublicKey }: Props) {
   const [creando, setCreando] = useState(false);
   const [nombreNuevo, setNombreNuevo] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [publicKeyEfectiva, setPublicKeyEfectiva] = useState<string | null>(
+    vapiPublicKey,
+  );
 
   async function cargar() {
     setCargando(true);
@@ -43,6 +52,13 @@ export function AdminAssistantsVapi({ idCuenta, vapiPublicKey }: Props) {
 
   useEffect(() => {
     void cargar();
+    // Consultar la public key efectiva (cuenta o fallback al env)
+    fetch(`/api/cuentas/${idCuenta}/vapi/estado`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: EstadoVapi | null) => {
+        if (d?.publicKey) setPublicKeyEfectiva(d.publicKey);
+      })
+      .catch(() => {});
   }, [idCuenta]);
 
   async function crear(e: React.FormEvent) {
@@ -121,7 +137,7 @@ export function AdminAssistantsVapi({ idCuenta, vapiPublicKey }: Props) {
               key={a.id}
               assistant={a}
               idCuenta={idCuenta}
-              vapiPublicKey={vapiPublicKey}
+              vapiPublicKey={publicKeyEfectiva}
               onCambio={cargar}
             />
           ))}
