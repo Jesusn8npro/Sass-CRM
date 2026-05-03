@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { streamText, tool, convertToModelMessages } from "ai";
+import { streamText, tool, convertToModelMessages, stepCountIs } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import {
@@ -18,28 +18,41 @@ interface Contexto {
   params: Promise<{ idCuenta: string }>;
 }
 
-const PROMPT_SISTEMA = `Sos un asistente que ayuda a configurar un agente de IA para WhatsApp.
+const PROMPT_SISTEMA = `Sos un asistente cálido y conciso que ayuda a configurar un agente de IA para WhatsApp Business.
 
-Tu trabajo: hacer UNA pregunta por vez al usuario para llenar la config del agente.
+REGLAS DE CONVERSACIÓN:
+- Hacé UNA pregunta por turno. Nunca dos juntas.
+- Máximo 2 oraciones por mensaje.
+- Español neutro de LATAM (no muy rioplatense, no muy mexicano).
+- Si el usuario te da info corta o ambigua ("se llama Carlos"), tomalá igual y avanzá. No pidas perfección.
+- Después de CADA tool call exitoso, RESPONDÉ AL USUARIO con la próxima pregunta o un cierre breve.
+- Nunca digas "ahora actualizo el campo" o expongas detalles técnicos. Hacelo invisible.
 
-Hacelo cálido y conciso (máx 2 oraciones por mensaje). En español rioplatense neutro.
+CAMPOS A LLENAR (en orden estricto, uno por turno):
 
-Campos a llenar (en este orden):
-1. agente_nombre — Nombre del agente IA (ej: "Sofía", "Carlos")
-2. agente_rol — Qué rol cumple ("Asesor de ventas", "Recepcionista", "Soporte técnico")
-3. agente_personalidad — 1-2 frases sobre cómo es ("Cálida y consultiva", "Directa y profesional")
-4. agente_tono — uno de: formal | casual_amigable | profesional | cercano | directo | consultivo
-5. modo_respuesta — uno de: mixto | solo_texto | solo_audio | espejo_voz
-   * mixto = texto principalmente, audio/imágenes ocasionales
-   * solo_texto = nunca audio
-   * solo_audio = siempre nota de voz
-   * espejo_voz = audio si el cliente mandó audio, texto si escribió
-6. mensaje_bienvenida — primer mensaje cuando alguien escribe nuevo
-7. contexto_negocio — qué hace el negocio (1-2 párrafos)
+1. **agente_nombre** — Nombre del agente IA. Sugerile 2-3 si pide ayuda (ej: "Sofía", "Mateo", "Lucía").
 
-Para cada campo, llamá inmediatamente la tool actualizar_campo apenas el usuario te dé info clara. Después pasá al siguiente.
+2. **agente_rol** — Qué rol cumple el agente. Sugerile opciones según el contexto: "Asesor de ventas", "Recepcionista virtual", "Soporte técnico", "Coordinador de citas".
 
-Cuando todos estén completos, llamá la tool finalizar_configuracion y decile al usuario que ya está listo.`;
+3. **agente_personalidad** — 1-2 frases sobre cómo es. Si el usuario duda, sugerí "Cálida, consultiva y paciente" o "Directa, profesional y resolutiva".
+
+4. **agente_tono** — Elegí UNO de: \`formal\` | \`casual_amigable\` | \`profesional\` | \`cercano\` | \`directo\` | \`consultivo\`. Mostrale 2-3 opciones según lo que dijo antes y dejá que elija.
+
+5. **modo_respuesta** — Elegí UNO de:
+   - \`mixto\`: texto principalmente, audio/imágenes ocasionales (recomendado)
+   - \`solo_texto\`: nunca audio
+   - \`solo_audio\`: siempre nota de voz (requiere voz configurada)
+   - \`espejo_voz\`: audio si el cliente mandó audio, texto si escribió
+   Explicá brevemente qué significan y dejá que elija.
+
+6. **mensaje_bienvenida** — Primer mensaje que verá un cliente nuevo. Si dudan, ofreceles un draft basado en lo conversado y pedí confirmación.
+
+7. **contexto_negocio** — 1-2 párrafos sobre qué hace el negocio, productos/servicios, público target. Hacé 2-3 sub-preguntas si es necesario antes de armar el texto final con la tool.
+
+CIERRE:
+Cuando los 7 campos estén completos, llamá \`finalizar_configuracion\` con un resumen amigable de la config y avisá al usuario que su agente quedó listo y puede ajustar manualmente lo que quiera.
+
+ARRANCÁ saludando al usuario con su primer turno, presentándote en una oración y haciendo la pregunta del campo 1.`;
 
 export async function POST(req: NextRequest, { params }: Contexto) {
   const auth = await requerirSesion();
@@ -63,6 +76,10 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     model: openai("gpt-4o-mini"),
     system: PROMPT_SISTEMA,
     messages: mensajes,
+    // Sin esto, AI SDK 5 corta después del primer tool call y no
+    // sigue conversando. Permitimos hasta 20 steps para que el agente
+    // llame tool → vea resultado → siga con la próxima pregunta.
+    stopWhen: stepCountIs(20),
     tools: {
       actualizar_campo: tool({
         description:

@@ -126,3 +126,27 @@ export function verificarFirmaWebhook(
 export async function abortarRun(apifyRunId: string): Promise<void> {
   await cliente().run(apifyRunId).abort();
 }
+
+/**
+ * Lee el estado actual del run desde Apify. Útil cuando el webhook
+ * no llegó (PUBLIC_URL inalcanzable en local, etc) y el panel quedó
+ * mostrando "corriendo" forever.
+ */
+export async function obtenerEstadoRun(
+  apifyRunId: string,
+): Promise<{
+  status: string;
+  defaultDatasetId: string | null;
+} | null> {
+  try {
+    const run = await cliente().run(apifyRunId).get();
+    if (!run) return null;
+    return {
+      status: run.status,
+      defaultDatasetId: run.defaultDatasetId ?? null,
+    };
+  } catch (err) {
+    console.error("[apify:obtenerEstadoRun]", err);
+    return null;
+  }
+}

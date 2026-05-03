@@ -193,7 +193,7 @@ export default function PaginaLeads() {
         ) : (
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
             {runs.map((r) => (
-              <FilaRun key={r.id} run={r} />
+              <FilaRun key={r.id} run={r} idCuenta={idCuenta} />
             ))}
           </ul>
         )}
@@ -202,36 +202,91 @@ export default function PaginaLeads() {
   );
 }
 
-function FilaRun({ run }: { run: RunApifyUI }) {
+function FilaRun({ run, idCuenta }: { run: RunApifyUI; idCuenta: string }) {
+  const [sincronizando, setSincronizando] = useState(false);
+  const [mensaje, setMensaje] = useState<string | null>(null);
   const corriendo = run.estado === "corriendo";
   const fallo = run.estado === "fallido" || run.estado === "abortado";
   const busqueda = run.input.searchStringsArray?.[0] ?? "(?)";
   const ubicacion = run.input.locationQuery ?? "(?)";
 
+  async function sincronizar() {
+    if (sincronizando) return;
+    setSincronizando(true);
+    setMensaje(null);
+    try {
+      const r = await fetch(
+        `/api/cuentas/${idCuenta}/apify/runs/${run.id}/sincronizar`,
+        { method: "POST" },
+      );
+      const data = (await r.json()) as {
+        ok?: boolean;
+        todavia_corriendo?: boolean;
+        ya_completado?: boolean;
+        resumen?: { items_recibidos: number; emails_creados: number };
+        mensaje?: string;
+        error?: string;
+      };
+      if (!r.ok) {
+        setMensaje(data.mensaje ?? data.error ?? "Error al sincronizar");
+      } else if (data.todavia_corriendo) {
+        setMensaje("El run sigue corriendo en Apify, esperá unos segundos");
+      } else if (data.resumen) {
+        setMensaje(
+          `✓ ${data.resumen.items_recibidos} resultados, ${data.resumen.emails_creados} emails nuevos`,
+        );
+      }
+    } catch (err) {
+      setMensaje(err instanceof Error ? err.message : "Error de red");
+    } finally {
+      setSincronizando(false);
+    }
+  }
+
   return (
-    <li className="flex items-center justify-between gap-3 py-3">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold">
-          {busqueda} · {ubicacion}
-        </p>
-        <p className="text-[11px] text-zinc-500">
-          {new Date(run.creado_en).toLocaleString("es")}
-          {run.estado === "completado" &&
-            ` · ${run.items_count} resultados importados`}
-          {fallo && run.error && ` · ${run.error.slice(0, 80)}`}
-        </p>
+    <li className="py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">
+            {busqueda} · {ubicacion}
+          </p>
+          <p className="text-[11px] text-zinc-500">
+            {new Date(run.creado_en).toLocaleString("es")}
+            {run.estado === "completado" &&
+              ` · ${run.items_count} resultados importados`}
+            {fallo && run.error && ` · ${run.error.slice(0, 80)}`}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {corriendo && (
+            <button
+              type="button"
+              onClick={sincronizar}
+              disabled={sincronizando}
+              title="Consultar a Apify si ya terminó (cuando el webhook no llegó)"
+              className="rounded-full border border-emerald-500/40 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-500/10 disabled:opacity-50 dark:text-emerald-300"
+            >
+              {sincronizando ? "…" : "↻ Sincronizar"}
+            </button>
+          )}
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+              corriendo
+                ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                : run.estado === "completado"
+                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                : "bg-rose-500/10 text-rose-700 dark:text-rose-300"
+            }`}
+          >
+            {corriendo ? "⏳ Corriendo" : run.estado}
+          </span>
+        </div>
       </div>
-      <span
-        className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-          corriendo
-            ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
-            : run.estado === "completado"
-            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-            : "bg-rose-500/10 text-rose-700 dark:text-rose-300"
-        }`}
-      >
-        {corriendo ? "⏳ Corriendo" : run.estado}
-      </span>
+      {mensaje && (
+        <p className="mt-2 rounded-md bg-emerald-500/5 px-2 py-1 text-[11px] text-emerald-700 dark:text-emerald-300">
+          {mensaje}
+        </p>
+      )}
     </li>
   );
 }

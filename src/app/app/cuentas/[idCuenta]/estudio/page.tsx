@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { PRESETS_IMAGEN, type PresetImagen } from "@/lib/imagenes/presets";
 
@@ -22,16 +22,34 @@ interface RespuestaGenerar {
   requeridos?: number;
 }
 
+interface RespuestaSubirArchivo {
+  ok?: boolean;
+  ruta?: string;
+  error?: string;
+}
+
+type ModoBase = "producto" | "subir" | "ninguna";
+type ModoPrompt = "preset" | "custom";
+
 export default function PaginaEstudio() {
   const { idCuenta } = useParams<{ idCuenta: string }>();
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [modoBase, setModoBase] = useState<ModoBase>("ninguna");
   const [seleccionado, setSeleccionado] = useState<string | null>(null);
+  const [archivoSubido, setArchivoSubido] = useState<{
+    ruta: string;
+    nombre: string;
+  } | null>(null);
+  const [subiendo, setSubiendo] = useState(false);
+  const [modoPrompt, setModoPrompt] = useState<ModoPrompt>("preset");
   const [presetActivo, setPresetActivo] = useState<PresetImagen | null>(
     PRESETS_IMAGEN[0] ?? null,
   );
+  const [promptCustom, setPromptCustom] = useState("");
   const [generando, setGenerando] = useState(false);
   const [resultado, setResultado] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const refInputArchivo = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!idCuenta) return;
@@ -43,16 +61,59 @@ export default function PaginaEstudio() {
       .catch(() => {});
   }, [idCuenta]);
 
+  async function subirArchivo(file: File) {
+    if (subiendo) return;
+    setSubiendo(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append("archivo", file);
+      const r = await fetch(`/api/cuentas/${idCuenta}/imagenes/subir`, {
+        method: "POST",
+        body: fd,
+      });
+      const data = (await r.json()) as RespuestaSubirArchivo;
+      if (!r.ok || !data.ruta) {
+        setError(data.error ?? "No se pudo subir el archivo");
+      } else {
+        setArchivoSubido({ ruta: data.ruta, nombre: file.name });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error de red al subir");
+    } finally {
+      setSubiendo(false);
+      if (refInputArchivo.current) refInputArchivo.current.value = "";
+    }
+  }
+
+  function rutaImagenBase(): string | null {
+    if (modoBase === "producto") {
+      const prod = productos.find((p) => p.id === seleccionado);
+      return prod?.imagen_url
+        ? extraerRutaInterna(prod.imagen_url, idCuenta)
+        : null;
+    }
+    if (modoBase === "subir") {
+      return archivoSubido ? `biblio:${archivoSubido.ruta}` : null;
+    }
+    return null;
+  }
+
   async function generar() {
-    if (!presetActivo || generando) return;
+    if (generando) return;
+    if (modoPrompt === "preset" && !presetActivo) return;
+    if (modoPrompt === "custom" && promptCustom.trim().length < 10) {
+      setError("El prompt custom debe tener al menos 10 caracteres");
+      return;
+    }
     setGenerando(true);
     setResultado(null);
     setError(null);
 
-    const prodSeleccionado = productos.find((p) => p.id === seleccionado);
-    const rutaBase = prodSeleccionado?.imagen_url
-      ? extraerRutaInterna(prodSeleccionado.imagen_url, idCuenta)
-      : null;
+    const body =
+      modoPrompt === "preset"
+        ? { preset_id: presetActivo!.id, ruta_imagen_base: rutaImagenBase() }
+        : { prompt: promptCustom.trim(), ruta_imagen_base: rutaImagenBase() };
 
     try {
       const r = await fetch(
@@ -60,10 +121,7 @@ export default function PaginaEstudio() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            preset_id: presetActivo.id,
-            ruta_imagen_base: rutaBase,
-          }),
+          body: JSON.stringify(body),
         },
       );
       const data = (await r.json()) as RespuestaGenerar;
@@ -101,55 +159,146 @@ export default function PaginaEstudio() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Columna izquierda: form */}
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 md:p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-3 text-sm font-semibold">1. Producto base</h2>
-          {productos.length === 0 ? (
-            <p className="text-xs text-zinc-500">
-              Todavía no tenés productos. Podés generar sin imagen base
-              (text-to-image) o crear uno primero.
-            </p>
-          ) : (
-            <select
-              value={seleccionado ?? ""}
-              onChange={(e) => setSeleccionado(e.target.value || null)}
-              className="mb-4 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-            >
-              <option value="">Sin imagen base (text-to-image)</option>
-              {productos.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre}
-                  {!p.imagen_url ? " (sin imagen)" : ""}
-                </option>
-              ))}
-            </select>
-          )}
-
-          <h2 className="mb-3 mt-6 text-sm font-semibold">2. Estilo</h2>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {PRESETS_IMAGEN.map((p) => (
+          <h2 className="mb-3 text-sm font-semibold">1. Imagen base (opcional)</h2>
+          <div className="mb-3 flex gap-1 rounded-lg border border-zinc-200 p-1 text-xs dark:border-zinc-800">
+            {(["ninguna", "producto", "subir"] as ModoBase[]).map((m) => (
               <button
-                key={p.id}
+                key={m}
                 type="button"
-                onClick={() => setPresetActivo(p)}
-                className={`rounded-xl border px-3 py-2.5 text-left text-xs transition-colors ${
-                  presetActivo?.id === p.id
-                    ? "border-emerald-500/40 bg-emerald-500/5"
-                    : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700"
+                onClick={() => setModoBase(m)}
+                className={`flex-1 rounded-md px-2 py-1.5 transition-colors ${
+                  modoBase === m
+                    ? "bg-emerald-500 text-white shadow-sm"
+                    : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
                 }`}
               >
-                <p className="font-semibold">
-                  {p.emoji} {p.etiqueta}
-                </p>
-                <p className="mt-0.5 text-[11px] text-zinc-500">
-                  {p.descripcion}
-                </p>
+                {m === "ninguna"
+                  ? "Sin base"
+                  : m === "producto"
+                  ? "De un producto"
+                  : "Subir foto"}
               </button>
             ))}
           </div>
 
+          {modoBase === "producto" && (
+            productos.length === 0 ? (
+              <p className="text-xs text-zinc-500">
+                Todavía no tenés productos. Cambiá a "Subir foto" o "Sin base".
+              </p>
+            ) : (
+              <select
+                value={seleccionado ?? ""}
+                onChange={(e) => setSeleccionado(e.target.value || null)}
+                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              >
+                <option value="">— Elegí un producto —</option>
+                {productos.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                    {!p.imagen_url ? " (sin imagen)" : ""}
+                  </option>
+                ))}
+              </select>
+            )
+          )}
+
+          {modoBase === "subir" && (
+            <div>
+              <input
+                ref={refInputArchivo}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void subirArchivo(f);
+                }}
+              />
+              {archivoSubido ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs">
+                  <span className="truncate">📎 {archivoSubido.nombre}</span>
+                  <button
+                    type="button"
+                    onClick={() => setArchivoSubido(null)}
+                    className="shrink-0 text-rose-600 hover:underline"
+                  >
+                    Quitar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => refInputArchivo.current?.click()}
+                  disabled={subiendo}
+                  className="w-full rounded-lg border-2 border-dashed border-zinc-300 px-3 py-6 text-xs text-zinc-500 hover:border-emerald-500/40 hover:bg-emerald-500/5 disabled:opacity-50 dark:border-zinc-700"
+                >
+                  {subiendo ? "Subiendo…" : "📤 Click para subir foto JPG/PNG"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {modoBase === "ninguna" && (
+            <p className="text-xs text-zinc-500">
+              La IA va a generar la imagen desde el prompt sin foto de referencia.
+            </p>
+          )}
+
+          <h2 className="mb-3 mt-6 text-sm font-semibold">2. Qué generar</h2>
+          <div className="mb-3 flex gap-1 rounded-lg border border-zinc-200 p-1 text-xs dark:border-zinc-800">
+            {(["preset", "custom"] as ModoPrompt[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setModoPrompt(m)}
+                className={`flex-1 rounded-md px-2 py-1.5 transition-colors ${
+                  modoPrompt === m
+                    ? "bg-emerald-500 text-white shadow-sm"
+                    : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                }`}
+              >
+                {m === "preset" ? "Preset rápido" : "Prompt personalizado"}
+              </button>
+            ))}
+          </div>
+
+          {modoPrompt === "preset" ? (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {PRESETS_IMAGEN.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setPresetActivo(p)}
+                  className={`rounded-xl border px-3 py-2.5 text-left text-xs transition-colors ${
+                    presetActivo?.id === p.id
+                      ? "border-emerald-500/40 bg-emerald-500/5"
+                      : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700"
+                  }`}
+                >
+                  <p className="font-semibold">
+                    {p.emoji} {p.etiqueta}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-zinc-500">
+                    {p.descripcion}
+                  </p>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <textarea
+              value={promptCustom}
+              onChange={(e) => setPromptCustom(e.target.value)}
+              rows={5}
+              placeholder="Describí cómo querés que sea la imagen. Ej: 'Producto sobre fondo de mármol blanco, iluminación cinematográfica desde la izquierda, sin texto ni logos.'"
+              className="w-full resize-y rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+            />
+          )}
+
           <button
             type="button"
             onClick={generar}
-            disabled={!presetActivo || generando}
+            disabled={generando}
             className="mt-6 w-full rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {generando ? "Generando…" : "Generar imagen (1 crédito)"}
