@@ -68,10 +68,11 @@ export async function POST(_req: NextRequest, { params }: Contexto) {
       const resumen = await importarResultadosRun({
         cuentaId: run.cuenta_id,
         apifyDatasetId: estado.defaultDatasetId,
+        runApifyId: run.id,
         actorIdInterno: run.actor_id,
       });
 
-      const itemsReales = resumen.items_recibidos;
+      const itemsReales = resumen.leads_guardados;
       const itemsCobrados = run.costo_creditos / (def?.creditosPorItem ?? 1);
       if (itemsReales < itemsCobrados && def) {
         const reintegrar = Math.floor(

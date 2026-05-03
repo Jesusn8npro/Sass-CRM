@@ -68,10 +68,11 @@ export async function POST(req: NextRequest) {
       const resumen = await importarResultadosRun({
         cuentaId: fila.cuenta_id,
         apifyDatasetId: payload.apifyDatasetId,
+        runApifyId: fila.id,
         actorIdInterno: fila.actor_id,
       });
 
-      const itemsReales = resumen.items_recibidos;
+      const itemsReales = resumen.leads_guardados;
       const itemsCobrados = fila.costo_creditos / (def?.creditosPorItem ?? 1);
       // Reintegrar diferencia si vinieron menos resultados que el máximo cobrado.
       if (itemsReales < itemsCobrados && def) {

@@ -6,6 +6,8 @@ import {
   ACTORS_DISPONIBLES,
   type DefinicionActor,
 } from "@/lib/apify/actors";
+import { LeadDetalleModal } from "./_modal";
+import { FilaRun } from "./_filaRun";
 
 interface RunApifyUI {
   id: string;
@@ -23,6 +25,20 @@ interface RespuestaRuns {
   runs: RunApifyUI[];
 }
 
+export interface LeadUI {
+  id: string;
+  nombre: string;
+  telefono: string | null;
+  email: string | null;
+  direccion: string | null;
+  sitio_web: string | null;
+  categoria: string | null;
+  raw: Record<string, unknown>;
+  importado: boolean;
+  conversacion_id: string | null;
+  creado_en: string;
+}
+
 export default function PaginaLeads() {
   const { idCuenta } = useParams<{ idCuenta: string }>();
   const [actor] = useState<DefinicionActor | null>(
@@ -34,8 +50,8 @@ export default function PaginaLeads() {
   const [lanzando, setLanzando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [runs, setRuns] = useState<RunApifyUI[]>([]);
+  const [leadAbierto, setLeadAbierto] = useState<LeadUI | null>(null);
 
-  // Polling de runs cada 4s mientras haya alguno corriendo
   useEffect(() => {
     if (!idCuenta) return;
     let cancelado = false;
@@ -110,8 +126,8 @@ export default function PaginaLeads() {
           Buscar contactos potenciales
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-          Buscá en Google Maps por término + ciudad y conseguí nombre, teléfono,
-          email y sitio web. Los contactos se importan a tu CRM.
+          Buscá en Google Maps por término + ciudad. Los resultados quedan en
+          una bandeja — vos decidís cuáles importar al CRM.
         </p>
       </header>
 
@@ -153,7 +169,9 @@ export default function PaginaLeads() {
               max={200}
               value={maxResultados}
               onChange={(e) =>
-                setMaxResultados(Math.max(1, Math.min(200, Number(e.target.value))))
+                setMaxResultados(
+                  Math.max(1, Math.min(200, Number(e.target.value))),
+                )
               }
               className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
             />
@@ -193,248 +211,29 @@ export default function PaginaLeads() {
         ) : (
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
             {runs.map((r) => (
-              <FilaRun key={r.id} run={r} idCuenta={idCuenta} />
+              <FilaRun
+                key={r.id}
+                run={r}
+                idCuenta={idCuenta}
+                onAbrirLead={(lead) => setLeadAbierto(lead)}
+              />
             ))}
           </ul>
         )}
       </section>
-    </div>
-  );
-}
 
-interface FilaResultado {
-  nombre: string;
-  telefono: string | null;
-  email: string | null;
-  direccion: string | null;
-  sitio_web: string | null;
-  categoria: string | null;
-  conversacion_id: string | null;
-}
-
-function FilaRun({ run, idCuenta }: { run: RunApifyUI; idCuenta: string }) {
-  const [sincronizando, setSincronizando] = useState(false);
-  const [mensaje, setMensaje] = useState<string | null>(null);
-  const [expandido, setExpandido] = useState(false);
-  const [resultados, setResultados] = useState<FilaResultado[] | null>(null);
-  const [cargandoRes, setCargandoRes] = useState(false);
-
-  const corriendo = run.estado === "corriendo";
-  const completado = run.estado === "completado";
-  const fallo = run.estado === "fallido" || run.estado === "abortado";
-  const busqueda = run.input.searchStringsArray?.[0] ?? "(?)";
-  const ubicacion = run.input.locationQuery ?? "(?)";
-
-  async function sincronizar() {
-    if (sincronizando) return;
-    setSincronizando(true);
-    setMensaje(null);
-    try {
-      const r = await fetch(
-        `/api/cuentas/${idCuenta}/apify/runs/${run.id}/sincronizar`,
-        { method: "POST" },
-      );
-      const data = (await r.json()) as {
-        ok?: boolean;
-        todavia_corriendo?: boolean;
-        resumen?: { items_recibidos: number; emails_creados: number };
-        mensaje?: string;
-        error?: string;
-      };
-      if (!r.ok) {
-        setMensaje(data.mensaje ?? data.error ?? "Error al sincronizar");
-      } else if (data.todavia_corriendo) {
-        setMensaje("Sigue corriendo en Apify, esperá unos segundos");
-      } else if (data.resumen) {
-        setMensaje(
-          `✓ ${data.resumen.items_recibidos} resultados importados`,
-        );
-      }
-    } catch (err) {
-      setMensaje(err instanceof Error ? err.message : "Error de red");
-    } finally {
-      setSincronizando(false);
-    }
-  }
-
-  async function cargarResultados() {
-    if (cargandoRes || resultados) return;
-    setCargandoRes(true);
-    try {
-      const r = await fetch(
-        `/api/cuentas/${idCuenta}/apify/runs/${run.id}/resultados`,
-      );
-      if (!r.ok) {
-        setMensaje("No se pudieron cargar los resultados");
-        return;
-      }
-      const data = (await r.json()) as { resultados: FilaResultado[] };
-      setResultados(data.resultados);
-    } finally {
-      setCargandoRes(false);
-    }
-  }
-
-  function alternarExpandido() {
-    const nuevo = !expandido;
-    setExpandido(nuevo);
-    if (nuevo && completado) void cargarResultados();
-  }
-
-  return (
-    <li className="py-3">
-      <div
-        className={`flex items-center justify-between gap-3 ${completado ? "cursor-pointer" : ""}`}
-        onClick={completado ? alternarExpandido : undefined}
-      >
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">
-            {completado && (
-              <span className="mr-1.5 text-zinc-400">
-                {expandido ? "▾" : "▸"}
-              </span>
-            )}
-            {busqueda} · {ubicacion}
-          </p>
-          <p className="text-[11px] text-zinc-500">
-            {new Date(run.creado_en).toLocaleString("es")}
-            {completado && ` · ${run.items_count} resultados importados`}
-            {fallo && run.error && ` · ${run.error.slice(0, 80)}`}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {corriendo && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                void sincronizar();
-              }}
-              disabled={sincronizando}
-              title="Consultar a Apify si ya terminó"
-              className="rounded-full border border-emerald-500/40 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-500/10 disabled:opacity-50 dark:text-emerald-300"
-            >
-              {sincronizando ? "…" : "↻ Sincronizar"}
-            </button>
-          )}
-          <span
-            className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-              corriendo
-                ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                : completado
-                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                : "bg-rose-500/10 text-rose-700 dark:text-rose-300"
-            }`}
-          >
-            {corriendo ? "⏳ Corriendo" : run.estado}
-          </span>
-        </div>
-      </div>
-      {mensaje && (
-        <p className="mt-2 rounded-md bg-emerald-500/5 px-2 py-1 text-[11px] text-emerald-700 dark:text-emerald-300">
-          {mensaje}
-        </p>
-      )}
-      {expandido && completado && (
-        <TablaResultados
-          idCuenta={idCuenta}
-          resultados={resultados}
-          cargando={cargandoRes}
-        />
-      )}
-    </li>
-  );
-}
-
-function TablaResultados({
-  idCuenta,
-  resultados,
-  cargando,
-}: {
-  idCuenta: string;
-  resultados: FilaResultado[] | null;
-  cargando: boolean;
-}) {
-  if (cargando) {
-    return (
-      <p className="mt-3 px-3 text-xs text-zinc-500">Cargando resultados…</p>
-    );
-  }
-  if (!resultados || resultados.length === 0) {
-    return (
-      <p className="mt-3 px-3 text-xs text-zinc-500">
-        Sin resultados para mostrar.
-      </p>
-    );
-  }
-  return (
-    <div className="mt-3 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-      <table className="w-full text-xs">
-        <thead className="bg-zinc-50 text-left dark:bg-zinc-900">
-          <tr>
-            <th className="px-3 py-2 font-semibold">Nombre</th>
-            <th className="px-3 py-2 font-semibold">Teléfono</th>
-            <th className="px-3 py-2 font-semibold">Email</th>
-            <th className="px-3 py-2 font-semibold">Web</th>
-            <th className="px-3 py-2 font-semibold">Categoría</th>
-            <th className="px-3 py-2 font-semibold"></th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-          {resultados.map((r, i) => (
-            <tr
-              key={i}
-              className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
-            >
-              <td className="px-3 py-2 font-medium">{r.nombre}</td>
-              <td className="px-3 py-2 font-mono">
-                {r.telefono ?? <span className="text-zinc-400">—</span>}
-              </td>
-              <td className="px-3 py-2">
-                {r.email ? (
-                  <a
-                    href={`mailto:${r.email}`}
-                    className="text-emerald-700 underline dark:text-emerald-400"
-                  >
-                    {r.email}
-                  </a>
-                ) : (
-                  <span className="text-zinc-400">—</span>
-                )}
-              </td>
-              <td className="px-3 py-2">
-                {r.sitio_web ? (
-                  <a
-                    href={r.sitio_web}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="truncate text-emerald-700 underline dark:text-emerald-400"
-                  >
-                    {r.sitio_web.replace(/^https?:\/\//, "").slice(0, 30)}
-                  </a>
-                ) : (
-                  <span className="text-zinc-400">—</span>
-                )}
-              </td>
-              <td className="px-3 py-2 text-zinc-600 dark:text-zinc-400">
-                {r.categoria ?? <span className="text-zinc-400">—</span>}
-              </td>
-              <td className="px-3 py-2 text-right">
-                {r.conversacion_id ? (
-                  <a
-                    href={`/app/cuentas/${idCuenta}/conversaciones?conv=${r.conversacion_id}`}
-                    className="rounded-full bg-emerald-500 px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-emerald-400"
-                  >
-                    Abrir chat →
-                  </a>
-                ) : (
-                  <span className="text-[10px] text-zinc-400">No importado</span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <LeadDetalleModal
+        idCuenta={idCuenta}
+        lead={leadAbierto}
+        onCerrar={() => setLeadAbierto(null)}
+        onImportado={(conversacionId) => {
+          setLeadAbierto((prev) =>
+            prev
+              ? { ...prev, importado: true, conversacion_id: conversacionId }
+              : prev,
+          );
+        }}
+      />
     </div>
   );
 }
