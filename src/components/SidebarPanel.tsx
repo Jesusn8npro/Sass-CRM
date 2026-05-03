@@ -256,6 +256,27 @@ export function SidebarPanel({
             actual={pathname}
           />
         </SeccionNav>
+
+        <SeccionNav titulo="IA · Crecimiento">
+          <ItemNav
+            icono={<IconoLeads />}
+            etiqueta="Buscar leads"
+            href={`/app/cuentas/${idCuentaActual}/leads`}
+            actual={pathname}
+          />
+          <ItemNav
+            icono={<IconoEstudio />}
+            etiqueta="Estudio imágenes"
+            href={`/app/cuentas/${idCuentaActual}/estudio`}
+            actual={pathname}
+          />
+          <ItemNav
+            icono={<IconoCreditos />}
+            etiqueta="Créditos"
+            href={`/app/cuentas/${idCuentaActual}/creditos`}
+            actual={pathname}
+          />
+        </SeccionNav>
       </nav>
 
       {/* Footer: notif + tema + usuario */}
@@ -462,5 +483,25 @@ const IconoInversiones = () => (
   <svg {...props}>
     <line x1="12" y1="1" x2="12" y2="23" />
     <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+  </svg>
+);
+const IconoLeads = () => (
+  <svg {...props}>
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    <path d="M11 8v6M8 11h6" />
+  </svg>
+);
+const IconoEstudio = () => (
+  <svg {...props}>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21 15 16 10 5 21" />
+  </svg>
+);
+const IconoCreditos = () => (
+  <svg {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 6v12M9 9h6M9 15h6" />
   </svg>
 );

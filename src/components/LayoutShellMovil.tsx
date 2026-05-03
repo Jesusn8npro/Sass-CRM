@@ -13,6 +13,7 @@
 
 import { useEffect, useState } from "react";
 import type { Cuenta } from "@/lib/baseDatos";
+import { PillCreditos } from "./PillCreditos";
 import { SidebarPanel } from "./SidebarPanel";
 
 export function LayoutShellMovil({
@@ -94,6 +95,9 @@ export function LayoutShellMovil({
             S
           </div>
           <span className="text-sm font-bold tracking-tight">Sass-CRM</span>
+          <div className="ml-auto">
+            <PillCreditos idCuenta={idCuenta} />
+          </div>
         </div>
 
         <main className="flex-1 overflow-x-hidden overflow-y-auto">{children}</main>
