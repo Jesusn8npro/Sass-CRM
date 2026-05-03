@@ -7,9 +7,15 @@ interface Props {
   onGrabacionLista: (blob: Blob) => Promise<void>;
   /** Si está procesando una grabación previa, deshabilitar */
   deshabilitado?: boolean;
+  /** Notifica al padre el estado de grabación (para ocultar UI alrededor) */
+  onEstadoCambio?: (grabando: boolean) => void;
 }
 
-export function GrabadoraAudio({ onGrabacionLista, deshabilitado }: Props) {
+export function GrabadoraAudio({
+  onGrabacionLista,
+  deshabilitado,
+  onEstadoCambio,
+}: Props) {
   const [grabando, setGrabando] = useState(false);
   const [duracion, setDuracion] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +103,7 @@ export function GrabadoraAudio({ onGrabacionLista, deshabilitado }: Props) {
       refIniciado.current = Date.now();
       setDuracion(0);
       setGrabando(true);
+      onEstadoCambio?.(true);
       refIntervalo.current = setInterval(() => {
         setDuracion(Math.floor((Date.now() - refIniciado.current) / 1000));
       }, 250);
@@ -112,6 +119,7 @@ export function GrabadoraAudio({ onGrabacionLista, deshabilitado }: Props) {
     refCancelado.current = cancelar;
     setGrabando(false);
     setDuracion(0);
+    onEstadoCambio?.(false);
     try {
       refMediaRecorder.current?.stop();
     } catch {
@@ -127,28 +135,44 @@ export function GrabadoraAudio({ onGrabacionLista, deshabilitado }: Props) {
 
   if (grabando) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2">
-        <span className="h-2.5 w-2.5 animate-pulso-suave rounded-full bg-red-500" />
-        <span className="font-mono text-sm font-semibold text-red-700 dark:text-red-300">
-          {formatear(duracion)}
-        </span>
-        <span className="hidden text-xs text-red-700/70 dark:text-red-300/70 md:inline">
-          Grabando...
-        </span>
-        <div className="flex-1" />
+      <div className="flex w-full min-w-0 flex-1 items-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2">
         <button
           type="button"
           onClick={() => detener(true)}
-          className="rounded-full px-3 py-1 text-xs font-medium text-zinc-600 hover:bg-white dark:text-zinc-300 dark:hover:bg-zinc-800"
+          aria-label="Cancelar grabación"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-600 transition-colors hover:bg-white dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
-          Cancelar
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          </svg>
         </button>
+        <span className="h-2.5 w-2.5 shrink-0 animate-pulso-suave rounded-full bg-red-500" />
+        <span className="shrink-0 font-mono text-sm font-semibold text-red-700 dark:text-red-300">
+          {formatear(duracion)}
+        </span>
+        <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
+          {Array.from({ length: 24 }).map((_, i) => (
+            <span
+              key={i}
+              className="block w-0.5 shrink-0 rounded-full bg-red-500/60"
+              style={{
+                height: `${20 + Math.abs(Math.sin((duracion * 4 + i) / 2)) * 60}%`,
+                animation: "pulso-suave 1s ease-in-out infinite",
+                animationDelay: `${i * 40}ms`,
+              }}
+            />
+          ))}
+        </div>
         <button
           type="button"
           onClick={() => detener(false)}
-          className="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-red-400"
+          aria-label="Enviar grabación"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500 text-white shadow-md transition-colors hover:bg-red-400"
         >
-          Enviar
+          <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+            <path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z" />
+          </svg>
         </button>
       </div>
     );

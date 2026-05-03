@@ -21,15 +21,6 @@ const cliente = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY ?? "",
 });
 
-// Carpetas legacy locales — solo para fallback de lectura de archivos
-// pre-cutover. Ya no escribimos acá.
-const directorioMediaBaseLegacy = path.resolve(process.cwd(), "data", "media");
-const directorioBibliotecaBaseLegacy = path.resolve(
-  process.cwd(),
-  "data",
-  "biblioteca",
-);
-
 const logger = pino({ level: "silent" });
 
 function extensionParaMime(
@@ -144,9 +135,7 @@ export function detectarTipoMedia(msg: WAMessage): {
 
 /**
  * Descarga el contenido multimedia de un mensaje y lo sube al bucket
- * `media-chats` de Supabase Storage. Devuelve el buffer también para
- * que el caller pueda procesarlo inmediato (transcripción) sin
- * re-descargar.
+ * `media-chats` de Supabase Storage.
  */
 export async function descargarYGuardarMedia(
   sock: WASocket,
@@ -210,7 +199,6 @@ export async function descargarYGuardarMedia(
 
 /**
  * Transcribe un audio con Whisper a partir de un buffer en memoria.
- * (Antes recibía path a disco — ya no.)
  */
 export async function transcribirAudio(
   buffer: Buffer,
@@ -235,8 +223,7 @@ export async function transcribirAudio(
 }
 
 /**
- * Sube un buffer arbitrario al bucket `media-chats` (TTS, uploads
- * manuales del panel, etc). Async porque va a Storage.
+ * Sube un buffer arbitrario al bucket `media-chats`.
  */
 export async function guardarMediaSubido(
   cuentaId: string,
@@ -262,41 +249,22 @@ export async function guardarMediaSubido(
 }
 
 /**
- * Lee un archivo del bucket `media-chats`. Si no existe en Storage
- * (legacy pre-cutover), cae a disco local.
+ * Lee un archivo del bucket `media-chats`.
  */
 export async function descargarMediaChat(
   mediaPath: string,
 ): Promise<{ buffer: Buffer; mime: string } | null> {
-  const enStorage = await descargarArchivo("media-chats", mediaPath);
-  if (enStorage) return enStorage;
-  // Fallback legacy
-  try {
-    const abs = path.join(directorioMediaBaseLegacy, mediaPath);
-    if (!fs.existsSync(abs)) return null;
-    return {
-      buffer: fs.readFileSync(abs),
-      mime: mimePorExtension(abs),
-    };
-  } catch {
-    return null;
-  }
+  return descargarArchivo("media-chats", mediaPath);
 }
 
 /**
- * Borra un archivo de chat (Storage + intento de borrar legacy local).
+ * Borra un archivo del bucket `media-chats`.
  */
 export async function borrarMediaChat(mediaPath: string): Promise<void> {
   try {
     await borrarArchivo("media-chats", mediaPath);
   } catch {
-    // ya no existe en Storage
-  }
-  try {
-    const abs = path.join(directorioMediaBaseLegacy, mediaPath);
-    if (fs.existsSync(abs)) fs.unlinkSync(abs);
-  } catch {
-    // ignorar
+    // ya no existe
   }
 }
 
@@ -305,8 +273,7 @@ export async function borrarMediaChat(mediaPath: string): Promise<void> {
 // ============================================================
 
 /**
- * Sube un archivo a la biblioteca del usuario. Async — va a Storage
- * bucket `biblioteca`.
+ * Sube un archivo a la biblioteca del usuario.
  */
 export async function guardarEnBiblioteca(
   cuentaId: string,
@@ -332,27 +299,16 @@ export async function guardarEnBiblioteca(
 }
 
 /**
- * Lee un medio de biblioteca. Storage primero, fallback local.
+ * Lee un medio de biblioteca.
  */
 export async function descargarBiblioteca(
   rutaRelativa: string,
 ): Promise<{ buffer: Buffer; mime: string } | null> {
-  const enStorage = await descargarArchivo("biblioteca", rutaRelativa);
-  if (enStorage) return enStorage;
-  try {
-    const abs = path.join(directorioBibliotecaBaseLegacy, rutaRelativa);
-    if (!fs.existsSync(abs)) return null;
-    return {
-      buffer: fs.readFileSync(abs),
-      mime: mimePorExtension(abs),
-    };
-  } catch {
-    return null;
-  }
+  return descargarArchivo("biblioteca", rutaRelativa);
 }
 
 /**
- * Borra un medio de biblioteca (Storage + legacy).
+ * Borra un medio de biblioteca.
  */
 export async function borrarMedioBibliotecaArchivo(
   rutaRelativa: string,
@@ -360,13 +316,7 @@ export async function borrarMedioBibliotecaArchivo(
   try {
     await borrarArchivo("biblioteca", rutaRelativa);
   } catch {
-    // ya no existe en Storage
-  }
-  try {
-    const abs = path.join(directorioBibliotecaBaseLegacy, rutaRelativa);
-    if (fs.existsSync(abs)) fs.unlinkSync(abs);
-  } catch {
-    // ignorar
+    // ya no existe
   }
 }
 

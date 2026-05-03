@@ -1,13 +1,13 @@
 # Sass-CRM — Agente WhatsApp multi-cuenta
 
-CRM/SaaS local para WhatsApp. Conecta uno o varios números reales vía
-Baileys (no Meta API, no Twilio), responde con un LLM (OpenAI), envía
-notas de voz con ElevenLabs y transcribe los audios entrantes con
-Whisper. Cada número (cuenta) tiene su propio prompt, modelo, voz,
-biblioteca de medios, conocimiento, etiquetas y respuestas rápidas.
+CRM/SaaS multi-tenant para WhatsApp. Cada usuario maneja una o varias
+cuentas (números) reales conectadas vía Baileys. Cada cuenta tiene su
+propio prompt, modelo, voz, biblioteca de medios, conocimiento,
+etiquetas, funnel y respuestas rápidas. La IA responde, agenda citas,
+captura datos del cliente, transfiere a humano y dispara llamadas Vapi.
 
-Todo corre en localhost / VPS. La data vive en SQLite. Las sesiones de
-Baileys se guardan por cuenta en `auth/{idCuenta}/`.
+Todo el estado (auth, DB, storage, sesiones Baileys) vive en
+**Supabase**.
 
 ---
 
@@ -15,351 +15,169 @@ Baileys se guardan por cuenta en `auth/{idCuenta}/`.
 
 - **Next.js 16** (App Router) + **React 19** + **TypeScript**
 - **Tailwind CSS 4**
-- **@whiskeysockets/baileys** — cliente WhatsApp Web vía QR
-- **better-sqlite3** — base de datos local
-- **OpenAI** (chat completions con `response_format: json_schema`)
+- **Supabase** — Auth + Postgres + Storage
+- **@whiskeysockets/baileys** — cliente WhatsApp Web (QR)
+- **OpenAI** — chat con `response_format: json_schema` + tools
 - **ElevenLabs** — TTS para notas de voz salientes
 - **OpenAI Whisper** — transcripción de audios entrantes
+- **Vapi** — llamadas IA salientes/entrantes
 - **ffmpeg-static** — conversión a OGG/Opus para WhatsApp
-- **tsx** — entrypoint legacy del bot suelto (opcional)
 
 ---
 
 ## Requisitos
 
-- **Node.js 20.9+** (recomendado: 22, ver `.nvmrc`).
+- **Node.js 20.9+** (recomendado 22, ver `.nvmrc`).
+- Cuenta de **Supabase** con las migraciones aplicadas.
 - Cuenta de **OpenAI** con API key.
-- (Opcional, para audio saliente) cuenta de **ElevenLabs** con API key.
+- (Opcional) cuenta de **ElevenLabs** para notas de voz.
+- (Opcional) cuenta de **Vapi** para llamadas IA.
 
 ---
 
 ## Configuración
 
-1. Cloná el repo y entrá a la carpeta:
+```bash
+git clone <repo>
+cd AgenteNuevooWhatsApp
+cp .env.example .env.local
+# Editá .env.local con tus keys
+npm install
+npm run dev
+```
 
-   ```bash
-   git clone https://github.com/Jesusn8npro/Sass-CRM.git
-   cd Sass-CRM
-   ```
+Variables mínimas en `.env.local`:
 
-2. Copiá el archivo de entorno:
-
-   ```bash
-   cp .env.example .env.local
-   ```
-
-3. Editá `.env.local`:
-
-   ```
-   OPENAI_API_KEY=sk-proj-...
-   OPENAI_MODEL=gpt-4o-mini
-   ELEVENLABS_API_KEY=sk_...
-   ```
-
-   Si no vas a usar audio TTS podés dejar `ELEVENLABS_API_KEY` vacío.
-
-4. Instalá dependencias:
-
-   ```bash
-   npm install
-   ```
-
-   Tarda ~1 minuto la primera vez por la compilación nativa de
-   `better-sqlite3`.
+```
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
+OPENAI_API_KEY=sk-proj-...
+OPENAI_MODEL=gpt-4o-2024-08-06
+```
 
 ---
 
 ## Uso
 
-Un solo proceso. El bot de Baileys arranca dentro del propio proceso
-de Next.js vía `instrumentation.ts`, así que no hay que abrir una
-segunda terminal.
-
-**Desarrollo:**
-
 ```bash
-npm run dev
-```
-
-**Producción:**
-
-```bash
-npm run build
+npm run dev      # desarrollo
+npm run build    # producción
 npm run start
 ```
 
 Abrí `http://localhost:3000`:
 
-1. La primera vez verás el panel vacío. Creá una cuenta con el botón
-   **"+ Nueva cuenta"** y poné una etiqueta (ej: "Ventas", "Soporte").
-2. Aparece la pantalla **Conectar tu número** con un QR.
-3. En tu teléfono: WhatsApp → Ajustes → Dispositivos vinculados →
-   Vincular un dispositivo. Escaneá el QR.
-4. La pantalla pasa al panel cuando la conexión se establece.
-5. Repetí para cada número adicional.
-
-Si por algún motivo querés correr el bot como proceso suelto (debug),
-seteá `BOT_EN_PROCESO=0` y usá `npm run start:bot` en otra terminal.
+1. Signup con email + password.
+2. Crear una cuenta WhatsApp (botón "+ Nueva cuenta").
+3. Escanear QR desde el teléfono (WhatsApp → Dispositivos vinculados).
+4. Ya recibe mensajes y responde con IA.
 
 ---
 
-## Cómo funciona
+## Arquitectura
 
-### Arquitectura de un solo proceso
+### Un solo proceso
 
-- `src/instrumentation.ts` es el hook `register()` de Next.js que
-  corre una vez al arrancar el server. Llama a
-  `arrancarBotEnProceso()` (en `src/lib/bot/cicloVida.ts`) que levanta
-  los sockets de Baileys, los intervals de bandeja de salida (2s),
-  heartbeat (5s) y sincronización de cuentas (3s).
-- El estado del ciclo de vida vive en `globalThis` para sobrevivir al
-  HMR de dev y ser idempotente: llamar a `arrancarBotEnProceso()` dos
-  veces no duplica nada.
-- API routes y UI comparten memoria con el bot — pero igual usamos
-  SQLite (`data/`) como fuente de verdad y bandeja de salida para que
-  el patrón sea simple y `scripts/iniciar-bot.ts` siga funcionando si
-  alguien quiere correrlo aparte (modo legacy).
+`src/instrumentation.ts` (hook `register()` de Next) levanta el bot de
+Baileys dentro del proceso de Next vía
+[`src/lib/bot/cicloVida.ts`](src/lib/bot/cicloVida.ts). Se crean los
+sockets de cada cuenta no archivada y se agendan los intervals
+(bandeja de salida 2s, heartbeat 5s, sync de cuentas 3s).
 
-### Flujo de mensaje entrante
+El estado del ciclo de vida vive en `globalThis` para sobrevivir HMR
+de dev y ser idempotente.
 
-1. Llega un mensaje al socket Baileys de la cuenta.
-2. `manejador.ts` desempaqueta el mensaje (ephemeral, viewOnce,
-   documentWithCaption, etc.) y resuelve la identidad del remitente
-   (incluyendo `@lid` vía `senderPn`/`remoteJidAlt`).
-3. Si es media (imagen, video, audio, documento) se descarga a
-   `data/media/{idCuenta}/`. Los audios se transcriben con Whisper.
-4. Se inserta el mensaje en la tabla `mensajes` con `rol='usuario'`.
-5. Si la conversación está en modo **IA**:
-   - Se inicia un timer de buffer (`buffer_segundos`, configurable
-     por cuenta) para agrupar mensajes rápidos.
-   - Al disparar, se construye el prompt sistema (prompt base +
-     contexto de negocio + entradas de conocimiento + biblioteca de
-     medios disponible) y se llama a OpenAI con un schema estricto:
+### Flujo de mensaje entrante (modo IA)
 
-     ```json
-     {
-       "partes": [
-         { "tipo": "texto", "contenido": "...", "media_id": "" },
-         { "tipo": "media", "contenido": "", "media_id": "promo_octubre" }
-       ],
-       "transferir_a_humano": { "activar": false, "razon": "" }
-     }
-     ```
-   - Cada parte se envía con un pequeño delay y "escribiendo..."
-     para sentirse natural.
-   - Si la conversación reciente fue por audio (modo espejo), las
-     partes de texto se generan con voz vía ElevenLabs y se envían
-     como nota de voz (OGG/Opus con duración + waveform).
-   - Si `transferir_a_humano.activar=true`, la conversación pasa a
-     modo HUMANO y aparece un badge rojo en el panel.
-6. Si está en modo **HUMANO**: solo se guarda y se muestra el badge.
-   Vos respondés desde el panel.
+1. Llega al socket Baileys de la cuenta.
+2. [`manejador.ts`](src/lib/baileys/manejador.ts) desempaqueta el
+   mensaje, resuelve la identidad del remitente y descarga media si
+   corresponde (audios → Whisper).
+3. Inserta en `mensajes` con `rol='usuario'`.
+4. Inicia un timer de buffer (`buffer_segundos` configurable) para
+   agrupar mensajes rápidos.
+5. Al disparar: arma el system prompt (rol del agente + contexto +
+   conocimiento + biblioteca + funnel) y llama a OpenAI con schema
+   estricto + 12 tools (capturar datos, agendar/cancelar cita, cambiar
+   estado, etc.).
+6. Cada parte de la respuesta se envía con delay y "escribiendo…". Si
+   el modo es espejo (último mensaje del cliente fue audio), las
+   partes se generan con voz vía ElevenLabs.
+7. Si la IA decide `transferir_a_humano`, la conversación pasa a modo
+   HUMANO y aparece badge en el panel.
 
-### Mensajes salientes desde el panel
+### Mensajes salientes (panel → cliente)
 
-Como bot y panel corren en procesos distintos, las API routes no
-pueden llamar `sock.sendMessage()` directamente. Patrón outbox:
-
-1. POST a `/api/cuentas/[id]/mensajes/[idConv]` (texto) o
-   `/api/cuentas/[id]/mensajes/[idConv]/multimedia` (archivo).
-2. La API guarda el mensaje en `mensajes` con `rol='humano'` (visible
-   en el panel) y lo encola en `bandeja_salida` con `enviado=0`.
-3. El bot tiene un `setInterval` cada 2s que lee `bandeja_salida`,
-   envía cada item por Baileys y marca `enviado=1`.
+Patrón outbox: la API guarda el mensaje en `mensajes` y lo encola en
+`bandeja_salida`. El bot tiene un `setInterval` (2s) que lee la
+bandeja, envía vía Baileys y marca `enviado=1`.
 
 ### Heartbeat
 
-El bot escribe `cuentas.ultimo_heartbeat` cada 5s para todas las
-cuentas no archivadas. El panel deriva `bot_vivo` (heartbeat fresco
-en los últimos 30s, con período de gracia para cuentas recién
-creadas). Si el bot está caído, aparece un banner rojo colapsable.
-
-### Polling
-
-El frontend hace polling cada 2-3s a las API routes. No usa
-WebSockets en v1.
+El bot escribe `cuentas.ultimo_heartbeat` cada 5s. El frontend deriva
+`bot_vivo` (heartbeat fresco en últimos 30s).
 
 ---
 
-## Personalizar cada cuenta
+## Personalización por cuenta
 
-Ingresá a **Ajustes** desde el header de la cuenta. Podés configurar:
+Desde **Configuración** podés ajustar:
 
-- **Identidad**: etiqueta interna.
-- **Prompt sistema**: el rol/personalidad del agente.
-- **Contexto de negocio**: información persistente (productos,
-  precios, horarios) que se inyecta en cada llamada.
-- **Conocimiento**: entradas estructuradas (título + contenido)
-  para FAQs largos.
-- **Comportamiento**: `buffer_segundos` para agrupar mensajes
-  rápidos, modelo de OpenAI a usar.
-- **Voz (ElevenLabs)**: ID de la voz para notas de voz salientes.
-  El modo espejo solo se activa si el usuario mandó audios.
-- **Respuestas rápidas**: atajos (`/saludo`, `/precios`) para el
-  modo humano.
-- **Etiquetas**: para clasificar conversaciones (caliente, pagó,
-  seguimiento) con 8 colores.
-- **Biblioteca de medios**: imágenes/videos/audios/PDFs subidos con
-  un identificador y descripción. La IA decide cuándo enviar cada
-  uno citándolos por `media_id`.
-- **Avanzado**: archivar la cuenta (cierra el socket).
-
----
-
-## Estructura del proyecto
-
-```
-Sass-CRM/
-├── src/
-│   ├── app/
-│   │   ├── page.tsx                       # PuertaConexion (orquestador)
-│   │   ├── cuentas/[idCuenta]/configuracion/page.tsx
-│   │   └── api/
-│   │       ├── cuentas/                   # CRUD + sub-recursos por cuenta
-│   │       │   └── [idCuenta]/
-│   │       │       ├── conexion/{estado,desconectar}/route.ts
-│   │       │       ├── conversaciones/route.ts
-│   │       │       ├── conversaciones/[idConversacion]/{route,etiquetas}.ts
-│   │       │       ├── mensajes/[idConversacion]/{route,multimedia}.ts
-│   │       │       ├── modo/[idConversacion]/route.ts
-│   │       │       ├── conocimiento/[idEntrada]/route.ts
-│   │       │       ├── respuestas-rapidas/[idRespuesta]/route.ts
-│   │       │       ├── etiquetas/[idEtiqueta]/route.ts
-│   │       │       └── biblioteca/[idMedio]/route.ts
-│   │       ├── media/[idCuenta]/[archivo]/route.ts
-│   │       └── biblioteca/[idCuenta]/[archivo]/route.ts
-│   ├── components/
-│   │   ├── PuertaConexion.tsx
-│   │   ├── BarraLateralCuentas.tsx
-│   │   ├── EncabezadoCuenta.tsx
-│   │   ├── BannerBotInactivo.tsx
-│   │   ├── PantallaQR.tsx
-│   │   ├── ListaConversaciones.tsx
-│   │   ├── PanelConversacion.tsx
-│   │   ├── BurbujaMensaje.tsx
-│   │   ├── InterruptorModo.tsx
-│   │   ├── InterruptorTema.tsx
-│   │   ├── SelectorEmoji.tsx
-│   │   ├── SelectorEtiquetas.tsx
-│   │   ├── GrabadoraAudio.tsx
-│   │   └── ModalNuevaCuenta.tsx
-│   └── lib/
-│       ├── baseDatos.ts                   # SQLite + DDL + helpers
-│       ├── openai.ts                      # cliente + schema JSON
-│       ├── elevenlabs.ts                  # TTS
-│       ├── construirPrompt.ts             # arma el system prompt
-│       ├── latidoBot.ts                   # heartbeat / bot_vivo
-│       └── baileys/
-│           ├── gestor.ts                  # GestorCuentas (multi-socket)
-│           ├── manejador.ts               # messages.upsert + outbox
-│           ├── medios.ts                  # download/save/transcribe
-│           └── conversion.ts              # ffmpeg → OGG/Opus
-├── scripts/
-│   ├── cargador-entorno.ts                # CRÍTICO: side-effect import
-│   └── iniciar-bot.ts                     # entrypoint del bot
-├── data/                                  # SQLite + media (gitignored)
-├── auth/                                  # sesiones Baileys (gitignored)
-├── .env.local
-├── package.json
-├── nixpacks.toml                          # deploy EasyPanel/Railway
-└── .nvmrc
-```
+- **General**: nombre del agente, rol, estilo de comunicación.
+- **Mensajes**: bienvenida, fallback, palabras de handoff.
+- **Captura**: campos custom que la IA debe extraer del cliente.
+- **IA**: modelo, temperatura, max_tokens, prompt sistema avanzado.
+- **Vapi**: credenciales y N assistants (vendedor/soporte/cobranza).
+- **Conocimiento**: FAQs estructurados + upload .txt/.md/.pdf/.docx.
+- **Biblioteca**: imágenes/videos/audios/PDFs que la IA cita por ID.
+- **Funnel**: pasos del pipeline (4 plantillas pre-armadas).
+- **Etiquetas**, **respuestas rápidas**, **voz** (ElevenLabs).
 
 ---
 
 ## Despliegue (EasyPanel / Railway sin Docker)
 
-1. Subí el repo a GitHub.
-2. En EasyPanel, creá una app desde el repo.
-3. Asegurate de que detecte `nixpacks.toml`.
-4. **Volúmenes persistentes obligatorios:**
-   - `/app/data` — conversaciones, media, biblioteca.
-   - `/app/auth` — sesiones de WhatsApp. Sin esto, cada redeploy
-     obliga a re-escanear el QR de cada cuenta.
-5. Variables de entorno: `OPENAI_API_KEY`, `OPENAI_MODEL`,
-   `ELEVENLABS_API_KEY`.
-
----
-
-## Seguridad — sin auth en el panel
-
-⚠️ **Bloqueante para producción pública**
-
-El panel **no tiene autenticación**. Si vas a desplegarlo a internet,
-**antes** poné:
-
-- Basic auth a nivel proxy (Caddy / Nginx / EasyPanel app).
-- O Cloudflare Access / túnel privado.
-
-Sin esto, **cualquiera con la URL puede leer todas las conversaciones
-y enviar mensajes haciéndose pasar por vos**.
+1. Subir el repo a GitHub.
+2. App nueva apuntando al repo (detecta `nixpacks.toml`).
+3. **Variables de entorno**: las mismas de `.env.example`.
+4. **No hace falta volumen persistente** — toda la data vive en
+   Supabase (Auth + Postgres + Storage). Sí conviene tener un volumen
+   pequeño para `data/samples/` (cache de previews ElevenLabs), pero
+   no es bloqueante.
 
 ---
 
 ## Solución de problemas
 
-**El bot tira `code=440` en loop al conectar**
+**Bot tira `code=440` en loop al conectar**
 
-Code 440 = `connectionReplaced`. Causas:
-- Hay un dispositivo viejo activo. En tu teléfono: WhatsApp →
-  Dispositivos vinculados → cerrá los viejos.
-- Si persiste, esperá 24h o cambiá la IP del VPS.
-- El gestor reintenta con backoff de 15s para 440.
+`connectionReplaced`. Causas:
+- Hay un dispositivo viejo activo. WhatsApp → Dispositivos vinculados
+  → cerrar los viejos.
+- Si persiste, esperar 24h o cambiar IP del VPS.
 
-**El bot tira `code=405` al conectar**
+**Bot tira `code=405`**
 
-Versión de Baileys desactualizada vs el protocolo de WhatsApp Web.
-`fetchLatestBaileysVersion()` lo soluciona en runtime, pero si la
-cache de npm está vieja:
+Versión de Baileys vieja vs protocolo de WhatsApp Web.
+`fetchLatestBaileysVersion()` lo soluciona en runtime, sino:
 
 ```bash
 npm install @whiskeysockets/baileys@latest
 ```
 
-**ElevenLabs devuelve 402 `paid_plan_required`**
+**ElevenLabs 402 `paid_plan_required`**
 
-Estás usando una voz de tu **biblioteca personal**. El plan free de
-ElevenLabs solo permite voces **default** (Sarah, Aria, Rachel,
-Adam, Antoni, etc.). O cambiá a una voz default o cargá créditos.
+Estás usando voz de tu biblioteca personal. El plan free solo permite
+voces default (Sarah, Aria, Rachel, Adam, Antoni). Cambiar voz o
+cargar créditos.
 
-**El audio llega como "Este audio ya no está disponible"**
+**Audio llega como "Este audio ya no está disponible"**
 
-Faltan los campos `seconds` y `waveform` al enviar (Baileys 6.7.9+
-los exige). Verificá que `manejador.ts` los pase. También que
-`asegurarFormatoVoz` esté convirtiendo a OGG/Opus mono 16kHz.
-
-**`OPENAI_API_KEY undefined` en el bot**
-
-El cargador de entorno no se ejecutó antes de que `openai.ts`
-leyera la variable. Verificá que la primera línea de
-`scripts/iniciar-bot.ts` sea:
-
-```typescript
-import "./cargador-entorno";
-```
-
-Sin nada antes. Es side-effect-only para garantizar que
-`process.env` se puebla antes que cualquier otro `import`.
-
-**Procesos zombies en Windows**
-
-Si `Ctrl+C` no termina de matar Node:
-
-```powershell
-tasklist | findstr node
-taskkill /PID <pid> /F
-```
-
----
-
-## Mejoras pendientes (v2)
-
-- WebSocket en lugar de polling.
-- Auth básica integrada al middleware de Next.js.
-- Soporte para grupos.
-- Métricas: tokens consumidos, latencia del LLM, % de respuestas.
-- Function calling (agendar citas, consultar Supabase, etc.).
-- Importar/exportar configuración de cuenta.
+Faltan campos `seconds` y `waveform` al enviar (Baileys 6.7.9+ los
+exige), o el formato no es OGG/Opus mono 16kHz. Revisar
+`asegurarFormatoVoz` en
+[`baileys/conversion.ts`](src/lib/baileys/conversion.ts).
 
 ---
 

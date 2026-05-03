@@ -26,9 +26,16 @@ interface InfoUsuario {
 export function SidebarPanel({
   idCuentaActual,
   cuentas,
+  abierto = true,
+  onCerrar,
 }: {
   idCuentaActual: string;
   cuentas: Cuenta[];
+  /** En mobile el sidebar es un drawer controlado por LayoutShellMovil.
+   *  En desktop (lg+) `abierto` se ignora — siempre visible. */
+  abierto?: boolean;
+  /** Cierra el drawer cuando se navega a un link (solo aplica en mobile). */
+  onCerrar?: () => void;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -53,10 +60,21 @@ export function SidebarPanel({
     // Reemplazar el idCuenta en la URL actual manteniendo la sub-ruta
     const subRuta = pathname?.split(`/cuentas/${idCuentaActual}`)[1] ?? "";
     router.push(`/app/cuentas/${idNuevo}${subRuta || "/conversaciones"}`);
+    onCerrar?.();
   }
 
   return (
-    <aside className="flex h-screen w-[240px] shrink-0 flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <aside
+      aria-label="Navegación principal"
+      className={`fixed inset-y-0 left-0 z-50 flex h-screen w-[240px] flex-col border-r border-zinc-200 bg-white transition-transform duration-200 ease-out dark:border-zinc-800 dark:bg-zinc-950 lg:static lg:z-auto lg:translate-x-0 lg:shrink-0 ${
+        abierto ? "translate-x-0" : "-translate-x-full"
+      }`}
+      onClickCapture={(e) => {
+        // Cerrar drawer al hacer click en un Link interno (mobile only).
+        const target = e.target as HTMLElement;
+        if (target.closest("a[href]")) onCerrar?.();
+      }}
+    >
       {/* Header: logo + selector cuenta */}
       <div className="border-b border-zinc-200 px-4 py-4 dark:border-zinc-800">
         <Link href="/app" className="flex items-center gap-2">

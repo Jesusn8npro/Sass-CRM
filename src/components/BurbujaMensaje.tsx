@@ -42,7 +42,7 @@ export function BurbujaMensaje({ mensaje, idCuenta }: Props) {
   if (mensaje.rol === "sistema" || mensaje.tipo === "sistema") {
     return (
       <div className="flex justify-center animate-aparecer">
-        <div className="max-w-[80%] rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-center text-xs text-amber-800 dark:text-amber-200">
+        <div className="min-w-0 max-w-[80%] overflow-hidden rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-center text-xs text-amber-800 [overflow-wrap:anywhere] dark:text-amber-200">
           {mensaje.contenido}
         </div>
       </div>
@@ -78,7 +78,7 @@ export function BurbujaMensaje({ mensaje, idCuenta }: Props) {
     return (
       <div className={`flex ${lado} animate-aparecer`}>
         <div
-          className={`max-w-[78%] rounded-2xl ${radio} border px-4 py-3 shadow-sm backdrop-blur-sm ${colores}`}
+          className={`min-w-0 max-w-[78%] overflow-hidden rounded-2xl ${radio} border px-4 py-3 shadow-sm backdrop-blur-sm ${colores}`}
         >
           <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider opacity-80">
             <svg
@@ -97,12 +97,17 @@ export function BurbujaMensaje({ mensaje, idCuenta }: Props) {
             Audio transcrito
           </div>
           {transcripcion && (
-            <p className="mb-2 italic whitespace-pre-wrap break-words text-sm leading-relaxed opacity-90">
+            <p className="mb-2 italic whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere] opacity-90">
               &ldquo;{transcripcion}&rdquo;
             </p>
           )}
           {src ? (
-            <audio src={src} controls className="h-9 w-full max-w-[280px]" />
+            <audio
+              src={src}
+              controls
+              className="block h-9 w-full"
+              style={{ minWidth: 0, maxWidth: "100%" }}
+            />
           ) : (
             <p className="text-xs italic opacity-60">[audio no disponible]</p>
           )}
@@ -133,7 +138,7 @@ export function BurbujaMensaje({ mensaje, idCuenta }: Props) {
       return (
         <div className={`flex ${lado} animate-aparecer`}>
           <div
-            className={`max-w-[78%] rounded-2xl ${radio} border px-4 py-3 shadow-sm backdrop-blur-sm ${colores}`}
+            className={`min-w-0 max-w-[78%] overflow-hidden rounded-2xl ${radio} border px-4 py-3 shadow-sm backdrop-blur-sm ${colores}`}
           >
             <a
               href={src}
@@ -198,9 +203,9 @@ export function BurbujaMensaje({ mensaje, idCuenta }: Props) {
         {caption && (
           <div className={`flex ${lado}`}>
             <div
-              className={`max-w-[78%] rounded-2xl ${radio} border px-4 py-2.5 shadow-sm backdrop-blur-sm ${colores}`}
+              className={`min-w-0 max-w-[78%] overflow-hidden rounded-2xl ${radio} border px-4 py-2.5 shadow-sm backdrop-blur-sm ${colores}`}
             >
-              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]">
                 {caption}
               </p>
               <p
@@ -221,9 +226,9 @@ export function BurbujaMensaje({ mensaje, idCuenta }: Props) {
   return (
     <div className={`flex ${lado} animate-aparecer`}>
       <div
-        className={`max-w-[78%] rounded-2xl ${radio} border px-4 py-2.5 shadow-sm backdrop-blur-sm ${colores}`}
+        className={`min-w-0 max-w-[78%] overflow-hidden rounded-2xl ${radio} border px-4 py-2.5 shadow-sm backdrop-blur-sm ${colores}`}
       >
-        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]">
           {mensaje.contenido}
         </p>
         <p

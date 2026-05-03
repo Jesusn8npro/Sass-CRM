@@ -175,7 +175,11 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
 
   return (
     <div className="flex h-full">
-      <div className="flex w-[340px] shrink-0 flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40">
+      <div
+        className={`flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40 lg:flex lg:w-[340px] lg:shrink-0 ${
+          idConvSeleccionada ? "hidden lg:flex" : "flex w-full"
+        }`}
+      >
         <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
@@ -224,12 +228,17 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
         />
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div
+        className={`min-w-0 flex-1 overflow-hidden ${
+          idConvSeleccionada ? "flex" : "hidden lg:flex"
+        }`}
+      >
         {convSeleccionada ? (
           <PanelConversacion
             cuenta={cuenta}
             idCuenta={idCuenta}
             idConversacion={convSeleccionada.id}
+            onVolver={() => setIdConvSeleccionada(null)}
             onConversacionBorrada={(id) => {
               setConversaciones((prev) => prev.filter((c) => c.id !== id));
               setIdConvSeleccionada(null);
@@ -267,7 +276,7 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
           setIdConvSeleccionada(nueva.id);
           setModalNuevaConv(false);
         }}
-      />)
+      />
     </div>
   );
 }

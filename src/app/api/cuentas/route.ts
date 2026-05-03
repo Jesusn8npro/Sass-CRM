@@ -20,11 +20,9 @@ export async function GET() {
   // Fallback: si por algún motivo instrumentation no arrancó el bot,
   // lo arrancamos en la primera request al panel. arrancarBotEnProceso
   // es idempotente: llamadas repetidas no duplican intervals ni sockets.
-  if (process.env.BOT_EN_PROCESO !== "0") {
-    void arrancarBotEnProceso().catch((err) =>
-      console.error("[api/cuentas] fallback arrancar bot:", err),
-    );
-  }
+  void arrancarBotEnProceso().catch((err) =>
+    console.error("[api/cuentas] fallback arrancar bot:", err),
+  );
   const cuentas = await listarCuentas(auth.id);
   const enriquecidas = await Promise.all(
     cuentas.map(async (c) => {

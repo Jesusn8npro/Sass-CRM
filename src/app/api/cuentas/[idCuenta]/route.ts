@@ -121,6 +121,7 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     temperatura?: unknown;
     max_tokens?: unknown;
     instrucciones_extra?: unknown;
+    modo_respuesta?: unknown;
   };
   try {
     payload = await req.json();
@@ -254,6 +255,12 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     typeof payload.instrucciones_extra === "string"
       ? payload.instrucciones_extra.slice(0, 4000)
       : undefined;
+  const MODOS_RESP = ["mixto", "solo_texto", "solo_audio", "espejo_voz"] as const;
+  const modo_respuesta =
+    typeof payload.modo_respuesta === "string" &&
+    (MODOS_RESP as readonly string[]).includes(payload.modo_respuesta)
+      ? (payload.modo_respuesta as (typeof MODOS_RESP)[number])
+      : undefined;
 
   const actualizada = await actualizarCuenta(idCuenta, {
     etiqueta,
@@ -282,6 +289,7 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     temperatura,
     max_tokens,
     instrucciones_extra,
+    modo_respuesta,
   });
   if (!actualizada) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });

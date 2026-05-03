@@ -1,15 +1,14 @@
 import { redirect } from "next/navigation";
 import { obtenerUsuarioActual } from "@/lib/auth/sesion";
 import { listarCuentas, obtenerCuenta } from "@/lib/baseDatos";
-import { SidebarPanel } from "@/components/SidebarPanel";
+import { LayoutShellMovil } from "@/components/LayoutShellMovil";
 
 /**
  * Layout persistente para todas las páginas dentro de
- * `/app/cuentas/[idCuenta]/...`. Renderiza el sidebar global
- * con navegación contextual a la cuenta + selector si hay > 1.
+ * `/app/cuentas/[idCuenta]/...`. Renderiza el shell responsive con
+ * sidebar (drawer en mobile, estático en desktop ≥lg).
  *
- * El sidebar NO se re-monta al navegar entre pages dentro de la misma
- * cuenta — lo que mantiene polling/state intacto.
+ * El shell NO se re-monta al navegar entre pages — preserva polling/state.
  */
 export default async function LayoutCuenta({
   children,
@@ -32,9 +31,8 @@ export default async function LayoutCuenta({
   const cuentas = await listarCuentas(auth.id);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950">
-      <SidebarPanel idCuentaActual={idCuenta} cuentas={cuentas} />
-      <main className="flex-1 overflow-y-auto">{children}</main>
-    </div>
+    <LayoutShellMovil idCuenta={idCuenta} cuentas={cuentas}>
+      {children}
+    </LayoutShellMovil>
   );
 }

@@ -168,7 +168,7 @@ export default function PaginaPlantillas() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
+    <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">
       <header className="mb-8">
         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-400">
           Marketing
@@ -181,7 +181,7 @@ export default function PaginaPlantillas() {
       </header>
 
       {/* Envío masivo */}
-      <section className="mb-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-6">
+      <section className="mb-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 md:p-6">
         <h2 className="mb-3 text-sm font-semibold">Envío masivo</h2>
         {plantillas.length === 0 ? (
           <p className="text-xs text-zinc-500">
@@ -206,8 +206,8 @@ export default function PaginaPlantillas() {
                 ))}
               </select>
             </div>
-            <div className="flex items-end justify-between">
-              <p className="text-sm">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <p className="min-w-0 text-sm">
                 <span className="font-semibold">{seleccionadas.size}</span>{" "}
                 contacto{seleccionadas.size === 1 ? "" : "s"} seleccionado
                 {seleccionadas.size === 1 ? "" : "s"}
@@ -218,7 +218,7 @@ export default function PaginaPlantillas() {
                 disabled={
                   enviando || !plantillaParaEnvio || seleccionadas.size === 0
                 }
-                className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow-md disabled:opacity-50"
+                className="shrink-0 rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow-md disabled:opacity-50"
               >
                 {enviando ? "Encolando…" : "Encolar envío"}
               </button>
@@ -234,7 +234,7 @@ export default function PaginaPlantillas() {
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Plantillas */}
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <section className="rounded-2xl border border-zinc-200 bg-white p-4 md:p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-3 text-sm font-semibold">
             Mis plantillas ({plantillas.length})
           </h2>
@@ -296,15 +296,15 @@ export default function PaginaPlantillas() {
         </section>
 
         {/* Lista contactos para selección */}
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">
+        <section className="rounded-2xl border border-zinc-200 bg-white p-4 md:p-6 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="min-w-0 truncate text-sm font-semibold">
               Contactos ({convs.length})
             </h2>
             <button
               type="button"
               onClick={toggleTodas}
-              className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+              className="shrink-0 text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
             >
               {seleccionadas.size === convs.length
                 ? "Deseleccionar todos"
@@ -324,12 +324,12 @@ export default function PaginaPlantillas() {
                       type="checkbox"
                       checked={seleccionadas.has(c.id)}
                       onChange={() => toggle(c.id)}
-                      className="h-4 w-4"
+                      className="h-4 w-4 shrink-0"
                     />
-                    <span className="truncate">
+                    <span className="min-w-0 flex-1 truncate">
                       {c.nombre ?? `+${c.telefono}`}
                     </span>
-                    <span className="ml-auto font-mono text-[10px] text-zinc-500">
+                    <span className="shrink-0 font-mono text-[10px] text-zinc-500">
                       +{c.telefono}
                     </span>
                   </label>

@@ -8,19 +8,18 @@ import type {
   ModoConversacion,
   RespuestaRapida,
 } from "@/lib/baseDatos";
-import Link from "next/link";
 import { BurbujaMensaje } from "./BurbujaMensaje";
-import { InterruptorModo } from "./InterruptorModo";
-import { SelectorEmoji } from "./SelectorEmoji";
-import { GrabadoraAudio } from "./GrabadoraAudio";
-import { BotonLlamar } from "./BotonLlamar";
 import { PanelDetalleCliente } from "./PanelDetalleCliente";
+import { ChatFooter } from "./_chatFooter";
+import { ChatHeader } from "./_chatHeader";
 
 interface Props {
   idCuenta: string;
   idConversacion: string;
   cuenta: Cuenta;
   onConversacionBorrada: (id: string) => void;
+  /** Volver a la lista (mobile only). En desktop el botón se oculta. */
+  onVolver?: () => void;
 }
 
 interface RespuestaMensajes {
@@ -33,6 +32,7 @@ export function PanelConversacion({
   idConversacion,
   cuenta,
   onConversacionBorrada,
+  onVolver,
 }: Props) {
   const [conversacion, setConversacion] = useState<Conversacion | null>(null);
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
@@ -314,97 +314,23 @@ export function PanelConversacion({
     : 0;
   const enLinea = Date.now() - ultimoMsg < 5 * 60 * 1000;
 
-  const colorEstado: Record<string, string> = {
-    nuevo: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-    contactado: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
-    calificado: "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300",
-    interesado: "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
-    negociacion: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
-    cerrado: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
-    perdido: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
-  };
-
   return (
     <div className="flex h-full flex-col">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 bg-white/70 px-3 py-3 backdrop-blur-md md:px-5 md:py-3.5 dark:border-zinc-800 dark:bg-zinc-950/60">
-        {/* Lado izquierdo: avatar + nombre + paso + estado.
-            Click en avatar/nombre → vista 360 completa del cliente. */}
-        <Link
-          href={`/app/cuentas/${idCuenta}/contactos/${conversacion.id}`}
-          className="group flex min-w-0 items-center gap-3 rounded-xl px-1 py-1 -mx-1 -my-1 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/50"
-          title="Ver perfil completo del cliente"
-        >
-          <div className="relative shrink-0">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-base font-semibold text-white shadow-sm">
-              {inicial}
-            </div>
-            {enLinea && (
-              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-950" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-bold tracking-tight group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
-              {nombreReal}
-            </h2>
-            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-              <span className="text-zinc-500">Paso:</span>
-              <span className="font-mono font-semibold text-zinc-700 dark:text-zinc-300">
-                {paso}
-              </span>
-              <span
-                className={`rounded-full px-2 py-0.5 font-semibold uppercase tracking-wider ${colorEstado[estadoLead] ?? colorEstado.nuevo}`}
-              >
-                {estadoLead}
-              </span>
-            </div>
-          </div>
-        </Link>
+      <ChatHeader
+        idCuenta={idCuenta}
+        cuenta={cuenta}
+        conversacion={conversacion}
+        inicial={inicial}
+        enLinea={enLinea}
+        nombreReal={nombreReal}
+        paso={paso}
+        estadoLead={estadoLead}
+        score={score}
+        abrirDetalle={() => setDetalleAbierto(true)}
+        actualizarModo={actualizarModo}
+        onVolver={onVolver}
+      />
 
-        {/* Lado derecho: badge score + botones */}
-        <div className="flex shrink-0 items-center gap-1.5 md:gap-2">
-          {/* Lead score badge */}
-          <div
-            className="hidden items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 ring-1 ring-emerald-500/20 sm:inline-flex dark:bg-emerald-950/30 dark:text-emerald-300"
-            title="Lead score"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3 w-3">
-              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-              <polyline points="16 7 22 7 22 13" />
-            </svg>
-            <span className="font-mono text-xs font-bold">{score}</span>
-          </div>
-
-          {/* Botón Perfil (abre drawer) */}
-          <button
-            type="button"
-            onClick={() => setDetalleAbierto(true)}
-            title="Ver datos del cliente"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 transition-colors hover:border-emerald-500/40 hover:bg-emerald-50 hover:text-emerald-700 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-emerald-950/30"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
-            </svg>
-          </button>
-
-          {/* Llamar */}
-          <BotonLlamar
-            cuenta={cuenta}
-            telefono={conversacion.telefono}
-            nombre={conversacion.nombre}
-          />
-
-          {/* Intervenir / IA */}
-          <InterruptorModo
-            idCuenta={idCuenta}
-            idConversacion={conversacion.id}
-            modo={conversacion.modo}
-            onCambio={actualizarModo}
-          />
-        </div>
-      </header>
-
-      {/* Drawer con todos los datos del cliente */}
       <PanelDetalleCliente
         abierto={detalleAbierto}
         idCuenta={idCuenta}
@@ -423,7 +349,6 @@ export function PanelConversacion({
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {/* Botón "cargar mensajes anteriores": pide a WhatsApp 50 más */}
             <div className="mx-auto flex flex-col items-center gap-2">
               <button
                 type="button"
@@ -448,234 +373,25 @@ export function PanelConversacion({
         )}
       </div>
 
-      <footer className="shrink-0 border-t border-zinc-200 bg-white/70 px-3 py-3 backdrop-blur-md md:px-6 md:py-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-        {errorMedia && (
-          <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
-            {errorMedia}
-          </div>
-        )}
-        {esIA ? (
-          <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
-            <span className="h-1.5 w-1.5 animate-pulso-suave rounded-full bg-emerald-500" />
-            <p className="text-sm text-emerald-800 dark:text-emerald-200/80">
-              El bot responde automáticamente. Cambia a Humano para escribir
-              tú.
-            </p>
-          </div>
-        ) : (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              enviarMensajeHumano();
-            }}
-            className="relative flex items-end gap-2"
-          >
-            <input
-              ref={refInputArchivo}
-              type="file"
-              accept="image/*,video/*,audio/*,application/pdf"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) subirArchivo(f);
-              }}
-            />
-
-            {/* Píldora estilo WhatsApp: emoji + textarea + clip + respuestas */}
-            <div className="flex flex-1 items-end gap-1 rounded-3xl border border-zinc-200 bg-white px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-900/60">
-              {/* Emoji a la izquierda dentro de la píldora */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmojiAbierto((v) => !v);
-                    setRespuestasAbiertas(false);
-                  }}
-                  title="Insertar emoji"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-5 w-5"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                    <line x1="9" y1="9" x2="9.01" y2="9" />
-                    <line x1="15" y1="9" x2="15.01" y2="9" />
-                  </svg>
-                </button>
-                <SelectorEmoji
-                  abierto={emojiAbierto}
-                  onCerrar={() => setEmojiAbierto(false)}
-                  onSeleccionar={(e) => {
-                    insertarEnTextarea(e);
-                  }}
-                />
-              </div>
-
-              <textarea
-                ref={refTextarea}
-                value={borrador}
-                onChange={(e) => setBorrador(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    enviarMensajeHumano();
-                  }
-                }}
-                rows={1}
-                placeholder="Mensaje"
-                className="max-h-32 min-h-[36px] flex-1 resize-none border-0 bg-transparent px-1 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-0 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-              />
-
-              {/* Respuestas rápidas dentro de la píldora */}
-              {respuestas.length > 0 && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRespuestasAbiertas((v) => !v);
-                      setEmojiAbierto(false);
-                    }}
-                    title="Respuestas rápidas"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-5 w-5"
-                    >
-                      <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
-                    </svg>
-                  </button>
-                  {respuestasAbiertas && (
-                    <DropdownRespuestas
-                      respuestas={respuestas}
-                      onSeleccionar={(texto) => {
-                        setBorrador(texto);
-                        setRespuestasAbiertas(false);
-                        setTimeout(() => refTextarea.current?.focus(), 0);
-                      }}
-                      onCerrar={() => setRespuestasAbiertas(false)}
-                    />
-                  )}
-                </div>
-              )}
-
-              {/* Adjuntar archivo dentro de la píldora */}
-              <button
-                type="button"
-                onClick={() => refInputArchivo.current?.click()}
-                disabled={subiendoMedia}
-                title="Adjuntar imagen, video, audio o PDF"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-              >
-                {subiendoMedia ? (
-                  <span className="h-2 w-2 animate-pulso-suave rounded-full bg-amber-500" />
-                ) : (
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-5 w-5"
-                  >
-                    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.57 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                  </svg>
-                )}
-              </button>
-            </div>
-
-            {/* Botón circular: micrófono cuando está vacío, enviar cuando hay texto */}
-            {borrador.trim() ? (
-              <button
-                type="submit"
-                disabled={enviando}
-                aria-label="Enviar mensaje"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-500 text-zinc-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="h-5 w-5"
-                >
-                  <path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z" />
-                </svg>
-              </button>
-            ) : (
-              <GrabadoraAudio
-                onGrabacionLista={subirAudioVoz}
-                deshabilitado={subiendoMedia}
-              />
-            )}
-          </form>
-        )}
-      </footer>
-    </div>
-  );
-}
-
-function DropdownRespuestas({
-  respuestas,
-  onSeleccionar,
-  onCerrar,
-}: {
-  respuestas: RespuestaRapida[];
-  onSeleccionar: (texto: string) => void;
-  onCerrar: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    function alClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onCerrar();
-    }
-    const t = setTimeout(() => {
-      document.addEventListener("mousedown", alClick);
-    }, 0);
-    return () => {
-      clearTimeout(t);
-      document.removeEventListener("mousedown", alClick);
-    };
-  }, [onCerrar]);
-  return (
-    <div
-      ref={ref}
-      className="absolute bottom-full left-0 z-20 mb-2 w-[320px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
-    >
-      <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-          Respuestas rápidas
-        </p>
-      </div>
-      <ul className="max-h-[280px] overflow-y-auto py-1">
-        {respuestas.map((r) => (
-          <li key={r.id}>
-            <button
-              type="button"
-              onClick={() => onSeleccionar(r.texto)}
-              className="flex w-full items-start gap-2 px-3 py-2 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-            >
-              <span className="shrink-0 rounded-md bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                {r.atajo}
-              </span>
-              <span className="line-clamp-2 text-xs text-zinc-700 dark:text-zinc-300">
-                {r.texto}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <ChatFooter
+        esIA={esIA}
+        errorMedia={errorMedia}
+        borrador={borrador}
+        setBorrador={setBorrador}
+        emojiAbierto={emojiAbierto}
+        setEmojiAbierto={setEmojiAbierto}
+        respuestasAbiertas={respuestasAbiertas}
+        setRespuestasAbiertas={setRespuestasAbiertas}
+        respuestas={respuestas}
+        refTextarea={refTextarea}
+        refInputArchivo={refInputArchivo}
+        enviarMensajeHumano={enviarMensajeHumano}
+        insertarEnTextarea={insertarEnTextarea}
+        subirArchivo={subirArchivo}
+        subirAudioVoz={subirAudioVoz}
+        subiendoMedia={subiendoMedia}
+        enviando={enviando}
+      />
     </div>
   );
 }

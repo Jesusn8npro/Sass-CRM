@@ -3,7 +3,9 @@ import {
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeWASocket,
+  type WAMessageKey,
   type WASocket,
+  type proto,
 } from "@whiskeysockets/baileys";
 import pino from "pino";
 import qrcodeTerminal from "qrcode-terminal";
@@ -33,6 +35,31 @@ interface SocketCuenta {
   etiqueta: string;
   sock: WASocket;
   temporizadorReconexion: NodeJS.Timeout | null;
+  /**
+   * Caché de mensajes enviados — Baileys la consulta por `getMessage`
+   * cuando WhatsApp pide reupload de media (sin esto el receptor ve
+   * "este audio ya no está disponible"). Bounded a 500 entradas LRU.
+   */
+  mensajesEnviados: Map<string, proto.IMessage>;
+}
+
+const MAX_MENSAJES_CACHE = 500;
+
+function recordarMensaje(
+  entrada: SocketCuenta,
+  id: string | null | undefined,
+  mensaje: proto.IMessage | null | undefined,
+): void {
+  if (!id || !mensaje) return;
+  const cache = entrada.mensajesEnviados;
+  // LRU simple: si ya existe, lo movemos al final reinsertando.
+  if (cache.has(id)) cache.delete(id);
+  cache.set(id, mensaje);
+  while (cache.size > MAX_MENSAJES_CACHE) {
+    const primero = cache.keys().next().value;
+    if (primero === undefined) break;
+    cache.delete(primero);
+  }
 }
 
 const logger = pino({ level: "silent" });
@@ -102,6 +129,10 @@ class GestorCuentas {
       await actualizarEstadoCuenta(cuenta.id, { estado: "conectando" });
     }
 
+    // Inicializamos la caché ANTES de makeWASocket porque getMessage
+    // (callback que Baileys invoca para retries de media) la consulta.
+    const mensajesEnviados = new Map<string, proto.IMessage>();
+
     const sock = makeWASocket({
       version,
       auth: state,
@@ -112,6 +143,16 @@ class GestorCuentas {
       // estamos online ante el contacto.
       markOnlineOnConnect: true,
       syncFullHistory: false,
+      // Sin esto, cuando el receptor pide reupload de un audio/imagen
+      // después de unos minutos, Baileys responde null y WhatsApp
+      // muestra "este audio ya no está disponible". Devolviendo el
+      // mensaje cacheado, Baileys re-sube la media correctamente.
+      getMessage: async (
+        key: WAMessageKey,
+      ): Promise<proto.IMessage | undefined> => {
+        if (!key.id) return undefined;
+        return mensajesEnviados.get(key.id);
+      },
     });
 
     const entrada: SocketCuenta = {
@@ -119,8 +160,19 @@ class GestorCuentas {
       etiqueta: cuenta.etiqueta,
       sock,
       temporizadorReconexion: null,
+      mensajesEnviados,
     };
     this.sockets.set(cuenta.id, entrada);
+
+    // Capturamos cada mensaje que sale de este socket para tenerlo
+    // disponible si WhatsApp pide reupload luego.
+    sock.ev.on("messages.upsert", ({ messages }) => {
+      for (const m of messages) {
+        if (m.key.fromMe && m.key.id && m.message) {
+          recordarMensaje(entrada, m.key.id, m.message);
+        }
+      }
+    });
 
     sock.ev.on("creds.update", saveCreds);
 
