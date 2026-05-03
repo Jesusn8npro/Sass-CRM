@@ -57,7 +57,17 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
 
-  let payload: { nombre?: unknown; color?: unknown; orden_ids?: unknown };
+  let payload: {
+    nombre?: unknown;
+    color?: unknown;
+    orden_ids?: unknown;
+    paso_id?: unknown;
+    paso_siguiente_id?: unknown;
+    criterio_transicion?: unknown;
+    objetivos?: unknown;
+    descripcion?: unknown;
+    plantilla?: unknown;
+  };
   try {
     payload = await req.json();
   } catch {
@@ -74,6 +84,25 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     return NextResponse.json({ etapas });
   }
 
+  // Aplicar plantilla pre-armada → crea N etapas de una
+  if (typeof payload.plantilla === "string") {
+    const { aplicarPlantillaFunnel } = await import("@/lib/plantillasFunnel");
+    try {
+      const etapas = await aplicarPlantillaFunnel(idCuenta, payload.plantilla);
+      return NextResponse.json({ etapas, mensaje: "Plantilla aplicada" });
+    } catch (err) {
+      return NextResponse.json(
+        {
+          error:
+            err instanceof Error
+              ? err.message
+              : "Error aplicando plantilla",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   // Crear nueva etapa
   const nombre =
     typeof payload.nombre === "string" ? payload.nombre.trim() : "";
@@ -87,8 +116,39 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     typeof payload.color === "string" && COLORES_VALIDOS.has(payload.color)
       ? payload.color
       : "zinc";
+  const slugify = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40);
+  const opciones = {
+    paso_id:
+      typeof payload.paso_id === "string" && payload.paso_id.trim()
+        ? slugify(payload.paso_id)
+        : null,
+    paso_siguiente_id:
+      typeof payload.paso_siguiente_id === "string" &&
+      payload.paso_siguiente_id.trim()
+        ? slugify(payload.paso_siguiente_id)
+        : null,
+    criterio_transicion:
+      typeof payload.criterio_transicion === "string"
+        ? payload.criterio_transicion.slice(0, 500)
+        : "",
+    objetivos:
+      typeof payload.objetivos === "string"
+        ? payload.objetivos.slice(0, 300)
+        : "",
+    descripcion:
+      typeof payload.descripcion === "string"
+        ? payload.descripcion.slice(0, 500)
+        : "",
+  };
   try {
-    const etapa = await crearEtapa(idCuenta, nombre, color);
+    const etapa = await crearEtapa(idCuenta, nombre, color, opciones);
     return NextResponse.json({ etapa }, { status: 201 });
   } catch (err) {
     return NextResponse.json(

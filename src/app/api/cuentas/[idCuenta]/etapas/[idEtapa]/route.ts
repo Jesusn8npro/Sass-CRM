@@ -41,12 +41,30 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     return NextResponse.json({ error: "Etapa no encontrada" }, { status: 404 });
   }
 
-  let payload: { nombre?: unknown; color?: unknown; orden?: unknown };
+  let payload: {
+    nombre?: unknown;
+    color?: unknown;
+    orden?: unknown;
+    paso_id?: unknown;
+    paso_siguiente_id?: unknown;
+    criterio_transicion?: unknown;
+    objetivos?: unknown;
+    descripcion?: unknown;
+  };
   try {
     payload = await req.json();
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
+
+  const slugify = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40);
 
   const nombre =
     typeof payload.nombre === "string" && payload.nombre.trim()
@@ -60,8 +78,41 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     typeof payload.orden === "number" && Number.isFinite(payload.orden)
       ? payload.orden
       : undefined;
+  const paso_id =
+    typeof payload.paso_id === "string"
+      ? payload.paso_id.trim()
+        ? slugify(payload.paso_id)
+        : null
+      : undefined;
+  const paso_siguiente_id =
+    typeof payload.paso_siguiente_id === "string"
+      ? payload.paso_siguiente_id.trim()
+        ? slugify(payload.paso_siguiente_id)
+        : null
+      : undefined;
+  const criterio_transicion =
+    typeof payload.criterio_transicion === "string"
+      ? payload.criterio_transicion.slice(0, 500)
+      : undefined;
+  const objetivos =
+    typeof payload.objetivos === "string"
+      ? payload.objetivos.slice(0, 300)
+      : undefined;
+  const descripcion =
+    typeof payload.descripcion === "string"
+      ? payload.descripcion.slice(0, 500)
+      : undefined;
 
-  const actualizada = await actualizarEtapa(idEtapa, { nombre, color, orden });
+  const actualizada = await actualizarEtapa(idEtapa, {
+    nombre,
+    color,
+    orden,
+    paso_id,
+    paso_siguiente_id,
+    criterio_transicion,
+    objetivos,
+    descripcion,
+  });
   return NextResponse.json({ etapa: actualizada });
 }
 

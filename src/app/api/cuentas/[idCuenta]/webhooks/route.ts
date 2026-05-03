@@ -13,9 +13,12 @@ const EVENTOS_VALIDOS = [
   "mensaje_recibido",
   "mensaje_enviado",
   "contacto_nuevo",
-  "cita_agendada",
-  "llamada_terminada",
+  "contacto_actualizado",
   "handoff_humano",
+  "cita_agendada",
+  "cita_modificada",
+  "cita_cancelada",
+  "llamada_terminada",
 ] as const;
 
 function db() {

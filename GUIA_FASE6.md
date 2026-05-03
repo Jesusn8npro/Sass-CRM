@@ -25,6 +25,7 @@ Este documento cubre **qué se hizo en la sub-fase 6.A.1**, **cómo probarlo**, 
 | **6.E.4 — Reportes con CRM analytics** | ✅ Completada | Métricas extendidas: distribución por estado del lead, lead_score promedio, "casi a confirmar" (negociación o score≥75), tasa de aceptación (cerrados / decididos), tasa asistencia citas (realizadas / cerradas), citas hoy/próximas 7d/realizadas/canceladas/no_asistio. **Embudo de leads** visual con barras horizontales coloreadas por estado. **Sección "Conversaciones que necesitan atención"** roja al final con cards clickeables que llevan directo al chat. Card "Necesitan atención" del primer row es link anchor a esa sección. |
 | **6.E.5 — WhatsApp Business + Configuración con tabs** | ✅ Completada | **Página `/whatsapp-business`** estilo Talos para conectar con Meta Cloud API oficial (Phone Number ID + Business Account ID + Access Token). Endpoints: GET/PATCH credenciales, POST `/probar` (Graph API ping), POST `/suscribir-webhook`. Receiver `/api/wa-cloud/webhook` con verify_token validation + recepción placeholder. **Migración 23**: campos `wa_*` en cuentas. **Sidebar**: dos items separados — "WhatsApp Web" (Baileys) y "WhatsApp Business" (Meta). **Configuración rediseñada con 5 tabs**: General (identidad agente: nombre + rol + estilo de comunicación con personalidad/idioma/tono) · Mensajes (bienvenida/no_entiende/palabras_handoff con detección automática de handoff por keyword) · Captura de Datos · Configuración IA (modelo + temperatura slider + max_tokens + instrucciones extra + prompt sistema avanzado collapsible) · Llamadas Vapi (sub-tabs internos Credenciales/Assistants). **Migración 24**: 11 campos estructurados del agente. |
 | **6.E.6 — Fixes críticos de captura + identidad** | ✅ Completada | **max_tokens 700→2000** (con 12 tools strict, mini cortaba el JSON). **Modelo default**: `gpt-4o-2024-08-06` (mini fallaba con strict + 12 tools — confirmado en docs OpenAI). **Reglas anti-alucinación** al inicio absoluto del prompt (R1-R6: decir≠ejecutar, no re-capturar idénticos, no duplicar citas). **Fix primer mensaje**: aceptar `messages.upsert` con `type='append'`, no solo `'notify'`. **Dedupe captura**: normalización con acentos/espacios/casing. **Auto-correct UUID**: si IA manda fecha como `cita_id`, resuelve por matching de fecha en citas activas. **Identidad inviolable**: primacy+recency effect — bloque "TU NOMBRE ES X" al inicio + recordatorio al final del prompt. Migración del `prompt_sistema` viejo a `contexto_negocio` (separación de concerns: el rol del agente vs el contexto del negocio). |
+| **6.E.7 — Webhooks rediseñados + Funnel con plantillas** | ✅ Completada | **Webhooks**: `EVENTOS_VALIDOS` extendido a 9 eventos (agregados `contacto_actualizado`, `cita_modificada`, `cita_cancelada`). UI nueva con stats hero + tabla con NOMBRE/URL/EVENTOS/ESTADO/ACCIONES + acciones inline (▶ probar, ⎘ copiar URL, ✎ editar, 🗑 borrar, toggle activo/pausado). Modal "Nuevo Webhook" con eventos **agrupados por categoría coloreada**: 💬 Mensajes (esmeralda) · 👥 Contactos & Leads (azul) · 📅 Agenda (ámbar). Cards seleccionables con descripción de cada evento + toggle "Webhook activo". **Funnel**: migración 25 con `paso_id`, `paso_siguiente_id`, `criterio_transicion`, `objetivos`, `descripcion` en `etapas_pipeline`. **4 plantillas pre-armadas**: 🏠 Inmobiliaria · 🛒 E-commerce · 💼 Servicios Profesionales · 📚 Educación (cada una con 6 pasos pre-configurados, criterios de transición y objetivos). Página `/pipeline` con sub-tabs **📋 Configuración del Funnel** (vista nueva con tabla de pasos + plantillas) y **🎯 Kanban de Leads** (vista anterior preservada). Modal "Seleccionar plantilla" estilo Talos con preview lateral. Modal Editar Paso completo con paso_id, paso_siguiente_id (autocompleta con existentes), criterio, objetivos, descripción y color. |
 
 > **6.A.2 logrado**: cada usuario nuevo arranca de cero (0 cuentas, 0 conversaciones). Las APIs verifican `cuenta.usuario_id === auth.uid()` antes de devolver/mutar nada, y RLS por relación protege a nivel DB como segunda capa.
 
@@ -952,3 +953,75 @@ El prompt sistema custom de la cuenta tenía 5277 chars con descripción del neg
 ---
 
 *Fase 6.E completada en mayo 2026. SaaS al nivel de Talos Flow con CRM completo, captura estructurada, identidad inviolable y métricas de performance del agente. Próximo: integración bidireccional WhatsApp Business Cloud API (recibir webhook → bot → enviar respuesta vía Graph API) cuando el dueño consiga permisos de Meta aprobados.*
+
+---
+
+## 📋 Resumen 6.E.7 — Webhooks rediseñados + Funnel con plantillas
+
+### Webhooks
+
+**`EVENTOS_VALIDOS` extendido** a 9 eventos en `/api/cuentas/[id]/webhooks/route.ts`:
+- 💬 **Mensajes**: `mensaje_recibido`, `mensaje_enviado`
+- 👥 **Contactos & Leads**: `contacto_nuevo`, `contacto_actualizado`, `handoff_humano`
+- 📅 **Agenda**: `cita_agendada`, `cita_modificada`, `cita_cancelada`, `llamada_terminada`
+
+**UI rediseñada** en `/webhooks/page.tsx`:
+- Hero violeta gradient con icono 🔗
+- Banner azul "¿Cómo funcionan los webhooks?" con CTA
+- Tabla con columnas Nombre / URL / Eventos / Estado / Acciones — acciones inline (▶ probar disparo, ⎘ copiar URL, ✎ editar, 🗑 borrar)
+- Toggle "Activo / Pausado" inline en cada fila (sin abrir modal)
+- Pills mini con eventos (formato `mensaje.recibido` con dots) + "+N más" si hay muchos
+
+**Modal "Nuevo Webhook"**:
+- 4 secciones: Nombre · URL · Secret opcional · Eventos a recibir
+- **Eventos agrupados por categoría** con colores Tailwind:
+  - 💬 Mensajes — emerald (`bg-emerald-50 ring-emerald-200`)
+  - 👥 Contactos & Leads — blue (`bg-blue-50 ring-blue-200`)
+  - 📅 Agenda — amber (`bg-amber-50 ring-amber-200`)
+- Cada evento es una card clickeable con label `mensaje.recibido` + descripción + checkbox emerald
+- Toggle "Webhook activo" estilo iOS al final
+- Validación: nombre + URL obligatorios
+
+### Funnel
+
+**Migración `25_etapas_pipeline_criterio_objetivos`**:
+```sql
+ALTER TABLE etapas_pipeline ADD COLUMN
+  paso_id TEXT,                      -- slug semántico (ej. "bienvenida")
+  paso_siguiente_id TEXT,            -- slug del próximo paso (NULL = fin)
+  criterio_transicion TEXT,          -- texto natural para que la IA decida cuándo avanzar
+  objetivos TEXT,                    -- CSV: "saludo_hecho,nombre_capturado"
+  descripcion TEXT;
+```
+
+Helpers `crearEtapa` y `actualizarEtapa` extendidos para aceptar todos los campos. API endpoints `etapas/route.ts` y `[idEtapa]/route.ts` con validación slugify (lowercase, sin acentos, alfanumérico+underscore, max 40 chars).
+
+**Módulo nuevo `lib/plantillasFunnel.ts`** con 4 plantillas:
+
+| Plantilla | Pasos | Casos típicos |
+|---|---|---|
+| 🏠 **Inmobiliaria** | bienvenida → calificación → presentación_opciones → agendar_visita → negociación → cierre | Compra/venta/alquiler de propiedades |
+| 🛒 **E-commerce** | bienvenida → consulta_producto → agregar_carrito → datos_envío → pago → postventa | Tienda online con stock |
+| 💼 **Servicios Profesionales** | bienvenida → diagnóstico → presentación_solución → agendar_demo → propuesta → confirmación | Consultoría, agencia, abogacía |
+| 📚 **Educación** | bienvenida → info_curso → calificar_perfil → presentar_plan_pago → inscripción → onboarding | Cursos, talleres, programas |
+
+Cada paso tiene `criterio_transicion` en lenguaje natural + `objetivos` CSV (ej. `nombre_capturado,contacto_capturado,zona_definida`). Función `aplicarPlantillaFunnel(cuentaId, plantillaId)` crea las N etapas de una vez, idempotente por `paso_id` (no duplica).
+
+**Página `/pipeline`** con sub-tabs:
+- **📋 Configuración del Funnel** (default) — vista de tabla con todos los pasos del funnel:
+  - Header CTA "Usar Plantilla" (violeta) y "+ Agregar Paso" (esmeralda)
+  - Banner azul "¿Cómo funciona?" explicando el rastreo de objetivos
+  - Tabla con orden numerado, nombre + paso_id, paso_siguiente (pill violeta) o "Fin del flujo" (pill esmeralda), criterio de transición (line-clamp 2), acciones (✎/🗑)
+  - Modal "Seleccionar plantilla" con lista lateral + preview del seleccionado
+  - Modal "Editar Paso" con todos los campos (autocompleta paso_siguiente_id con datalist de pasos existentes)
+- **🎯 Kanban de Leads** — vista anterior preservada (drag & drop con dnd-kit)
+
+### Cómo lo usa la IA (futuro)
+
+Los campos `paso_id`, `criterio_transicion`, `objetivos` están en DB y pueden ser leídos por `construirPrompt.ts` para inyectar el funnel completo al prompt sistema. La conversación tiene `paso_actual` (en `conversaciones`) que la IA actualiza con la tool existente. Cuando se cumpla el `criterio_transicion`, la IA cambia `paso_actual` al `paso_siguiente_id`. El operador ve el progreso en el header del chat (ya existe la pill "Paso: X" desde 6.E.2) y en el dashboard.
+
+Por ahora, esto está disponible como datos estructurados — la integración explícita en el prompt de la IA es una extensión natural de las tools que ya tenemos.
+
+---
+
+*Fase 6.E.7 completada. Total Fase 6.E: 7 sub-fases, 7 migraciones SQL nuevas (19-25), CRM completo con captura estructurada, calendario, conocimiento RAG-lite, dashboard con analytics, WhatsApp Business + Cloud API, configuración con tabs, webhooks por categoría, funnel con plantillas pre-armadas. Project ready para producción con clientes pagantes.*

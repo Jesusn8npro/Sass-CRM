@@ -19,6 +19,7 @@ import {
 } from "@dnd-kit/core";
 import { ColumnaPipeline } from "@/components/pipeline/ColumnaPipeline";
 import { TarjetaConversacion } from "@/components/pipeline/TarjetaConversacion";
+import { VistaConfiguracionFunnel } from "@/components/VistaConfiguracionFunnel";
 import type {
   ConversacionConPreview,
   Cuenta,
@@ -58,6 +59,9 @@ export default function PaginaPipeline() {
   >([]);
   const [arrastrando, setArrastrando] = useState<string | null>(null);
   const [creandoEtapa, setCreandoEtapa] = useState(false);
+  const [vistaInterna, setVistaInterna] = useState<"configuracion" | "kanban">(
+    "configuracion",
+  );
   const [nombreEtapaNueva, setNombreEtapaNueva] = useState("");
   const [colorEtapaNueva, setColorEtapaNueva] = useState("zinc");
 
@@ -223,54 +227,55 @@ export default function PaginaPipeline() {
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 px-4 py-3 backdrop-blur-md md:px-6 dark:border-zinc-800 dark:bg-zinc-950/80">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <Link
-              href="/app"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
-              aria-label="Volver"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-              >
-                <path d="m15 18-6-6 6-6" />
-              </svg>
-            </Link>
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                Pipeline
+      <header className="relative overflow-hidden border-b border-zinc-200 bg-gradient-to-br from-white via-violet-50/30 to-white px-6 pt-6 pb-3 dark:border-zinc-800 dark:from-zinc-950 dark:via-violet-950/10 dark:to-zinc-950">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-500 text-lg text-white shadow-md">
+              🎯
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-400">
+                Funnel · {cuenta?.etiqueta ?? "—"}
               </p>
-              <h1 className="truncate text-base font-semibold tracking-tight text-zinc-900 md:text-lg dark:text-zinc-100">
-                {cuenta?.etiqueta ?? "—"}
+              <h1 className="mt-1 text-2xl font-bold tracking-tight">
+                Funnel de Ventas
               </h1>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Link
-              href={`/app/cuentas/${idCuenta}/dashboard`}
-              className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href={`/app/cuentas/${idCuenta}/configuracion`}
-              className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-            >
-              Ajustes
-            </Link>
             <InterruptorTema />
           </div>
+        </div>
+
+        {/* Sub-tabs */}
+        <div className="mt-4 inline-flex rounded-full border border-zinc-200 bg-white p-0.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          {(["configuracion", "kanban"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setVistaInterna(t)}
+              className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
+                vistaInterna === t
+                  ? "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300"
+                  : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400"
+              }`}
+            >
+              {t === "configuracion"
+                ? "📋 Configuración del Funnel"
+                : "🎯 Kanban de Leads"}
+            </button>
+          ))}
         </div>
       </header>
 
       <div className="px-4 py-4 md:px-6 md:py-6">
+        {vistaInterna === "configuracion" ? (
+          <VistaConfiguracionFunnel
+            idCuenta={idCuenta}
+            etapas={etapas}
+            onCambio={cargarTodo}
+          />
+        ) : (
         <DndContext
           sensors={sensores}
           onDragStart={alIniciarArrastre}
@@ -356,6 +361,7 @@ export default function PaginaPipeline() {
             ) : null}
           </DragOverlay>
         </DndContext>
+        )}
       </div>
     </main>
   );

@@ -276,6 +276,17 @@ export interface EtapaPipeline {
   nombre: string;
   color: string;
   orden: number;
+  /** Slug semántico que la IA usa para referirse al paso. Ej:
+   * "bienvenida", "diagnostico_ia", "presentacion", "cierre". */
+  paso_id: string | null;
+  /** Slug del próximo paso (no UUID). NULL = fin del flujo. */
+  paso_siguiente_id: string | null;
+  /** Cuándo el agente debe avanzar al próximo paso. Texto natural. */
+  criterio_transicion: string;
+  /** Objetivos que se deben cumplir en este paso, separados por coma.
+   * Ej: "saludo_hecho,nombre_capturado,intencion_identificada". */
+  objetivos: string;
+  descripcion: string;
   creada_en: string;
 }
 
@@ -1672,6 +1683,13 @@ export async function crearEtapa(
   cuentaId: string,
   nombre: string,
   color: string,
+  opciones?: {
+    paso_id?: string | null;
+    paso_siguiente_id?: string | null;
+    criterio_transicion?: string;
+    objetivos?: string;
+    descripcion?: string;
+  },
 ): Promise<EtapaPipeline> {
   const { data: max } = await db()
     .from("etapas_pipeline")
@@ -1683,7 +1701,17 @@ export async function crearEtapa(
   const orden = ((max as { orden: number } | null)?.orden ?? 0) + 1;
   const { data, error } = await db()
     .from("etapas_pipeline")
-    .insert({ cuenta_id: cuentaId, nombre, color, orden })
+    .insert({
+      cuenta_id: cuentaId,
+      nombre,
+      color,
+      orden,
+      paso_id: opciones?.paso_id ?? null,
+      paso_siguiente_id: opciones?.paso_siguiente_id ?? null,
+      criterio_transicion: opciones?.criterio_transicion ?? "",
+      objetivos: opciones?.objetivos ?? "",
+      descripcion: opciones?.descripcion ?? "",
+    })
     .select()
     .single();
   if (error) lanzar(error, "crearEtapa");
@@ -1692,7 +1720,16 @@ export async function crearEtapa(
 
 export async function actualizarEtapa(
   id: string,
-  cambios: Partial<{ nombre: string; color: string; orden: number }>,
+  cambios: Partial<{
+    nombre: string;
+    color: string;
+    orden: number;
+    paso_id: string | null;
+    paso_siguiente_id: string | null;
+    criterio_transicion: string;
+    objetivos: string;
+    descripcion: string;
+  }>,
 ): Promise<EtapaPipeline | null> {
   const { data, error } = await db()
     .from("etapas_pipeline")
