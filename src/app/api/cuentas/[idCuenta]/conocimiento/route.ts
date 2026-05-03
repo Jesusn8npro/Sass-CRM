@@ -41,7 +41,12 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
 
-  let payload: { titulo?: unknown; contenido?: unknown };
+  let payload: {
+    titulo?: unknown;
+    contenido?: unknown;
+    categoria?: unknown;
+    esta_activo?: unknown;
+  };
   try {
     payload = await req.json();
   } catch {
@@ -51,6 +56,16 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   const titulo = typeof payload.titulo === "string" ? payload.titulo.trim() : "";
   const contenido =
     typeof payload.contenido === "string" ? payload.contenido : "";
+  const categoria =
+    typeof payload.categoria === "string" && payload.categoria.trim()
+      ? payload.categoria
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9_]+/g, "_")
+          .slice(0, 30)
+      : "general";
+  const esta_activo =
+    typeof payload.esta_activo === "boolean" ? payload.esta_activo : true;
   if (!titulo) {
     return NextResponse.json(
       { error: "El título es obligatorio" },
@@ -58,6 +73,9 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     );
   }
 
-  const entrada = await crearConocimiento(idCuenta, titulo, contenido);
+  const entrada = await crearConocimiento(idCuenta, titulo, contenido, {
+    categoria,
+    esta_activo,
+  });
   return NextResponse.json({ entrada });
 }

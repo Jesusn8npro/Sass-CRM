@@ -118,6 +118,55 @@ export interface RespuestaIA {
     fecha_iso: string;
     motivo: string;
   };
+  /** Capturar/actualizar datos del cliente (nombre real, email, teléfono
+   * alternativo, intereses, contexto de su negocio, ventajas que percibe,
+   * miedos/objeciones). El sistema MERGEA con lo que ya estaba — solo
+   * llená los campos nuevos. Para campos sin info nueva, mandar "". */
+  capturar_datos: {
+    activar: boolean;
+    nombre: string;
+    email: string;
+    telefono_alt: string;
+    interes: string;
+    negocio: string;
+    ventajas: string;
+    miedos: string;
+    otros: string; // formato libre "clave: valor; clave: valor"
+  };
+  /** Subir/bajar el lead score (0-100) según señales de interés. */
+  actualizar_score: {
+    activar: boolean;
+    score: number;
+    motivo: string;
+  };
+  /** Cambiar el estado del lead en el CRM. */
+  cambiar_estado: {
+    activar: boolean;
+    nuevo_estado:
+      | "nuevo"
+      | "contactado"
+      | "calificado"
+      | "interesado"
+      | "negociacion"
+      | "cerrado"
+      | "perdido"
+      | "";
+    motivo: string;
+  };
+  /** Reprogramar una cita ya creada. cita_id viene de la lista que el
+   * sistema te pasa en el contexto (Citas activas). */
+  reprogramar_cita: {
+    activar: boolean;
+    cita_id: string;
+    nueva_fecha_iso: string;
+    motivo: string;
+  };
+  /** Cancelar una cita ya creada. */
+  cancelar_cita: {
+    activar: boolean;
+    cita_id: string;
+    motivo: string;
+  };
 }
 
 const ESQUEMA_RESPUESTA = {
@@ -260,6 +309,159 @@ const ESQUEMA_RESPUESTA = {
       required: ["activar", "fecha_iso", "motivo"],
       additionalProperties: false,
     },
+    capturar_datos: {
+      type: "object",
+      description:
+        "Capturar/actualizar datos del cliente. Activá CADA VEZ que el cliente te dé información NUEVA: nombre real, email, otro teléfono, qué necesita, qué negocio tiene, qué le importa (ventajas), qué le preocupa (miedos/objeciones). El sistema MERGEA con lo guardado — los campos vacíos NO pisan datos previos. Es CRÍTICO porque alimenta el CRM y el contexto que recibe el agente Vapi cuando llama.",
+      properties: {
+        activar: { type: "boolean" },
+        nombre: {
+          type: "string",
+          description:
+            "Nombre real que el cliente te dijo (no el de WhatsApp). Vacío si no lo dio en este turno.",
+        },
+        email: {
+          type: "string",
+          description: "Email si el cliente lo compartió. Vacío si no.",
+        },
+        telefono_alt: {
+          type: "string",
+          description:
+            "Teléfono alternativo si el cliente dio uno distinto al de WhatsApp. Vacío si no.",
+        },
+        interes: {
+          type: "string",
+          description:
+            "Qué quiere o necesita el cliente (ej: 'agendar demo', 'precio del plan premium', 'asesoría legal'). Vacío si no aplica.",
+        },
+        negocio: {
+          type: "string",
+          description:
+            "Tipo de negocio / industria / contexto profesional del cliente (ej: 'agencia de marketing', 'ecommerce de moda'). Vacío si no aplica.",
+        },
+        ventajas: {
+          type: "string",
+          description:
+            "Beneficios o ventajas que el cliente percibe / valora (ej: 'le importa rapidez de respuesta', 'busca ahorrar tiempo en seguimientos'). Vacío si no aplica.",
+        },
+        miedos: {
+          type: "string",
+          description:
+            "Objeciones, miedos o frenos del cliente (ej: 'le preocupa el precio', 'no sabe si su equipo va a adoptarlo'). Vacío si no aplica.",
+        },
+        otros: {
+          type: "string",
+          description:
+            "Cualquier OTRO dato relevante que no encaja arriba, en formato 'clave: valor; clave: valor' (ej: 'ciudad: Bogotá; equipo: 5 personas'). Vacío si no hay.",
+        },
+      },
+      required: [
+        "activar",
+        "nombre",
+        "email",
+        "telefono_alt",
+        "interes",
+        "negocio",
+        "ventajas",
+        "miedos",
+        "otros",
+      ],
+      additionalProperties: false,
+    },
+    actualizar_score: {
+      type: "object",
+      description:
+        "Subir/bajar la puntuación de calificación del lead (0-100). Subila a medida que el cliente muestra señales de interés (pregunta precio, agenda demo, comparte info personal). Bajala si frena o se aleja. Activá solo cuando el cambio sea significativo (>= 10 puntos).",
+      properties: {
+        activar: { type: "boolean" },
+        score: {
+          type: "number",
+          description:
+            "Nuevo score 0-100. 0-19=frío/perdido, 20-39=tibio, 40-59=interesado, 60-79=calificado, 80-100=listo para cerrar. Si activar=false, poné 0.",
+        },
+        motivo: {
+          type: "string",
+          description:
+            "Razón corta del cambio (ej: 'pidió demo y dio email'). Vacío si activar=false.",
+        },
+      },
+      required: ["activar", "score", "motivo"],
+      additionalProperties: false,
+    },
+    cambiar_estado: {
+      type: "object",
+      description:
+        "Cambiar el estado del lead en el CRM. Estados: nuevo (recién entró), contactado (ya respondiste), calificado (mostró interés real y dio datos), interesado (pidió info concreta o agendó demo), negociacion (hablando precios/condiciones), cerrado (ganó), perdido (rechazó o ghosting confirmado). Activá solo en transiciones reales.",
+      properties: {
+        activar: { type: "boolean" },
+        nuevo_estado: {
+          type: "string",
+          enum: [
+            "nuevo",
+            "contactado",
+            "calificado",
+            "interesado",
+            "negociacion",
+            "cerrado",
+            "perdido",
+            "",
+          ],
+          description: "Nuevo estado. Cadena vacía si activar=false.",
+        },
+        motivo: {
+          type: "string",
+          description:
+            "Razón del cambio (ej: 'agendó demo personalizada'). Vacío si activar=false.",
+        },
+      },
+      required: ["activar", "nuevo_estado", "motivo"],
+      additionalProperties: false,
+    },
+    reprogramar_cita: {
+      type: "object",
+      description:
+        "Reprogramar una cita YA AGENDADA. El sistema te pasa en el contexto la lista de Citas activas con su id. Usá ese id exacto para reprogramar. NO inventes ids.",
+      properties: {
+        activar: { type: "boolean" },
+        cita_id: {
+          type: "string",
+          description:
+            "ID exacto de la cita a reprogramar (de la lista de Citas activas en el contexto). Vacío si activar=false.",
+        },
+        nueva_fecha_iso: {
+          type: "string",
+          description:
+            "Nueva fecha y hora ISO 8601. Vacío si activar=false.",
+        },
+        motivo: {
+          type: "string",
+          description:
+            "Por qué se reprograma (ej: 'cliente pidió cambiar a las 4pm'). Vacío si activar=false.",
+        },
+      },
+      required: ["activar", "cita_id", "nueva_fecha_iso", "motivo"],
+      additionalProperties: false,
+    },
+    cancelar_cita: {
+      type: "object",
+      description:
+        "Cancelar una cita YA AGENDADA. Usá el cita_id exacto del contexto (Citas activas). NO inventes ids.",
+      properties: {
+        activar: { type: "boolean" },
+        cita_id: {
+          type: "string",
+          description:
+            "ID exacto de la cita a cancelar. Vacío si activar=false.",
+        },
+        motivo: {
+          type: "string",
+          description:
+            "Por qué se cancela (ej: 'cliente ya no puede asistir'). Vacío si activar=false.",
+        },
+      },
+      required: ["activar", "cita_id", "motivo"],
+      additionalProperties: false,
+    },
   },
   required: [
     "partes",
@@ -269,6 +471,11 @@ const ESQUEMA_RESPUESTA = {
     "programar_seguimiento",
     "agendar_cita",
     "agendar_llamada",
+    "capturar_datos",
+    "actualizar_score",
+    "cambiar_estado",
+    "reprogramar_cita",
+    "cancelar_cita",
   ],
   additionalProperties: false,
 } as const;
@@ -354,12 +561,77 @@ INSTRUCCIONES DE FORMATO DE RESPUESTA (siempre seguir):
    - Antes de activarlo, AVISÁ al cliente en una parte de texto: "Listo, te llamo en unos segundos por WhatsApp Calling".
    - Solo se puede usar 1 vez por hora por conversación (cooldown). Si lo activás de más, el sistema lo ignora silenciosamente.
    - En caso normal: activar=false, razon="".
+
+10) "capturar_datos" — REGLA OBLIGATORIA. Activá activar=true SIEMPRE que detectes CUALQUIERA de estos en el último mensaje del cliente (NO importa cuán sutil sea):
+    - Cualquier mención de su nombre ("soy X", "me llamo X", "soy X de Y", firma "— X")
+    - Cualquier email mencionado
+    - Cualquier teléfono adicional al de WhatsApp
+    - Cualquier mención de su trabajo / empresa / industria / rubro
+    - Cualquier interés o necesidad concreta ("quiero agendar", "necesito info de X", "busco Y")
+    - Cualquier ventaja que valora ("me importa rapidez", "lo más importante para mí es...")
+    - Cualquier objeción o miedo ("me preocupa el precio", "no estoy seguro de...", "tengo dudas con...")
+    - Cualquier dato personalizado que el negocio configuró (ver sección "Datos personalizados a capturar")
+
+    REGLA DE ORO: ante la duda, ACTIVÁ. Es preferible capturar de más que perder un dato. El sistema hace MERGE — campos vacíos NO pisan datos previos.
+
+    Ejemplos OBLIGATORIOS de activación (NUNCA dejar pasar estos):
+    - Cliente: "Hola soy Juan" → activar=true, nombre="Juan"
+    - Cliente: "Me llamo Erik Manuel Taveras" → activar=true, nombre="Erik Manuel Taveras"
+    - Cliente: "Erik por aquí" → activar=true, nombre="Erik"
+    - Cliente: "mi correo es x@y.com" / "mi mail x@y.com" / "x@y.com" → activar=true, email="x@y.com"
+    - Cliente: "tengo una agencia de marketing" → activar=true, negocio="agencia de marketing"
+    - Cliente: "me llegan muchos leads por Facebook" → activar=true, interes="gestión de leads de Facebook ads"
+    - Cliente: "me preocupa el precio" → activar=true, miedos="preocupado por el precio"
+    - Cliente: "lo más importante para mí es la rapidez" → activar=true, ventajas="valora rapidez de respuesta"
+
+    Si el cliente NO compartió ningún dato nuevo (mensajes tipo "ok", "gracias", "sí"), activar=false con todos los strings vacíos.
+
+    El sistema te muestra los datos YA capturados arriba en "# Datos del cliente". NO REPREGUNTES lo que ya tenés. SI ya tenés el nombre, NO le preguntes el nombre otra vez.
+
+11) "actualizar_score" — calificación 0-100 del lead. Activá activar=true cuando:
+    - El cliente da su nombre real → score sube ~15 (de 0 a 15-20)
+    - El cliente da email o teléfono → +15
+    - El cliente cuenta de su negocio / contexto → +10
+    - El cliente pide info de precios / planes → +20 (ya está en "calificado")
+    - El cliente agenda demo / cita / llamada → +25 (ya está en "interesado")
+    - El cliente pregunta sobre formas de pago / contratación → +15 (negociación)
+    - El cliente confirma compra → score = 100 (cerrado)
+
+    REGLA: activá activar=true cada vez que haya >= 10 puntos de cambio. El score actual te lo paso en el contexto bajo "Lead score actual: X/100".
+
+    Si no hay señal: activar=false, score=0, motivo="".
+
+12) "cambiar_estado" — transiciones del lead en el CRM. Activá cuando corresponda:
+    - "nuevo" → "contactado": el cliente RESPONDIÓ a tu primer mensaje (cualquier respuesta cuenta).
+    - "contactado" → "calificado": el cliente DIO al menos un dato (nombre, email, negocio, o interés concreto).
+    - "calificado" → "interesado": el cliente AGENDÓ algo (demo/cita/llamada) o pidió INFO ESPECÍFICA de un producto.
+    - "interesado" → "negociacion": el cliente HABLA DE PRECIOS, condiciones de pago o fechas de inicio.
+    - "negociacion" → "cerrado": el cliente CONFIRMÓ compra / pagó / dijo "dale, lo compro".
+    - cualquier → "perdido": dijo "no me interesa" o "ya compré con otro".
+
+    REGLA: activá activar=true en CADA transición. El estado actual te lo paso en "Estado del lead: X" — si la conversación ya cumple condición de avance, transicioná YA, no esperes.
+
+    Si el lead sigue en el mismo estado: activar=false, nuevo_estado="", motivo="".
+
+13) "reprogramar_cita" / "cancelar_cita" — modificar citas YA agendadas.
+    - El sistema te pasa la lista de "Citas activas" con su id en el contexto.
+    - Si el cliente dice "cambiame la cita del viernes a las 4pm" → reprogramar_cita con cita_id de esa cita y nueva_fecha_iso.
+    - Si dice "cancelá la cita" → cancelar_cita con cita_id.
+    - NUNCA inventes cita_id. Si no aparece en la lista del contexto, NO actives.
+    - En caso normal: activar=false en ambas.
+
+14) USO DEL NOMBRE DEL CLIENTE — REGLA INVIOLABLE.
+    - En el contexto te paso el "Nombre real capturado" del cliente (en datos_capturados.nombre).
+    - SI EXISTE ese nombre real, usalo SIEMPRE. NO uses el nombre de WhatsApp (que puede ser ficticio o un nick).
+    - Si todavía no capturaste el nombre real, NO inventes uno: dirigite al cliente sin nombre o pedile el nombre amablemente.
+    - Una vez capturado → repetilo en saludos / cierres / mensajes claves para que sienta personalización ("Listo Juan, te confirmo...", "Genial Juan, agendamos para el viernes").
 `.trim();
 
 export async function generarRespuesta(
   historial: Mensaje[],
   promptSistema?: string | null,
   modeloOverride?: string | null,
+  parametros?: { temperatura?: number; max_tokens?: number },
 ): Promise<RespuestaIA> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error(
@@ -370,6 +642,14 @@ export async function generarRespuesta(
   const promptUsuario = promptSistema?.trim() || PROMPT_SISTEMA_DEFAULT;
   const promptCompleto = `${promptUsuario}\n\n${INSTRUCCIONES_ESTRUCTURADAS}`;
   const modelo = modeloOverride?.trim() || MODELO_DEFAULT;
+  const temperatura =
+    typeof parametros?.temperatura === "number"
+      ? Math.max(0, Math.min(2, parametros.temperatura))
+      : 0.7;
+  const maxTokens =
+    typeof parametros?.max_tokens === "number"
+      ? Math.max(500, Math.min(8000, Math.floor(parametros.max_tokens)))
+      : 2000;
 
   const mensajesParaLLM = await Promise.all(
     historial
@@ -402,8 +682,11 @@ export async function generarRespuesta(
       { role: "system", content: promptCompleto },
       ...mensajesParaLLM,
     ],
-    temperature: 0.7,
-    max_tokens: 700,
+    temperature: temperatura,
+    // Mínimo recomendado 500: con 12 tools en strict mode, el JSON
+    // mínimo (todos activar=false) ya pesa ~500 tokens. Si el usuario
+    // configura menos, igual aplicamos el piso para evitar truncado.
+    max_tokens: maxTokens,
     response_format: {
       type: "json_schema",
       json_schema: {
@@ -455,6 +738,39 @@ export async function generarRespuesta(
       tipo: "",
       notas: "",
     };
+  }
+  if (!parsed.agendar_llamada) {
+    parsed.agendar_llamada = { activar: false, fecha_iso: "", motivo: "" };
+  }
+  if (!parsed.capturar_datos) {
+    parsed.capturar_datos = {
+      activar: false,
+      nombre: "",
+      email: "",
+      telefono_alt: "",
+      interes: "",
+      negocio: "",
+      ventajas: "",
+      miedos: "",
+      otros: "",
+    };
+  }
+  if (!parsed.actualizar_score) {
+    parsed.actualizar_score = { activar: false, score: 0, motivo: "" };
+  }
+  if (!parsed.cambiar_estado) {
+    parsed.cambiar_estado = { activar: false, nuevo_estado: "", motivo: "" };
+  }
+  if (!parsed.reprogramar_cita) {
+    parsed.reprogramar_cita = {
+      activar: false,
+      cita_id: "",
+      nueva_fecha_iso: "",
+      motivo: "",
+    };
+  }
+  if (!parsed.cancelar_cita) {
+    parsed.cancelar_cita = { activar: false, cita_id: "", motivo: "" };
   }
   return parsed;
 }

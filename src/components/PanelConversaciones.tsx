@@ -198,7 +198,29 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
         <ListaConversaciones
           conversaciones={conversaciones}
           idSeleccionada={idConvSeleccionada}
-          onSeleccionar={setIdConvSeleccionada}
+          onSeleccionar={(id) => {
+            setIdConvSeleccionada(id);
+            // Optimistic UI: bajamos el badge a 0 inmediatamente.
+            setConversaciones((prev) =>
+              prev.map((c) =>
+                c.id === id
+                  ? {
+                      ...c,
+                      mensajes_nuevos: 0,
+                      ultimo_visto_operador_en: new Date().toISOString(),
+                    }
+                  : c,
+              ),
+            );
+            // Persistimos en DB en background — si falla, el próximo
+            // polling lo va a corregir solo. Fire-and-forget.
+            void fetch(
+              `/api/cuentas/${idCuenta}/conversaciones/${id}/marcar-leida`,
+              { method: "POST" },
+            ).catch(() => {
+              /* ignorar */
+            });
+          }}
         />
       </div>
 
@@ -237,6 +259,8 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
           const enriquecida: ConversacionConPreview = {
             ...nueva,
             vista_previa_ultimo_mensaje: null,
+            vista_previa_rol: null,
+            mensajes_nuevos: 0,
             etiquetas: [],
           };
           setConversaciones((prev) => [enriquecida, ...prev]);

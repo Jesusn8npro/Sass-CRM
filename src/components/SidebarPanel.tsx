@@ -173,9 +173,16 @@ export function SidebarPanel({
         <SeccionNav titulo="Configuración">
           <ItemNav
             icono={<IconoWhatsApp />}
-            etiqueta="WhatsApp"
+            etiqueta="WhatsApp Web"
             href={`/app/cuentas/${idCuentaActual}/whatsapp`}
             actual={pathname}
+          />
+          <ItemNav
+            icono={<IconoWhatsAppBusiness />}
+            etiqueta="WhatsApp Business"
+            href={`/app/cuentas/${idCuentaActual}/whatsapp-business`}
+            actual={pathname}
+            matchPaths={["/whatsapp-business"]}
           />
           <ItemNav
             icono={<IconoAgente />}
@@ -384,6 +391,12 @@ const IconoWhatsApp = () => (
   <svg {...props}>
     <path d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5l-3 3V6a2 2 0 0 1 2-2z" />
     <path d="M9 10h.01M12 10h.01M15 10h.01" />
+  </svg>
+);
+const IconoWhatsAppBusiness = () => (
+  <svg {...props}>
+    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    <circle cx="12" cy="11" r="1" fill="currentColor" />
   </svg>
 );
 const IconoAgente = () => (

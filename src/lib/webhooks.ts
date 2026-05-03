@@ -17,7 +17,10 @@ export type EventoWebhook =
   | "mensaje_recibido"
   | "mensaje_enviado"
   | "contacto_nuevo"
+  | "contacto_actualizado"
   | "cita_agendada"
+  | "cita_modificada"
+  | "cita_cancelada"
   | "llamada_terminada"
   | "handoff_humano";
 

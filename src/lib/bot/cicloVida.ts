@@ -375,6 +375,9 @@ export async function arrancarBotEnProceso(): Promise<void> {
   instalarGuardias();
   try {
     console.log("[bot] Arrancando agente WhatsApp multi-cuenta...");
+    console.log(
+      "[bot] 🚀 build v2.6 — anti-duplicado citas, dedupe captura robusto, append messages, auto-correct fecha",
+    );
     if (!process.env.OPENAI_API_KEY) {
       console.warn(
         "[bot] ⚠ OPENAI_API_KEY no está definida. Las respuestas IA fallarán.",

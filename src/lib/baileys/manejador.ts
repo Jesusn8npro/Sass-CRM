@@ -6,6 +6,8 @@ import {
   type WAMessage,
 } from "@whiskeysockets/baileys";
 import {
+  actualizarCita,
+  actualizarLead,
   contarMensajesDeConversacion,
   crearCita,
   crearLlamadaProgramada,
@@ -16,8 +18,10 @@ import {
   guardarContactosTelefono,
   insertarMensaje,
   listarBiblioteca,
+  listarCitasActivasDeConversacion,
   listarProductosActivos,
   marcarConversacionNecesitaHumano,
+  obtenerCita,
   obtenerOCrearConversacion,
   obtenerConversacionPorId,
   obtenerHistorialReciente,
@@ -28,8 +32,10 @@ import {
   listarConocimientoDeCuenta,
   marcarBandejaEnviado,
   registrarInteresEnProducto,
+  type Cita,
   type Conversacion,
   type Cuenta,
+  type EstadoLead,
   type FilaBandejaSalida,
   type MedioBiblioteca,
   type TipoMensaje,
@@ -226,11 +232,14 @@ async function generarYEnviarRespuesta(
   const conocimiento = await listarConocimientoDeCuenta(cuenta.id);
   const biblioteca = await listarBiblioteca(cuenta.id);
   const productos = await listarProductosActivos(cuenta.id);
+  const citasActivas = await listarCitasActivasDeConversacion(conversacion.id);
   const promptCompleto = construirPromptSistema(
     cuenta,
     conocimiento,
     biblioteca,
     productos,
+    conversacion,
+    citasActivas,
   );
 
   const inicio = Date.now();
@@ -240,6 +249,10 @@ async function generarYEnviarRespuesta(
       historial,
       promptCompleto,
       cuenta.modelo,
+      {
+        temperatura: cuenta.temperatura,
+        max_tokens: cuenta.max_tokens,
+      },
     );
   } catch (err) {
     const detalle =
@@ -264,8 +277,45 @@ async function generarYEnviarRespuesta(
     return;
   }
   const duracion = Date.now() - inicio;
+  // Log detallado de qué tools activó la IA — esencial para diagnosticar
+  // por qué no captura datos. Si todo viene en false, hay que revisar
+  // el prompt o el modelo.
+  const toolsDisparadas: string[] = [];
+  if (respuesta.transferir_a_humano?.activar) toolsDisparadas.push("HANDOFF");
+  if (respuesta.iniciar_llamada?.activar) toolsDisparadas.push("LLAMAR_YA");
+  if (respuesta.agendar_llamada?.activar) toolsDisparadas.push("LLAMADA_FUTURA");
+  if (respuesta.agendar_cita?.activar) toolsDisparadas.push("CITA");
+  if (respuesta.reprogramar_cita?.activar) toolsDisparadas.push("REPROG_CITA");
+  if (respuesta.cancelar_cita?.activar) toolsDisparadas.push("CANCEL_CITA");
+  if (respuesta.programar_seguimiento?.activar)
+    toolsDisparadas.push("SEGUIMIENTO");
+  if (respuesta.capturar_datos?.activar) {
+    const c = respuesta.capturar_datos;
+    const camposLlenos: string[] = [];
+    if (c.nombre?.trim()) camposLlenos.push(`nombre="${c.nombre}"`);
+    if (c.email?.trim()) camposLlenos.push(`email="${c.email}"`);
+    if (c.telefono_alt?.trim()) camposLlenos.push(`tel_alt="${c.telefono_alt}"`);
+    if (c.interes?.trim()) camposLlenos.push(`interes="${c.interes.slice(0, 30)}"`);
+    if (c.negocio?.trim()) camposLlenos.push(`negocio="${c.negocio.slice(0, 30)}"`);
+    if (c.ventajas?.trim()) camposLlenos.push("ventajas+");
+    if (c.miedos?.trim()) camposLlenos.push("miedos+");
+    if (c.otros?.trim()) camposLlenos.push(`otros="${c.otros.slice(0, 40)}"`);
+    toolsDisparadas.push(`CAPTURA[${camposLlenos.join(", ")}]`);
+  }
+  if (respuesta.actualizar_score?.activar) {
+    toolsDisparadas.push(`SCORE→${respuesta.actualizar_score.score}`);
+  }
+  if (respuesta.cambiar_estado?.activar && respuesta.cambiar_estado.nuevo_estado) {
+    toolsDisparadas.push(`ESTADO→${respuesta.cambiar_estado.nuevo_estado}`);
+  }
+  if (
+    Array.isArray(respuesta.productos_de_interes) &&
+    respuesta.productos_de_interes.length > 0
+  ) {
+    toolsDisparadas.push(`PRODS×${respuesta.productos_de_interes.length}`);
+  }
   console.log(
-    `${prefijo} LLM respondió en ${duracion}ms (${respuesta.partes.length} parte${respuesta.partes.length === 1 ? "" : "s"}${respuesta.transferir_a_humano.activar ? ", HANDOFF" : ""})`,
+    `${prefijo} LLM respondió en ${duracion}ms (${respuesta.partes.length} parte${respuesta.partes.length === 1 ? "" : "s"}) tools=[${toolsDisparadas.join(" ") || "ninguna"}]`,
   );
 
   // Despachar cada parte según su tipo. La AI eligió una mezcla de
@@ -459,6 +509,10 @@ async function generarYEnviarRespuesta(
   }
 
   // Agendar cita si la IA lo decidió
+  // ANTI-DUPLICADO: si ya hay una cita activa de esta conversación
+  // cerca de la fecha que pide la IA (±2h), NO creamos una nueva —
+  // actualizamos la existente. Evita el bug donde la IA dispara
+  // agendar_cita cada vez que el cliente confirma o agrega info.
   if (respuesta.agendar_cita?.activar) {
     const ac = respuesta.agendar_cita;
     const fecha = parseFechaIso(ac.fecha_iso);
@@ -468,38 +522,82 @@ async function generarYEnviarRespuesta(
       );
     } else {
       try {
-        const c = await crearCita(cuenta.id, {
-          conversacion_id: conversacion.id,
-          cliente_nombre: conversacion.nombre ?? `+${conversacion.telefono}`,
-          cliente_telefono: conversacion.telefono,
-          fecha_hora: fecha,
-          duracion_min: ac.duracion_min > 0 ? ac.duracion_min : 30,
-          tipo: ac.tipo?.trim() || null,
-          notas: ac.notas?.trim() || null,
-        });
-        console.log(
-          `${prefijo} 📅 cita ${c.id} agendada: ${new Date(fecha).toISOString()} (${ac.tipo})`,
+        const fechaTs = new Date(fecha).getTime();
+        const VENTANA_MS = 2 * 60 * 60 * 1000; // ±2 horas
+        const citaExistente = citasActivas.find(
+          (c) => Math.abs(new Date(c.fecha_hora).getTime() - fechaTs) < VENTANA_MS,
         );
-        dispararWebhook(cuenta.id, "cita_agendada", {
-          cita_id: c.id,
-          conversacion_id: conversacion.id,
-          cliente_nombre: c.cliente_nombre,
-          cliente_telefono: c.cliente_telefono,
-          fecha_hora: c.fecha_hora,
-          duracion_min: c.duracion_min,
-          tipo: c.tipo,
-          notas: c.notas,
-        });
-        // Mensaje sistema visible en el panel
-        try {
-          await insertarMensaje(
-            cuenta.id,
-            conversacion.id,
-            "sistema",
-            `📅 Cita agendada: ${ac.tipo || "(sin tipo)"} el ${new Date(fecha).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}${ac.notas ? ` — ${ac.notas}` : ""}`,
-            { tipo: "sistema" },
+
+        if (citaExistente) {
+          // Mergear notas: si la IA mandó info nueva, la agregamos a las
+          // notas existentes en vez de duplicar la cita.
+          const notasNuevas = ac.notas?.trim() || "";
+          const tipoNuevo = ac.tipo?.trim() || citaExistente.tipo;
+          const notasMerged = notasNuevas
+            ? citaExistente.notas?.trim()
+              ? citaExistente.notas.trim() === notasNuevas
+                ? citaExistente.notas
+                : `${citaExistente.notas} | ${notasNuevas}`
+              : notasNuevas
+            : citaExistente.notas;
+          // Solo actualizamos si HAY cambio real (notas o tipo distintos)
+          const huboCambio =
+            notasMerged !== citaExistente.notas || tipoNuevo !== citaExistente.tipo;
+          if (huboCambio) {
+            await actualizarCita(citaExistente.id, {
+              notas: notasMerged,
+              tipo: tipoNuevo,
+            });
+            console.log(
+              `${prefijo} 📅↺ cita existente ${citaExistente.id} actualizada (no se duplicó)`,
+            );
+            await insertarMensaje(
+              cuenta.id,
+              conversacion.id,
+              "sistema",
+              `📅 Cita actualizada: ${tipoNuevo || "(sin tipo)"}${notasNuevas ? ` — ${notasNuevas}` : ""}`,
+              { tipo: "sistema" },
+            );
+          } else {
+            console.log(
+              `${prefijo} 📅= cita existente ${citaExistente.id} ya tiene la misma info, no se actualiza ni duplica`,
+            );
+          }
+        } else {
+          // No hay cita cerca → crear nueva
+          const c = await crearCita(cuenta.id, {
+            conversacion_id: conversacion.id,
+            cliente_nombre: conversacion.nombre ?? `+${conversacion.telefono}`,
+            cliente_telefono: conversacion.telefono,
+            fecha_hora: fecha,
+            duracion_min: ac.duracion_min > 0 ? ac.duracion_min : 30,
+            tipo: ac.tipo?.trim() || null,
+            notas: ac.notas?.trim() || null,
+          });
+          console.log(
+            `${prefijo} 📅 cita ${c.id} agendada: ${new Date(fecha).toISOString()} (${ac.tipo})`,
           );
-        } catch {}
+          dispararWebhook(cuenta.id, "cita_agendada", {
+            cita_id: c.id,
+            conversacion_id: conversacion.id,
+            cliente_nombre: c.cliente_nombre,
+            cliente_telefono: c.cliente_telefono,
+            fecha_hora: c.fecha_hora,
+            duracion_min: c.duracion_min,
+            tipo: c.tipo,
+            notas: c.notas,
+          });
+          // Mensaje sistema visible en el panel
+          try {
+            await insertarMensaje(
+              cuenta.id,
+              conversacion.id,
+              "sistema",
+              `📅 Cita agendada: ${ac.tipo || "(sin tipo)"} el ${new Date(fecha).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}${ac.notas ? ` — ${ac.notas}` : ""}`,
+              { tipo: "sistema" },
+            );
+          } catch {}
+        }
       } catch (err) {
         console.error(`${prefijo} error agendando cita:`, err);
       }
@@ -549,16 +647,523 @@ async function generarYEnviarRespuesta(
       }
     }
   }
+
+  // ============================================================
+  // CRM: capturar datos / score / estado / paso del lead
+  // ============================================================
+  // Acumulamos los cambios para hacer 1 sola UPDATE + 1 mensaje sistema
+  // visible que resume todo lo capturado en este turno.
+  const cambiosLead: Parameters<typeof actualizarLead>[1] = {};
+  const partesMensajeSistemaCRM: string[] = [];
+
+  // FALLBACK HEURÍSTICO — si la IA no disparó capturar_datos pero el
+  // último mensaje del cliente tiene datos detectables (nombre con
+  // patrón "soy X" / "me llamo X", email, teléfono), capturamos igual.
+  // Defensivo: garantiza que NUNCA perdamos un dato evidente.
+  const ultimoUsuario = [...historial]
+    .reverse()
+    .find((m) => m.rol === "usuario");
+  const textoCliente = ultimoUsuario?.contenido?.trim() ?? "";
+  const datosYaCapturados = conversacion.datos_capturados ?? {};
+
+  // Patrón nombre: "soy X", "me llamo X", "soy X de Y", "yo soy X"
+  // Capturamos hasta 4 palabras (nombre + apellidos) — corte natural en
+  // verbos comunes ("y necesito", "tengo", "vivo en", etc).
+  if (!datosYaCapturados.nombre?.trim() && !respuesta.capturar_datos?.nombre?.trim()) {
+    const reNombre =
+      /(?:soy|me llamo|mi nombre es|aqu[ií] (?:est[áa]|habla))\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,3})/iu;
+    const m = textoCliente.match(reNombre);
+    if (m && m[1]) {
+      const nombreDetectado = m[1].trim();
+      cambiosLead.datos_capturados_merge = {
+        ...(cambiosLead.datos_capturados_merge ?? {}),
+        nombre: nombreDetectado,
+      };
+      cambiosLead.nombre = nombreDetectado;
+      partesMensajeSistemaCRM.push(`✓ Nombre detectado: ${nombreDetectado}`);
+      console.log(
+        `${prefijo} 🔍 fallback heurístico: nombre="${nombreDetectado}" (la IA no lo capturó)`,
+      );
+    }
+  }
+
+  // Email — regex simple, ya tenemos `extraerEmailsDelTexto` pero lo
+  // hacemos inline para no duplicar trabajo.
+  if (!datosYaCapturados.email?.trim() && !respuesta.capturar_datos?.email?.trim()) {
+    const reEmail = /[\w.+-]+@[\w-]+\.[\w.-]+/;
+    const m = textoCliente.match(reEmail);
+    if (m && m[0]) {
+      const emailDetectado = m[0].toLowerCase();
+      cambiosLead.datos_capturados_merge = {
+        ...(cambiosLead.datos_capturados_merge ?? {}),
+        email: emailDetectado,
+      };
+      partesMensajeSistemaCRM.push(`✓ Email detectado: ${emailDetectado}`);
+      console.log(
+        `${prefijo} 🔍 fallback heurístico: email="${emailDetectado}" (la IA no lo capturó)`,
+      );
+    }
+  }
+
+  // ============================================================
+  // FALLBACK extendido: detectar campos custom (ciudad, fecha,
+  // cantidad invitados, tipo evento) en el historial reciente —
+  // no solo el último mensaje. Cubre el caso típico donde la IA
+  // entiende los datos pero no los persiste con la tool.
+  // ============================================================
+  const otrosYaCapturados = datosYaCapturados.otros ?? {};
+  // Concatenamos los últimos 6 mensajes del usuario para pescar datos
+  // que pueden venir spread en varios turnos ("100 personas", "5 de
+  // mayo", "Manizales").
+  const textoHistorial = historial
+    .filter((m) => m.rol === "usuario")
+    .slice(-6)
+    .map((m) => m.contenido ?? "")
+    .join(" \n ");
+  const otrosDetectados: Record<string, string> = {};
+
+  // Ciudad — lista corta de ciudades grandes de Colombia + patrón "en X"
+  // donde X arranca con mayúscula. Conservador para no capturar nombres.
+  if (!otrosYaCapturados.ciudad?.trim()) {
+    const ciudadesComunes = [
+      "Bogotá","Medellín","Cali","Barranquilla","Cartagena","Bucaramanga",
+      "Pereira","Manizales","Santa Marta","Cúcuta","Ibagué","Villavicencio",
+      "Pasto","Neiva","Armenia","Popayán","Sincelejo","Valledupar",
+      "Montería","Tunja","Riohacha","Quibdó","Florencia","Yopal",
+      "Bogota","Medellin","Cucuta","Ibague","Popayan","Monteria",
+    ];
+    const re = new RegExp(`\\b(${ciudadesComunes.join("|")})\\b`, "i");
+    const m = textoHistorial.match(re);
+    if (m && m[1]) {
+      const ciudadNorm = m[1]
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, "")
+        .toLowerCase();
+      // Re-canonizar a forma con tildes
+      const map: Record<string, string> = {
+        bogota: "Bogotá", medellin: "Medellín", cucuta: "Cúcuta",
+        ibague: "Ibagué", popayan: "Popayán", monteria: "Montería",
+      };
+      const ciudadDetectada = map[ciudadNorm] ?? m[1];
+      otrosDetectados.ciudad = ciudadDetectada;
+      console.log(
+        `${prefijo} 🔍 fallback heurístico: ciudad="${ciudadDetectada}" (la IA no lo capturó)`,
+      );
+    }
+  }
+
+  // Cantidad de invitados — "X personas" / "X invitados" / "para X"
+  if (!otrosYaCapturados.cantidad_invitados?.trim() && !otrosYaCapturados.tamano_equipo?.trim()) {
+    const reCant = /\b(\d{2,4})\s*(?:personas|invitados|asistentes|gentes?)\b/i;
+    const m = textoHistorial.match(reCant);
+    if (m && m[1]) {
+      const n = parseInt(m[1], 10);
+      if (n >= 5 && n <= 5000) {
+        otrosDetectados.cantidad_invitados = String(n);
+        console.log(
+          `${prefijo} 🔍 fallback heurístico: cantidad_invitados=${n}`,
+        );
+      }
+    }
+  }
+
+  // Fecha del evento — "5 de mayo", "el 15 de marzo de 2026", "viernes 6"
+  if (
+    !otrosYaCapturados.fecha_evento?.trim() &&
+    !otrosYaCapturados.fecha_inicio?.trim()
+  ) {
+    const meses =
+      "enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre";
+    const reFecha = new RegExp(
+      `\\b(\\d{1,2})\\s*(?:de\\s+)?(${meses})(?:\\s+(?:de\\s+)?(\\d{4}))?`,
+      "i",
+    );
+    const m = textoHistorial.match(reFecha);
+    if (m && m[1] && m[2]) {
+      const fechaStr = `${m[1]} de ${m[2].toLowerCase()}${m[3] ? ` de ${m[3]}` : ""}`;
+      otrosDetectados.fecha_evento = fechaStr;
+      console.log(
+        `${prefijo} 🔍 fallback heurístico: fecha_evento="${fechaStr}"`,
+      );
+    }
+  }
+
+  // Tipo de evento — palabras clave comunes
+  if (!otrosYaCapturados.tipo_evento?.trim()) {
+    const tipos = [
+      ["boda", "boda"],
+      ["matrimonio", "boda"],
+      ["fiesta patronal", "fiesta patronal"],
+      ["fiesta", "fiesta privada"],
+      ["cumpleaños", "cumpleaños"],
+      ["quince", "quinceaños"],
+      ["quinceañera", "quinceaños"],
+      ["corporativo", "evento corporativo"],
+      ["empresarial", "evento corporativo"],
+      ["serenata", "serenata"],
+      ["show", "show en vivo"],
+      ["concierto", "concierto"],
+      ["grabación", "sesión de estudio"],
+      ["estudio", "sesión de estudio"],
+    ] as const;
+    const tlow = textoHistorial.toLowerCase();
+    for (const [palabra, normalizado] of tipos) {
+      if (tlow.includes(palabra)) {
+        otrosDetectados.tipo_evento = normalizado;
+        console.log(
+          `${prefijo} 🔍 fallback heurístico: tipo_evento="${normalizado}"`,
+        );
+        break;
+      }
+    }
+  }
+
+  // Si detectamos algo en otros, lo aplicamos al merge
+  if (Object.keys(otrosDetectados).length > 0) {
+    cambiosLead.datos_capturados_merge = {
+      ...(cambiosLead.datos_capturados_merge ?? {}),
+      otros: {
+        ...(cambiosLead.datos_capturados_merge?.otros ?? {}),
+        ...otrosDetectados,
+      },
+    };
+    const lista = Object.entries(otrosDetectados)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(", ");
+    partesMensajeSistemaCRM.push(`✓ Detectados (heurística): ${lista}`);
+  }
+
+  // Helper: normaliza texto para comparación (sin acentos, sin espacios
+  // extra, lowercase). "contratar a Joshua González" === "contratar  a
+  // joshua gonzalez".
+  function normalizar(s: string): string {
+    return s
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, " ");
+  }
+
+  if (respuesta.capturar_datos?.activar) {
+    const cd = respuesta.capturar_datos;
+    const merge: Record<string, string> = {};
+    const mostrar: string[] = [];
+    const silenciados: string[] = [];
+
+    const map: Array<[keyof typeof cd, string]> = [
+      ["nombre", "nombre"],
+      ["email", "email"],
+      ["telefono_alt", "tel. alt"],
+      ["interes", "interés"],
+      ["negocio", "negocio"],
+      ["ventajas", "ventajas"],
+      ["miedos", "miedos"],
+    ];
+    for (const [campo, label] of map) {
+      const v = (cd[campo] as string)?.trim();
+      if (!v) continue;
+      // Dedupe robusto: comparamos sin acentos, sin casing, sin espacios
+      // extra. La IA suele re-capturar el mismo valor con variaciones
+      // mínimas — eso ensucia el panel y los logs.
+      const yaCapturado = (datosYaCapturados[campo as keyof typeof datosYaCapturados] as string | undefined)?.trim();
+      if (yaCapturado && normalizar(yaCapturado) === normalizar(v)) {
+        silenciados.push(label);
+        continue;
+      }
+      merge[campo] = v;
+      mostrar.push(`${label}: ${v}`);
+    }
+
+    // "otros" viene como string libre tipo "ciudad: Bogotá; equipo: 5".
+    const otrosStr = cd.otros?.trim();
+    if (otrosStr) {
+      const otros: Record<string, string> = {};
+      const otrosYa = datosYaCapturados.otros ?? {};
+      for (const par of otrosStr.split(";")) {
+        const i = par.indexOf(":");
+        if (i <= 0) continue;
+        const k = par.slice(0, i).trim();
+        const v = par.slice(i + 1).trim();
+        if (!k || !v) continue;
+        const yaVal = otrosYa[k]?.trim();
+        if (yaVal && normalizar(yaVal) === normalizar(v)) {
+          silenciados.push(k);
+          continue;
+        }
+        otros[k] = v;
+        mostrar.push(`${k}: ${v}`);
+      }
+      if (Object.keys(otros).length > 0) {
+        cambiosLead.datos_capturados_merge = {
+          ...(cambiosLead.datos_capturados_merge ?? {}),
+          otros: {
+            ...(cambiosLead.datos_capturados_merge?.otros ?? {}),
+            ...otros,
+          },
+        };
+      }
+    }
+
+    if (Object.keys(merge).length > 0) {
+      cambiosLead.datos_capturados_merge = {
+        ...(cambiosLead.datos_capturados_merge ?? {}),
+        ...merge,
+      };
+      if (merge.nombre) cambiosLead.nombre = merge.nombre;
+    }
+
+    if (silenciados.length > 0) {
+      console.log(
+        `${prefijo} 🔇 captura silenciada (datos ya guardados): [${silenciados.join(", ")}]`,
+      );
+    }
+
+    // SOLO mostramos mensaje sistema si capturamos algo NUEVO.
+    // Si la IA insistió con datos viejos pero no agregó nada nuevo,
+    // no spameamos el panel.
+    if (mostrar.length > 0) {
+      partesMensajeSistemaCRM.push(`✓ Datos guardados: ${mostrar.join(", ")}`);
+    }
+  }
+
+  if (respuesta.actualizar_score?.activar) {
+    const s = respuesta.actualizar_score;
+    if (Number.isFinite(s.score)) {
+      cambiosLead.lead_score = s.score;
+      partesMensajeSistemaCRM.push(
+        `📊 Lead score → ${Math.round(s.score)}/100${s.motivo ? ` (${s.motivo})` : ""}`,
+      );
+    }
+  }
+
+  if (respuesta.cambiar_estado?.activar && respuesta.cambiar_estado.nuevo_estado) {
+    const ce = respuesta.cambiar_estado;
+    const estadosValidos: EstadoLead[] = [
+      "nuevo",
+      "contactado",
+      "calificado",
+      "interesado",
+      "negociacion",
+      "cerrado",
+      "perdido",
+    ];
+    if (estadosValidos.includes(ce.nuevo_estado as EstadoLead)) {
+      cambiosLead.estado_lead = ce.nuevo_estado as EstadoLead;
+      partesMensajeSistemaCRM.push(
+        `🎯 Estado del lead → ${ce.nuevo_estado}${ce.motivo ? ` (${ce.motivo})` : ""}`,
+      );
+    }
+  }
+
+  if (Object.keys(cambiosLead).length > 0) {
+    try {
+      const actualizada = await actualizarLead(conversacion.id, cambiosLead);
+      console.log(
+        `${prefijo} 🧬 lead actualizado: ${JSON.stringify(cambiosLead).slice(0, 200)}`,
+      );
+      // Webhook contacto_actualizado para integraciones (n8n, etc).
+      if (actualizada) {
+        dispararWebhook(cuenta.id, "contacto_actualizado", {
+          conversacion_id: conversacion.id,
+          telefono: conversacion.telefono,
+          nombre: actualizada.nombre,
+          lead_score: actualizada.lead_score,
+          estado_lead: actualizada.estado_lead,
+          datos_capturados: actualizada.datos_capturados,
+        });
+      }
+    } catch (err) {
+      console.error(`${prefijo} error actualizando lead:`, err);
+    }
+  }
+
+  if (partesMensajeSistemaCRM.length > 0) {
+    try {
+      await insertarMensaje(
+        cuenta.id,
+        conversacion.id,
+        "sistema",
+        partesMensajeSistemaCRM.join(" | "),
+        { tipo: "sistema" },
+      );
+    } catch {}
+  }
+
+  // ============================================================
+  // Reprogramar cita
+  // ============================================================
+  // Helper: la IA a veces manda una FECHA en cita_id en vez del UUID.
+  // Si lo detectamos, intentamos resolver mirando las citas activas y
+  // matcheando por fecha. Como último recurso usamos la única cita activa.
+  const RE_UUID =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  async function resolverCitaId(idCandidato: string): Promise<string | null> {
+    const v = idCandidato?.trim() ?? "";
+    if (RE_UUID.test(v)) return v;
+    // No es UUID — la IA mandó algo raro (típico: fecha de la cita).
+    // Buscamos en citas activas de esta conversación.
+    if (citasActivas.length === 0) return null;
+    if (citasActivas.length === 1) {
+      console.log(
+        `${prefijo} 🔧 cita_id no era UUID ("${v}"), usando única cita activa: ${citasActivas[0]!.id}`,
+      );
+      return citasActivas[0]!.id;
+    }
+    // Múltiples citas: matchear por fecha si v parece una fecha ISO
+    const ts = new Date(v).getTime();
+    if (Number.isFinite(ts)) {
+      const match = citasActivas.find(
+        (c) => Math.abs(new Date(c.fecha_hora).getTime() - ts) < 86400 * 1000,
+      );
+      if (match) {
+        console.log(
+          `${prefijo} 🔧 cita_id no era UUID ("${v}"), matcheado por fecha: ${match.id}`,
+        );
+        return match.id;
+      }
+    }
+    return null;
+  }
+
+  if (respuesta.reprogramar_cita?.activar) {
+    const rc = respuesta.reprogramar_cita;
+    const fecha = parseFechaIso(rc.nueva_fecha_iso);
+    const citaIdResuelto = await resolverCitaId(rc.cita_id);
+    if (!citaIdResuelto || fecha === null) {
+      console.warn(
+        `${prefijo} ⚠ reprogramar_cita ignorada (cita_id="${rc.cita_id}" → resuelto="${citaIdResuelto}", fecha="${rc.nueva_fecha_iso}" → ${fecha})`,
+      );
+    } else {
+      try {
+        const cita = await obtenerCita(citaIdResuelto);
+        if (!cita || cita.cuenta_id !== cuenta.id) {
+          console.warn(
+            `${prefijo} ⚠ reprogramar_cita: cita ${citaIdResuelto} no existe o no pertenece a esta cuenta`,
+          );
+        } else {
+          await actualizarCita(citaIdResuelto, {
+            fecha_hora: fecha,
+            recordatorio_enviado: false, // re-disparar recordatorio para la nueva hora
+          });
+          dispararWebhook(cuenta.id, "cita_modificada", {
+            cita_id: citaIdResuelto,
+            conversacion_id: conversacion.id,
+            cliente_nombre: cita.cliente_nombre,
+            cliente_telefono: cita.cliente_telefono,
+            fecha_hora_anterior: cita.fecha_hora,
+            fecha_hora: fecha,
+            motivo: rc.motivo,
+          });
+          await insertarMensaje(
+            cuenta.id,
+            conversacion.id,
+            "sistema",
+            `📅 Cita reprogramada: ${new Date(fecha).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}${rc.motivo ? ` — ${rc.motivo}` : ""}`,
+            { tipo: "sistema" },
+          );
+          console.log(
+            `${prefijo} 📅↻ cita ${citaIdResuelto} reprogramada a ${new Date(fecha).toISOString()}`,
+          );
+        }
+      } catch (err) {
+        console.error(`${prefijo} error reprogramando cita:`, err);
+      }
+    }
+  }
+
+  // ============================================================
+  // Cancelar cita
+  // ============================================================
+  if (respuesta.cancelar_cita?.activar && respuesta.cancelar_cita.cita_id) {
+    const cc = respuesta.cancelar_cita;
+    const citaIdCancelar = await resolverCitaId(cc.cita_id);
+    if (!citaIdCancelar) {
+      console.warn(
+        `${prefijo} ⚠ cancelar_cita ignorada — no se pudo resolver cita_id="${cc.cita_id}"`,
+      );
+    } else {
+      try {
+        const cita = await obtenerCita(citaIdCancelar);
+        if (!cita || cita.cuenta_id !== cuenta.id) {
+          console.warn(
+            `${prefijo} ⚠ cancelar_cita: cita ${citaIdCancelar} no existe o no pertenece a esta cuenta`,
+          );
+        } else {
+          await actualizarCita(citaIdCancelar, { estado: "cancelada" });
+          dispararWebhook(cuenta.id, "cita_cancelada", {
+            cita_id: citaIdCancelar,
+            conversacion_id: conversacion.id,
+            cliente_nombre: cita.cliente_nombre,
+            cliente_telefono: cita.cliente_telefono,
+            fecha_hora: cita.fecha_hora,
+            motivo: cc.motivo,
+          });
+          await insertarMensaje(
+            cuenta.id,
+            conversacion.id,
+            "sistema",
+            `📅✗ Cita cancelada${cc.motivo ? ` — ${cc.motivo}` : ""}`,
+            { tipo: "sistema" },
+          );
+          console.log(
+            `${prefijo} 📅✗ cita ${citaIdCancelar} cancelada${cc.motivo ? `: ${cc.motivo}` : ""}`,
+          );
+        }
+      } catch (err) {
+        console.error(`${prefijo} error cancelando cita:`, err);
+      }
+    }
+  }
 }
 
 function parseFechaIso(iso: string | undefined): string | null {
   if (!iso || typeof iso !== "string") return null;
-  const ms = new Date(iso).getTime();
+  let ms = new Date(iso).getTime();
   if (!Number.isFinite(ms)) return null;
   const ahora = Date.now();
-  // Solo aceptamos fechas futuras (entre 5 min y 1 año adelante)
-  if (ms < ahora + 5 * 60 * 1000) return null;
-  if (ms > ahora + 365 * 86400 * 1000) return null;
+  const limiteFuturo = ahora + 365 * 86400 * 1000;
+  const limiteMin = ahora + 5 * 60 * 1000;
+
+  // [v2] Auto-corrección agresiva: si la IA mandó una fecha pasada
+  // (típico bug por training cutoff donde asume año 2024), la rescatamos
+  // moviendo el año al actual; si sigue pasada, al próximo año. Es
+  // tolerante: corrige UN AÑO A LA VEZ hasta encontrar una fecha futura
+  // dentro del rango (evita loops si la IA mandó algo absurdo como año 1).
+  if (ms < limiteMin) {
+    console.log(
+      `[parseFechaIso] ⚠ fecha pasada recibida: "${iso}" — intentando auto-corregir...`,
+    );
+    const d = new Date(iso);
+    if (Number.isFinite(d.getTime())) {
+      const añoActual = new Date().getFullYear();
+      // Probamos año actual, próximo, +2... hasta caer en rango futuro
+      // dentro de 365 días o agotar 3 intentos.
+      for (let delta = 0; delta <= 2; delta++) {
+        const intento = new Date(d);
+        intento.setFullYear(añoActual + delta);
+        if (
+          intento.getTime() >= limiteMin &&
+          intento.getTime() <= limiteFuturo
+        ) {
+          console.log(
+            `[parseFechaIso] ✓ auto-corregido: "${iso}" → "${intento.toISOString()}" (año ${añoActual + delta})`,
+          );
+          ms = intento.getTime();
+          break;
+        }
+      }
+    }
+    if (ms < limiteMin) {
+      console.warn(
+        `[parseFechaIso] ✗ no se pudo auto-corregir "${iso}" — fuera de rango incluso ajustando año`,
+      );
+    }
+  }
+
+  // Validación final
+  if (ms < limiteMin) return null;
+  if (ms > limiteFuturo) return null;
   return new Date(ms).toISOString();
 }
 
@@ -786,13 +1391,25 @@ export function registrarManejadores(
   const prefijo = `[bot:${etiquetaCuenta}]`;
 
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    if (type !== "notify") return;
+    // Aceptamos "notify" (mensajes en tiempo real) Y "append"
+    // (mensajes que WhatsApp re-entrega tras reconectar).
+    // Sin "append", el primer mensaje del cliente después de un
+    // reconnect quedaba en limbo hasta que llegaba un segundo mensaje.
+    // La idempotencia por wa_msg_id evita duplicados (ver insertarMensaje).
+    if (type !== "notify" && type !== "append") return;
 
     for (const msg of messages) {
       try {
         const clave = msg.key as ClaveMensajeExtendida;
         const remoteJid = clave.remoteJid;
         const desdeMi = !!clave.fromMe;
+
+        // Log de debug al inicio absoluto: nos permite diagnosticar
+        // si un mensaje llegó pero se descartó silenciosamente más
+        // adelante (filtros, dedupe, error en parser, etc).
+        console.log(
+          `${prefijo} 📥 evento entrante type=${type} remoteJid=${remoteJid ?? "null"} fromMe=${desdeMi} msgId=${msg.key.id ?? "?"}`,
+        );
 
         if (!remoteJid) continue;
         if (remoteJid.endsWith("@g.us")) continue;
@@ -899,6 +1516,38 @@ export function registrarManejadores(
           media_path: mediaPath,
           wa_msg_id: msg.key.id ?? null,
         });
+
+        // Handoff inmediato por palabras clave configuradas en /configuracion.
+        // Si el cliente escribe "hablar con humano", "agente humano", etc.,
+        // disparamos handoff sin pasar por la IA y ya el operador atiende.
+        if (cuenta.palabras_handoff?.trim() && contenido) {
+          const palabras = cuenta.palabras_handoff
+            .split(",")
+            .map((p) => p.trim().toLowerCase())
+            .filter(Boolean);
+          const textoLower = contenido.toLowerCase();
+          const matched = palabras.find((p) => textoLower.includes(p));
+          if (matched) {
+            console.log(
+              `${prefijo} 🤝 handoff por palabra clave "${matched}" — el cliente pidió humano`,
+            );
+            try {
+              await marcarConversacionNecesitaHumano(
+                conversacion.id,
+                `Cliente pidió hablar con humano (palabra clave: "${matched}")`,
+              );
+              dispararWebhook(cuentaId, "handoff_humano", {
+                conversacion_id: conversacion.id,
+                telefono: telefonoMostrable,
+                nombre: conversacion.nombre,
+                razon: `palabra clave: ${matched}`,
+              });
+            } catch (err) {
+              console.error(`${prefijo} error en handoff por palabra:`, err);
+            }
+            continue; // No pasamos a la IA
+          }
+        }
 
         // Webhooks: notificar que llegó mensaje + (si la conv es nueva)
         // que apareció contacto nuevo. Fire-and-forget — no bloquea.

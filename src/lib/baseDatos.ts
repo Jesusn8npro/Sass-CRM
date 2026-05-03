@@ -61,6 +61,23 @@ export type EstadoCita =
   | "cancelada"
   | "no_asistio";
 
+/** Campo extra que el dueño quiere que la IA capture del cliente.
+ * Se inyectan al prompt para guiar al agente. La IA los guarda en
+ * datos_capturados.otros con la clave indicada. */
+export interface CampoCaptura {
+  clave: string; // slug interno: "ciudad", "presupuesto", "equipo"
+  label: string; // visible en /clientes: "Ciudad", "Presupuesto"
+  descripcion: string; // pista para la IA: "Ciudad donde vive el cliente"
+  obligatorio: boolean;
+  /** Pregunta natural sugerida que la IA usa como referencia para pedir
+   * este dato. Ejemplo: "¿En qué ciudad estás organizando el evento?".
+   * Si está vacía, la IA improvisa con la descripción. */
+  pregunta_sugerida?: string;
+  /** Orden de captura preferido por el dueño (1, 2, 3...). La IA usa
+   * esto como guía de qué pedir primero. Default 100 = sin preferencia. */
+  orden?: number;
+}
+
 export interface Cuenta {
   id: string;
   usuario_id: string;
@@ -84,6 +101,40 @@ export interface Cuenta {
   vapi_max_segundos: number | null;
   vapi_grabar: boolean;
   vapi_sincronizado_en: string | null;
+  campos_a_capturar: CampoCaptura[];
+  // ===== Identidad y estilo del agente (estructurado) =====
+  agente_nombre: string;
+  agente_rol: string;
+  agente_personalidad: string;
+  agente_idioma: string;
+  agente_tono:
+    | "formal"
+    | "casual_amigable"
+    | "profesional"
+    | "cercano"
+    | "directo"
+    | "consultivo";
+  // ===== Mensajes predefinidos =====
+  mensaje_bienvenida: string;
+  mensaje_no_entiende: string;
+  /** Lista CSV de palabras/frases que activan handoff inmediato a humano. */
+  palabras_handoff: string;
+  // ===== Parámetros técnicos del modelo =====
+  temperatura: number;
+  max_tokens: number;
+  instrucciones_extra: string;
+  // ===== WhatsApp Business Cloud API (Meta) =====
+  // Independiente de los campos Baileys (estado, cadena_qr) — esta es la
+  // integración oficial via Meta Graph API. Si están seteados estos campos
+  // y wa_estado='conectado', la cuenta usa Meta Cloud en vez de Baileys.
+  wa_phone_number_id: string | null;
+  wa_business_account_id: string | null;
+  wa_access_token: string | null;
+  wa_verify_token: string | null;
+  wa_app_secret: string | null;
+  wa_estado: "desconectado" | "verificando" | "conectado" | "error";
+  wa_verificada_en: string | null;
+  wa_ultimo_error: string | null;
   esta_activa: boolean;
   esta_archivada: boolean;
   creada_en: string;
@@ -96,6 +147,29 @@ export interface EtiquetaResumen {
   color: string;
 }
 
+export type EstadoLead =
+  | "nuevo"
+  | "contactado"
+  | "calificado"
+  | "interesado"
+  | "negociacion"
+  | "cerrado"
+  | "perdido";
+
+/** Campos que la IA captura del cliente conversación a conversación.
+ * Es JSONB libre — la IA puede agregar campos en `otros` cuando aparezcan
+ * datos relevantes que no encajan en los predefinidos. */
+export interface DatosCapturados {
+  nombre?: string | null;
+  email?: string | null;
+  telefono_alt?: string | null;
+  interes?: string | null;
+  negocio?: string | null;
+  ventajas?: string | null;
+  miedos?: string | null;
+  otros?: Record<string, string> | null;
+}
+
 export interface Conversacion {
   id: string;
   cuenta_id: string;
@@ -106,11 +180,23 @@ export interface Conversacion {
   necesita_humano: boolean;
   etapa_id: string | null;
   ultimo_mensaje_en: string | null;
+  ultimo_visto_operador_en: string | null;
   creada_en: string;
+  lead_score: number;
+  estado_lead: EstadoLead;
+  paso_actual: string;
+  datos_capturados: DatosCapturados;
 }
 
 export interface ConversacionConPreview extends Conversacion {
   vista_previa_ultimo_mensaje: string | null;
+  /** Rol del último mensaje (para decidir prefix "Tu: " en la lista). */
+  vista_previa_rol: RolMensaje | null;
+  /** Cuántos mensajes del cliente (rol='usuario') llegaron DESPUÉS de
+   * la última vez que el operador abrió esta conversación en el panel.
+   * Se resetea a 0 cuando el operador hace click en la conv (vía
+   * marcarConversacionComoLeida). Igual que el badge de WhatsApp. */
+  mensajes_nuevos: number;
   etiquetas: EtiquetaResumen[];
 }
 
@@ -143,6 +229,8 @@ export interface EntradaConocimiento {
   cuenta_id: string;
   titulo: string;
   contenido: string;
+  categoria: string;
+  esta_activo: boolean;
   orden: number;
   creada_en: string;
   actualizada_en: string;
@@ -440,6 +528,39 @@ export interface MetricasCuenta {
     count: number;
   }>;
   mensajes_por_dia: Array<{ dia: string; count: number }>;
+
+  // ===== CRM / Lead tracking =====
+  por_estado_lead: Array<{
+    estado: EstadoLead;
+    count: number;
+  }>;
+  lead_score_promedio: number; // 0-100 promedio sobre todas las conversaciones
+  /** Leads "calientes": en negociación o con score >= 75. Clientes que
+   * están a punto de cerrar. */
+  casi_a_confirmar: number;
+  /** Tasa de aceptación: cerrados / (cerrados + perdidos). 0 si no hay
+   * decisiones aún. Útil para medir performance del agente. */
+  tasa_aceptacion: number;
+  /** Conversaciones marcadas con `necesita_humano` que requieren acción.
+   * Lista corta clickeable desde el dashboard. */
+  conversaciones_atencion: Array<{
+    conversacion_id: string;
+    nombre: string;
+    telefono: string;
+    ultimo_mensaje_en: string | null;
+    estado_lead: EstadoLead;
+    lead_score: number;
+  }>;
+
+  // ===== Citas =====
+  citas_total: number;
+  citas_proximas_7d: number;
+  citas_hoy: number;
+  citas_realizadas: number;
+  citas_canceladas: number;
+  citas_no_asistio: number;
+  /** Tasa de show-up: realizadas / (realizadas + no_asistio + canceladas). */
+  tasa_asistencia_citas: number;
 }
 
 // ============================================================
@@ -598,6 +719,26 @@ export async function actualizarCuenta(
     vapi_max_segundos: number | null;
     vapi_grabar: boolean;
     vapi_sincronizado_en: string | null;
+    campos_a_capturar: CampoCaptura[];
+    agente_nombre: string;
+    agente_rol: string;
+    agente_personalidad: string;
+    agente_idioma: string;
+    agente_tono: Cuenta["agente_tono"];
+    mensaje_bienvenida: string;
+    mensaje_no_entiende: string;
+    palabras_handoff: string;
+    temperatura: number;
+    max_tokens: number;
+    instrucciones_extra: string;
+    wa_phone_number_id: string | null;
+    wa_business_account_id: string | null;
+    wa_access_token: string | null;
+    wa_verify_token: string | null;
+    wa_app_secret: string | null;
+    wa_estado: "desconectado" | "verificando" | "conectado" | "error";
+    wa_verificada_en: string | null;
+    wa_ultimo_error: string | null;
   }>,
 ): Promise<Cuenta | null> {
   const cambios: Record<string, unknown> = {};
@@ -737,20 +878,60 @@ export async function listarConversaciones(
 
   const convIds = convs.map((c) => (c as Conversacion).id);
 
-  // Vistas previas del último mensaje por conversación
+  // Map de cuándo el operador vio cada conv (para contar "nuevos").
+  const ultimoVistoMap = new Map<string, number>();
+  for (const cv of convs as Conversacion[]) {
+    if (cv.ultimo_visto_operador_en) {
+      ultimoVistoMap.set(cv.id, new Date(cv.ultimo_visto_operador_en).getTime());
+    }
+  }
+
+  // Vistas previas + rol del último mensaje + contador "nuevos".
+  // Limitamos a los últimos 5000 msgs para no traer la DB completa en
+  // cuentas con mucho histórico — alcanza para que cada conv tenga sus
+  // mensajes recientes.
   const previews = new Map<string, string>();
+  const previewRol = new Map<string, RolMensaje>();
+  const nuevos = new Map<string, number>();
   const { data: msgs } = await db()
     .from("mensajes")
-    .select("conversacion_id, contenido, creado_en")
+    .select("conversacion_id, contenido, creado_en, rol, tipo")
     .in("conversacion_id", convIds)
-    .order("creado_en", { ascending: false });
+    .order("creado_en", { ascending: false })
+    .limit(5000);
   if (msgs) {
-    for (const m of msgs as Array<{
+    type FilaMsg = {
       conversacion_id: string;
       contenido: string;
-    }>) {
-      if (!previews.has(m.conversacion_id))
-        previews.set(m.conversacion_id, m.contenido);
+      creado_en: string;
+      rol: RolMensaje;
+      tipo: TipoMensaje;
+    };
+    for (const m of msgs as FilaMsg[]) {
+      // Preview = primer mensaje no-sistema más reciente.
+      if (!previews.has(m.conversacion_id)) {
+        let preview = m.contenido;
+        if (m.tipo === "imagen" && !preview?.trim()) preview = "📷 Imagen";
+        else if (m.tipo === "audio" && !preview?.trim()) preview = "🎤 Audio";
+        else if (m.tipo === "video" && !preview?.trim()) preview = "🎬 Video";
+        else if (m.tipo === "documento" && !preview?.trim()) preview = "📎 Documento";
+        previews.set(m.conversacion_id, preview ?? "");
+        previewRol.set(m.conversacion_id, m.rol);
+      }
+      // mensajes_nuevos = mensajes del cliente posteriores al
+      // ultimo_visto_operador_en (o TODOS si nunca abrió la conv).
+      // Persisten aunque la IA responda — solo se resetean cuando
+      // el operador hace click en la conversación.
+      if (m.rol === "usuario") {
+        const visto = ultimoVistoMap.get(m.conversacion_id);
+        const tsMsg = new Date(m.creado_en).getTime();
+        if (visto === undefined || tsMsg > visto) {
+          nuevos.set(
+            m.conversacion_id,
+            (nuevos.get(m.conversacion_id) ?? 0) + 1,
+          );
+        }
+      }
     }
   }
 
@@ -784,8 +965,23 @@ export async function listarConversaciones(
   return (convs as Conversacion[]).map((c) => ({
     ...c,
     vista_previa_ultimo_mensaje: previews.get(c.id) ?? null,
+    vista_previa_rol: previewRol.get(c.id) ?? null,
+    mensajes_nuevos: nuevos.get(c.id) ?? 0,
     etiquetas: etiquetasMap.get(c.id) ?? [],
   }));
+}
+
+/** Marca la conversación como leída por el operador. Resetea el badge
+ * de "mensajes nuevos" en la lista de chats. Se llama desde el panel
+ * cuando el operador hace click en una conversación. */
+export async function marcarConversacionComoLeida(
+  conversacionId: string,
+): Promise<void> {
+  const { error } = await db()
+    .from("conversaciones")
+    .update({ ultimo_visto_operador_en: new Date().toISOString() })
+    .eq("id", conversacionId);
+  if (error) lanzar(error, "marcarConversacionComoLeida");
 }
 
 export async function cambiarModo(
@@ -842,6 +1038,71 @@ export async function cambiarEtapaConversacion(
     .update({ etapa_id: etapaId })
     .eq("id", conversacionId);
   if (error) lanzar(error, "cambiarEtapaConversacion");
+}
+
+/**
+ * Actualiza lead tracking de una conversación. Recibe parches parciales
+ * — solo se aplican los campos provistos. Para `datos_capturados` hace
+ * MERGE con lo existente (no reemplaza), de modo que cuando la IA solo
+ * captura email no perdemos el nombre que ya estaba.
+ *
+ * Devuelve la conversación actualizada para que el caller pueda mostrar
+ * un mensaje sistema con los cambios aplicados.
+ */
+export async function actualizarLead(
+  conversacionId: string,
+  cambios: {
+    nombre?: string | null;
+    lead_score?: number;
+    estado_lead?: EstadoLead;
+    paso_actual?: string;
+    datos_capturados_merge?: Partial<DatosCapturados>;
+  },
+): Promise<Conversacion | null> {
+  // Si hay merge de datos, lo hacemos en JS para evitar SQL complejo —
+  // primero leo, mergeo, escribo.
+  const upd: Record<string, unknown> = {};
+  if (cambios.nombre !== undefined) upd.nombre = cambios.nombre;
+  if (cambios.lead_score !== undefined) {
+    upd.lead_score = Math.max(0, Math.min(100, Math.round(cambios.lead_score)));
+  }
+  if (cambios.estado_lead !== undefined) upd.estado_lead = cambios.estado_lead;
+  if (cambios.paso_actual !== undefined) upd.paso_actual = cambios.paso_actual;
+
+  if (cambios.datos_capturados_merge) {
+    const actual = await obtenerConversacionPorId(conversacionId);
+    if (!actual) return null;
+    const merged: DatosCapturados = { ...actual.datos_capturados };
+    for (const [k, v] of Object.entries(cambios.datos_capturados_merge)) {
+      if (v === undefined) continue;
+      if (k === "otros") {
+        merged.otros = {
+          ...(merged.otros ?? {}),
+          ...((v as Record<string, string>) ?? {}),
+        };
+      } else if (v === null || v === "") {
+        // null/string-vacío → no pisamos; ignoramos. La IA a veces
+        // manda strings vacíos cuando no tiene info nueva.
+        continue;
+      } else {
+        (merged as Record<string, unknown>)[k] = v;
+      }
+    }
+    upd.datos_capturados = merged;
+  }
+
+  if (Object.keys(upd).length === 0) {
+    return await obtenerConversacionPorId(conversacionId);
+  }
+
+  const { data, error } = await db()
+    .from("conversaciones")
+    .update(upd)
+    .eq("id", conversacionId)
+    .select()
+    .single();
+  if (error) lanzar(error, "actualizarLead");
+  return data as Conversacion;
 }
 
 // ============================================================
@@ -901,6 +1162,30 @@ export async function insertarMensaje(
       .update({ ultimo_mensaje_en: new Date().toISOString() })
       .eq("id", conversacionId);
   }
+
+  // Webhook saliente "mensaje_enviado" — solo para mensajes que SALIERON
+  // por WhatsApp (asistente/humano), no para entrantes ni sistema ni
+  // históricos. Import dinámico para no acoplar baseDatos a webhooks.
+  if (!opciones?.es_historico && (rol === "asistente" || rol === "humano")) {
+    void (async () => {
+      try {
+        const { dispararWebhook } = await import("./webhooks");
+        const m = res.data as Mensaje;
+        dispararWebhook(cuentaId, "mensaje_enviado", {
+          mensaje_id: m.id,
+          conversacion_id: conversacionId,
+          rol,
+          tipo: m.tipo,
+          contenido: m.contenido,
+          media_path: m.media_path,
+          wa_msg_id: m.wa_msg_id,
+        });
+      } catch {
+        /* ignorar */
+      }
+    })();
+  }
+
   return res.data as Mensaje;
 }
 
@@ -1032,6 +1317,7 @@ export async function crearConocimiento(
   cuentaId: string,
   titulo: string,
   contenido: string,
+  opciones?: { categoria?: string; esta_activo?: boolean },
 ): Promise<EntradaConocimiento> {
   // Próximo orden
   const { data: max } = await db()
@@ -1044,7 +1330,14 @@ export async function crearConocimiento(
   const orden = ((max as { orden: number } | null)?.orden ?? 0) + 1;
   const { data, error } = await db()
     .from("conocimiento")
-    .insert({ cuenta_id: cuentaId, titulo, contenido, orden })
+    .insert({
+      cuenta_id: cuentaId,
+      titulo,
+      contenido,
+      orden,
+      categoria: opciones?.categoria?.trim() || "general",
+      esta_activo: opciones?.esta_activo ?? true,
+    })
     .select()
     .single();
   if (error) lanzar(error, "crearConocimiento");
@@ -1053,7 +1346,13 @@ export async function crearConocimiento(
 
 export async function actualizarConocimiento(
   id: string,
-  cambios: Partial<{ titulo: string; contenido: string; orden: number }>,
+  cambios: Partial<{
+    titulo: string;
+    contenido: string;
+    orden: number;
+    categoria: string;
+    esta_activo: boolean;
+  }>,
 ): Promise<EntradaConocimiento | null> {
   const { data, error } = await db()
     .from("conocimiento")
@@ -2236,6 +2535,24 @@ export async function listarCitasFuturasDeCuenta(
   return (data ?? []) as Cita[];
 }
 
+/** Citas activas (agendada/confirmada) de UNA conversación, futuras.
+ * Se usa para inyectar al prompt de la IA: "estas son las citas que
+ * tiene este cliente, podés referirte a ellas por id si las quiere
+ * cancelar o reprogramar". */
+export async function listarCitasActivasDeConversacion(
+  conversacionId: string,
+): Promise<Cita[]> {
+  const { data, error } = await db()
+    .from("citas")
+    .select("*")
+    .eq("conversacion_id", conversacionId)
+    .in("estado", ["agendada", "confirmada"])
+    .gte("fecha_hora", new Date().toISOString())
+    .order("fecha_hora", { ascending: true });
+  if (error) lanzar(error, "listarCitasActivasDeConversacion");
+  return (data ?? []) as Cita[];
+}
+
 export async function listarCitasParaRecordar(
   desdeIso: string,
   hastaIso: string,
@@ -2397,15 +2714,24 @@ export async function obtenerMetricas(
   inicioHoy.setHours(0, 0, 0, 0);
   const inicio7d = new Date(ahora.getTime() - 7 * 86400 * 1000);
 
-  // Conversaciones
+  // Conversaciones (incluye lead tracking ahora)
   const { data: convs } = await db()
     .from("conversaciones")
-    .select("modo, necesita_humano, etapa_id")
+    .select(
+      "id, telefono, nombre, modo, necesita_humano, etapa_id, estado_lead, lead_score, ultimo_mensaje_en, datos_capturados",
+    )
     .eq("cuenta_id", cuentaId);
   const arrConvs = (convs ?? []) as Array<{
+    id: string;
+    telefono: string;
+    nombre: string | null;
     modo: ModoConversacion;
     necesita_humano: boolean;
     etapa_id: string | null;
+    estado_lead: EstadoLead;
+    lead_score: number;
+    ultimo_mensaje_en: string | null;
+    datos_capturados: DatosCapturados;
   }>;
 
   // Mensajes
@@ -2489,6 +2815,104 @@ export async function obtenerMetricas(
     (p) => p.esta_activo && p.stock !== null && p.stock <= 0,
   ).length;
 
+  // ===== CRM: distribución por estado del lead =====
+  const ESTADOS_LEAD: EstadoLead[] = [
+    "nuevo",
+    "contactado",
+    "calificado",
+    "interesado",
+    "negociacion",
+    "cerrado",
+    "perdido",
+  ];
+  const conteoEstado = new Map<EstadoLead, number>();
+  for (const c of arrConvs) {
+    const e = (c.estado_lead ?? "nuevo") as EstadoLead;
+    conteoEstado.set(e, (conteoEstado.get(e) ?? 0) + 1);
+  }
+  const por_estado_lead = ESTADOS_LEAD.map((estado) => ({
+    estado,
+    count: conteoEstado.get(estado) ?? 0,
+  }));
+
+  const scoreSum = arrConvs.reduce((acc, c) => acc + (c.lead_score ?? 0), 0);
+  const lead_score_promedio =
+    arrConvs.length > 0 ? Math.round(scoreSum / arrConvs.length) : 0;
+
+  const casi_a_confirmar = arrConvs.filter(
+    (c) =>
+      c.estado_lead === "negociacion" ||
+      (c.lead_score ?? 0) >= 75,
+  ).length;
+
+  const cerrados = conteoEstado.get("cerrado") ?? 0;
+  const perdidos = conteoEstado.get("perdido") ?? 0;
+  const tasa_aceptacion =
+    cerrados + perdidos > 0
+      ? Math.round((cerrados / (cerrados + perdidos)) * 100)
+      : 0;
+
+  // Top 10 conversaciones que necesitan atención humana, ordenadas por
+  // último mensaje desc para que el operador las vea por urgencia.
+  const conversaciones_atencion = arrConvs
+    .filter((c) => c.necesita_humano)
+    .map((c) => ({
+      conversacion_id: c.id,
+      nombre:
+        c.datos_capturados?.nombre?.trim() ||
+        c.nombre ||
+        `+${c.telefono}`,
+      telefono: c.telefono,
+      ultimo_mensaje_en: c.ultimo_mensaje_en,
+      estado_lead: (c.estado_lead ?? "nuevo") as EstadoLead,
+      lead_score: c.lead_score ?? 0,
+    }))
+    .sort((a, b) => {
+      const ta = a.ultimo_mensaje_en ? new Date(a.ultimo_mensaje_en).getTime() : 0;
+      const tb = b.ultimo_mensaje_en ? new Date(b.ultimo_mensaje_en).getTime() : 0;
+      return tb - ta;
+    })
+    .slice(0, 10);
+
+  // ===== Citas =====
+  const en7d = new Date(ahora.getTime() + 7 * 86400 * 1000);
+  const { data: citasData } = await db()
+    .from("citas")
+    .select("estado, fecha_hora")
+    .eq("cuenta_id", cuentaId);
+  const citas = (citasData ?? []) as Array<{
+    estado: EstadoCita;
+    fecha_hora: string;
+  }>;
+  const citas_total = citas.length;
+  const citas_proximas_7d = citas.filter((c) => {
+    const f = new Date(c.fecha_hora);
+    return (
+      f >= ahora &&
+      f <= en7d &&
+      (c.estado === "agendada" || c.estado === "confirmada")
+    );
+  }).length;
+  const citas_hoy = citas.filter((c) => {
+    const f = new Date(c.fecha_hora);
+    return (
+      f >= inicioHoy &&
+      f < new Date(inicioHoy.getTime() + 86400 * 1000) &&
+      c.estado !== "cancelada"
+    );
+  }).length;
+  const citas_realizadas = citas.filter((c) => c.estado === "realizada").length;
+  const citas_canceladas = citas.filter((c) => c.estado === "cancelada").length;
+  const citas_no_asistio = citas.filter((c) => c.estado === "no_asistio").length;
+  const tasa_asistencia_citas =
+    citas_realizadas + citas_canceladas + citas_no_asistio > 0
+      ? Math.round(
+          (citas_realizadas /
+            (citas_realizadas + citas_canceladas + citas_no_asistio)) *
+            100,
+        )
+      : 0;
+
   return {
     conversaciones_total: arrConvs.length,
     conversaciones_necesitan_humano: arrConvs.filter(
@@ -2517,6 +2941,18 @@ export async function obtenerMetricas(
     por_etapa,
     por_etiqueta,
     mensajes_por_dia,
+    por_estado_lead,
+    lead_score_promedio,
+    casi_a_confirmar,
+    tasa_aceptacion,
+    conversaciones_atencion,
+    citas_total,
+    citas_proximas_7d,
+    citas_hoy,
+    citas_realizadas,
+    citas_canceladas,
+    citas_no_asistio,
+    tasa_asistencia_citas,
   };
 }
 

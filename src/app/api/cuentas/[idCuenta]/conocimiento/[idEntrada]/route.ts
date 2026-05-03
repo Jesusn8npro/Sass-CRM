@@ -35,7 +35,13 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     );
   }
 
-  let payload: { titulo?: unknown; contenido?: unknown; orden?: unknown };
+  let payload: {
+    titulo?: unknown;
+    contenido?: unknown;
+    orden?: unknown;
+    categoria?: unknown;
+    esta_activo?: unknown;
+  };
   try {
     payload = await req.json();
   } catch {
@@ -48,11 +54,23 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     typeof payload.contenido === "string" ? payload.contenido : undefined;
   const orden =
     typeof payload.orden === "number" ? payload.orden : undefined;
+  const categoria =
+    typeof payload.categoria === "string" && payload.categoria.trim()
+      ? payload.categoria
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9_]+/g, "_")
+          .slice(0, 30)
+      : undefined;
+  const esta_activo =
+    typeof payload.esta_activo === "boolean" ? payload.esta_activo : undefined;
 
   const actualizada = await actualizarConocimiento(idEntrada, {
     titulo,
     contenido,
     orden,
+    categoria,
+    esta_activo,
   });
   if (!actualizada) {
     return NextResponse.json(

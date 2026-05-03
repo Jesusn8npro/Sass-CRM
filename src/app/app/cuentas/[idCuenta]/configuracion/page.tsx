@@ -14,6 +14,7 @@ import { InterruptorTema } from "@/components/InterruptorTema";
 import { BotonReproducirVoz } from "@/components/BotonReproducirVoz";
 import { ClonadorVoz } from "@/components/ClonadorVoz";
 import { AdminAssistantsVapi } from "@/components/AdminAssistantsVapi";
+import { EditorCamposCaptura } from "@/components/EditorCamposCaptura";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -166,11 +167,11 @@ export default function PaginaConfiguracion() {
               </svg>
             </Link>
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
-                Configuración del agente
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-400">
+                Agente IA · {cuenta.etiqueta}
               </p>
               <h1 className="mt-0.5 truncate text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-                {cuenta.etiqueta}
+                Configuración del Agente IA
               </h1>
             </div>
           </div>
@@ -178,40 +179,156 @@ export default function PaginaConfiguracion() {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-8">
-        <SeccionIdentidad cuenta={cuenta} onActualizada={setCuenta} />
-        <SeccionPrompt cuenta={cuenta} onActualizada={setCuenta} />
-        <SeccionContexto cuenta={cuenta} onActualizada={setCuenta} />
-        <SeccionConocimiento
-          idCuenta={cuenta.id}
-          entradas={conocimiento}
-          onCambio={recargarConocimiento}
-        />
-        <SeccionComportamiento cuenta={cuenta} onActualizada={setCuenta} />
-        <SeccionVoz cuenta={cuenta} onActualizada={setCuenta} />
-        <SeccionVapi cuenta={cuenta} onActualizada={setCuenta} />
-        <AdminAssistantsVapi
-          idCuenta={cuenta.id}
-          vapiPublicKey={cuenta.vapi_public_key}
-        />
-        <SeccionRespuestasRapidas
-          idCuenta={cuenta.id}
-          respuestas={respuestas}
-          onCambio={recargarRespuestas}
-        />
-        <SeccionEtiquetas
-          idCuenta={cuenta.id}
-          etiquetas={etiquetas}
-          onCambio={recargarEtiquetas}
-        />
-        <SeccionBiblioteca
-          idCuenta={cuenta.id}
-          medios={biblioteca}
-          onCambio={recargarBiblioteca}
-        />
-        <SeccionAvanzado cuenta={cuenta} />
-      </div>
+      <ContenidoConTabs
+        cuenta={cuenta}
+        setCuenta={setCuenta}
+        conocimiento={conocimiento}
+        respuestas={respuestas}
+        etiquetas={etiquetas}
+        biblioteca={biblioteca}
+        recargarRespuestas={recargarRespuestas}
+        recargarEtiquetas={recargarEtiquetas}
+        recargarBiblioteca={recargarBiblioteca}
+      />
     </main>
+  );
+}
+
+// ============================================================
+// Wrapper con 4 tabs (General / Mensajes / Captura / Configuración IA)
+// ============================================================
+
+type TabId = "general" | "mensajes" | "captura" | "ia" | "llamadas";
+
+function ContenidoConTabs({
+  cuenta,
+  setCuenta,
+  conocimiento,
+  respuestas,
+  etiquetas,
+  biblioteca,
+  recargarRespuestas,
+  recargarEtiquetas,
+  recargarBiblioteca,
+}: {
+  cuenta: Cuenta;
+  setCuenta: React.Dispatch<React.SetStateAction<Cuenta | null>>;
+  conocimiento: EntradaConocimiento[];
+  respuestas: RespuestaRapida[];
+  etiquetas: EtiquetaConCount[];
+  biblioteca: MedioBiblioteca[];
+  recargarRespuestas: () => Promise<void>;
+  recargarEtiquetas: () => Promise<void>;
+  recargarBiblioteca: () => Promise<void>;
+}) {
+  const [tab, setTab] = useState<TabId>("general");
+
+  const tabs: { id: TabId; label: string; icono: string }[] = [
+    { id: "general", label: "General", icono: "👤" },
+    { id: "mensajes", label: "Mensajes", icono: "💬" },
+    { id: "captura", label: "Captura de Datos", icono: "📋" },
+    { id: "ia", label: "Configuración IA", icono: "⚙" },
+    { id: "llamadas", label: "Llamadas Vapi", icono: "📞" },
+  ];
+
+  return (
+    <>
+      {/* Tabs */}
+      <div className="sticky top-[64px] z-10 border-b border-zinc-200 bg-white/90 px-6 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/90">
+        <div className="mx-auto flex max-w-4xl gap-1">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+                tab === t.id
+                  ? "text-emerald-700 dark:text-emerald-300"
+                  : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+              }`}
+            >
+              <span>{t.icono}</span>
+              <span>{t.label}</span>
+              {tab === t.id && (
+                <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-t-full bg-emerald-500" />
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-8">
+        {tab === "general" && (
+          <>
+            <SeccionIdentidad cuenta={cuenta} onActualizada={setCuenta} />
+            <SeccionEstilo cuenta={cuenta} onActualizada={setCuenta} />
+            <SeccionContexto cuenta={cuenta} onActualizada={setCuenta} />
+            <BannerConocimiento
+              idCuenta={cuenta.id}
+              count={conocimiento.length}
+            />
+          </>
+        )}
+
+        {tab === "mensajes" && (
+          <>
+            <SeccionMensajesPredefinidos
+              cuenta={cuenta}
+              onActualizada={setCuenta}
+            />
+            <SeccionRespuestasRapidas
+              idCuenta={cuenta.id}
+              respuestas={respuestas}
+              onCambio={recargarRespuestas}
+            />
+            <SeccionBiblioteca
+              idCuenta={cuenta.id}
+              medios={biblioteca}
+              onCambio={recargarBiblioteca}
+            />
+          </>
+        )}
+
+        {tab === "captura" && (
+          <>
+            <EditorCamposCaptura
+              idCuenta={cuenta.id}
+              valorInicial={cuenta.campos_a_capturar ?? []}
+              onGuardado={(nuevos) =>
+                setCuenta((c) =>
+                  c ? { ...c, campos_a_capturar: nuevos } : c,
+                )
+              }
+            />
+            <SeccionEtiquetas
+              idCuenta={cuenta.id}
+              etiquetas={etiquetas}
+              onCambio={recargarEtiquetas}
+            />
+          </>
+        )}
+
+        {tab === "ia" && (
+          <>
+            <SeccionConfiguracionIA
+              cuenta={cuenta}
+              onActualizada={setCuenta}
+            />
+            <SeccionComportamiento cuenta={cuenta} onActualizada={setCuenta} />
+            <SeccionVoz cuenta={cuenta} onActualizada={setCuenta} />
+            <SeccionPromptAvanzado
+              cuenta={cuenta}
+              onActualizada={setCuenta}
+            />
+            <SeccionAvanzado cuenta={cuenta} />
+          </>
+        )}
+
+        {tab === "llamadas" && (
+          <SeccionVapiUnificada cuenta={cuenta} onActualizada={setCuenta} />
+        )}
+      </div>
+    </>
   );
 }
 
@@ -348,17 +465,16 @@ async function patchCuenta(
 // ============================================================
 function SeccionIdentidad({ cuenta, onActualizada }: PropsSeccionBase) {
   const [etiqueta, setEtiqueta] = useState(cuenta.etiqueta);
-  const [modelo, setModelo] = useState(cuenta.modelo ?? "");
+  const [agenteNombre, setAgenteNombre] = useState(cuenta.agente_nombre);
+  const [agenteRol, setAgenteRol] = useState(cuenta.agente_rol);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState(false);
 
-  // IMPORTANTE: solo re-iniciar el form cuando cambia la cuenta (otro id),
-  // NO en cada re-render. El bug anterior reseteaba el form mientras
-  // el usuario escribía, cada vez que el polling devolvía nuevos datos.
   useEffect(() => {
     setEtiqueta(cuenta.etiqueta);
-    setModelo(cuenta.modelo ?? "");
+    setAgenteNombre(cuenta.agente_nombre);
+    setAgenteRol(cuenta.agente_rol);
     setError(null);
     setExito(false);
   }, [cuenta.id]);
@@ -371,7 +487,8 @@ function SeccionIdentidad({ cuenta, onActualizada }: PropsSeccionBase) {
     setExito(false);
     const r = await patchCuenta(cuenta.id, {
       etiqueta: etiqueta.trim(),
-      modelo: modelo.trim() || null,
+      agente_nombre: agenteNombre.trim(),
+      agente_rol: agenteRol.trim(),
     });
     if ("error" in r) {
       setError(r.error);
@@ -385,12 +502,42 @@ function SeccionIdentidad({ cuenta, onActualizada }: PropsSeccionBase) {
 
   return (
     <Tarjeta
-      titulo="Identidad"
-      descripcion="Nombre interno de la cuenta y modelo de IA que usa al responder."
+      titulo="Identidad del Agente"
+      descripcion="Define quién es tu agente virtual y cómo se presenta al cliente."
     >
       <form onSubmit={guardar} className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <Etiqueta>Nombre del Agente</Etiqueta>
+            <input
+              type="text"
+              value={agenteNombre}
+              onChange={(e) => setAgenteNombre(e.target.value)}
+              placeholder="Eryum"
+              maxLength={60}
+              className={inputClases()}
+            />
+            <p className="mt-1.5 text-xs text-zinc-500">
+              Ej: Ana, Carlos, Sofía, Asistente Virtual
+            </p>
+          </div>
+          <div>
+            <Etiqueta>Rol del Agente</Etiqueta>
+            <input
+              type="text"
+              value={agenteRol}
+              onChange={(e) => setAgenteRol(e.target.value)}
+              placeholder="asistente de ventas"
+              maxLength={80}
+              className={inputClases()}
+            />
+            <p className="mt-1.5 text-xs text-zinc-500">
+              Ej: asistente de ventas, asesor inmobiliario, soporte técnico
+            </p>
+          </div>
+        </div>
         <div>
-          <Etiqueta>Nombre de la cuenta</Etiqueta>
+          <Etiqueta>Nombre interno de la cuenta</Etiqueta>
           <input
             type="text"
             value={etiqueta}
@@ -399,20 +546,8 @@ function SeccionIdentidad({ cuenta, onActualizada }: PropsSeccionBase) {
             maxLength={60}
             className={inputClases()}
           />
-        </div>
-        <div>
-          <Etiqueta>Modelo de OpenAI</Etiqueta>
-          <input
-            type="text"
-            value={modelo}
-            onChange={(e) => setModelo(e.target.value)}
-            placeholder="gpt-4o-mini"
-            className={`${inputClases()} font-mono`}
-          />
           <p className="mt-1.5 text-xs text-zinc-500">
-            Vacío = usar el del .env (OPENAI_MODEL). Otros modelos comunes:{" "}
-            <code className="font-mono text-[11px]">gpt-4o</code>,{" "}
-            <code className="font-mono text-[11px]">gpt-4-turbo</code>.
+            Solo lo ves vos en el panel — no lo ve el cliente.
           </p>
         </div>
         <div className="flex items-center justify-between gap-3">
@@ -545,6 +680,50 @@ interface PropsSeccionConocimiento {
   idCuenta: string;
   entradas: EntradaConocimiento[];
   onCambio: () => void;
+}
+
+/** Banner que linkea a la página dedicada /conocimiento.
+ * Antes había un editor inline acá, pero la base de conocimiento se
+ * gestiona mejor en su propia página con búsqueda, categorías, upload
+ * de archivos y plantillas descargables. */
+function BannerConocimiento({
+  idCuenta,
+  count,
+}: {
+  idCuenta: string;
+  count: number;
+}) {
+  return (
+    <Link
+      href={`/app/cuentas/${idCuenta}/conocimiento`}
+      className="group relative overflow-hidden rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-violet-500/30 dark:from-violet-950/40 dark:to-indigo-950/40"
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-500 text-xl text-white shadow-md">
+            📚
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">
+              Base de conocimiento
+            </p>
+            <h3 className="mt-0.5 text-base font-bold tracking-tight">
+              {count > 0
+                ? `${count} documento${count === 1 ? "" : "s"} cargado${count === 1 ? "" : "s"}`
+                : "Aún no hay documentos cargados"}
+            </h3>
+            <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+              Subí información (productos, FAQs, políticas) para que tu agente
+              pueda responder con datos reales del negocio.
+            </p>
+          </div>
+        </div>
+        <span className="hidden shrink-0 rounded-full bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-sm group-hover:bg-violet-700 md:inline-flex">
+          Ir a Conocimiento →
+        </span>
+      </div>
+    </Link>
+  );
 }
 
 function SeccionConocimiento({
@@ -2570,5 +2749,456 @@ function SeccionAvanzado({ cuenta }: { cuenta: Cuenta }) {
         </button>
       )}
     </Tarjeta>
+  );
+}
+
+// ============================================================
+// NUEVAS SECCIONES — Tab General / Mensajes / IA
+// ============================================================
+
+const TONOS_AGENTE: { id: Cuenta["agente_tono"]; label: string }[] = [
+  { id: "casual_amigable", label: "Casual y amigable" },
+  { id: "formal", label: "Formal y respetuoso" },
+  { id: "profesional", label: "Profesional y consultivo" },
+  { id: "cercano", label: "Cercano (como un amigo)" },
+  { id: "directo", label: "Directo y eficiente" },
+  { id: "consultivo", label: "Consultivo (escucha primero)" },
+];
+
+const IDIOMAS = [
+  { id: "es", label: "Español neutro" },
+  { id: "es-AR", label: "Español rioplatense (Argentina)" },
+  { id: "es-CO", label: "Español colombiano" },
+  { id: "es-MX", label: "Español mexicano" },
+  { id: "en", label: "English" },
+  { id: "pt", label: "Português" },
+];
+
+const MODELOS_OPENAI = [
+  { id: "gpt-4o-2024-08-06", label: "GPT-4o (recomendado, 100% reliable)", precio: "$$" },
+  { id: "gpt-4o-mini", label: "GPT-4o Mini (rápido y económico)", precio: "$" },
+  { id: "gpt-4o", label: "GPT-4o (latest)", precio: "$$" },
+  { id: "gpt-4-turbo", label: "GPT-4 Turbo", precio: "$$$" },
+];
+
+/** Tab General → Estilo de Comunicación (personalidad, idioma, tono) */
+function SeccionEstilo({ cuenta, onActualizada }: PropsSeccionBase) {
+  const [personalidad, setPersonalidad] = useState(cuenta.agente_personalidad);
+  const [idioma, setIdioma] = useState(cuenta.agente_idioma);
+  const [tono, setTono] = useState<Cuenta["agente_tono"]>(cuenta.agente_tono);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [exito, setExito] = useState(false);
+
+  useEffect(() => {
+    setPersonalidad(cuenta.agente_personalidad);
+    setIdioma(cuenta.agente_idioma);
+    setTono(cuenta.agente_tono);
+  }, [cuenta.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function guardar() {
+    setGuardando(true);
+    setError(null);
+    setExito(false);
+    const r = await patchCuenta(cuenta.id, {
+      agente_personalidad: personalidad,
+      agente_idioma: idioma,
+      agente_tono: tono,
+    });
+    setGuardando(false);
+    if ("error" in r) setError(r.error);
+    else {
+      onActualizada(r);
+      setExito(true);
+      setTimeout(() => setExito(false), 1500);
+    }
+  }
+
+  return (
+    <Tarjeta
+      titulo="Estilo de Comunicación"
+      descripcion="Cómo debe hablar y comportarse el agente."
+    >
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Campo label="Personalidad">
+          <input
+            type="text"
+            value={personalidad}
+            onChange={(e) => setPersonalidad(e.target.value)}
+            placeholder="profesional, amable y entusiasta"
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900"
+          />
+        </Campo>
+        <Campo label="Idioma">
+          <select
+            value={idioma}
+            onChange={(e) => setIdioma(e.target.value)}
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900"
+          >
+            {IDIOMAS.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.label}
+              </option>
+            ))}
+          </select>
+        </Campo>
+        <Campo label="Tono">
+          <select
+            value={tono}
+            onChange={(e) =>
+              setTono(e.target.value as Cuenta["agente_tono"])
+            }
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900"
+          >
+            {TONOS_AGENTE.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </Campo>
+      </div>
+      <div className="mt-4 flex items-center justify-between">
+        <MensajeEstado exito={exito} error={error} />
+        <button
+          type="button"
+          onClick={guardar}
+          disabled={guardando}
+          className="rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {guardando ? "Guardando…" : "Guardar"}
+        </button>
+      </div>
+    </Tarjeta>
+  );
+}
+
+/** Tab Mensajes → Bienvenida + No entiende + Palabras handoff */
+function SeccionMensajesPredefinidos({
+  cuenta,
+  onActualizada,
+}: PropsSeccionBase) {
+  const [bienvenida, setBienvenida] = useState(cuenta.mensaje_bienvenida);
+  const [noEntiende, setNoEntiende] = useState(cuenta.mensaje_no_entiende);
+  const [handoff, setHandoff] = useState(cuenta.palabras_handoff);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [exito, setExito] = useState(false);
+
+  useEffect(() => {
+    setBienvenida(cuenta.mensaje_bienvenida);
+    setNoEntiende(cuenta.mensaje_no_entiende);
+    setHandoff(cuenta.palabras_handoff);
+  }, [cuenta.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function guardar() {
+    setGuardando(true);
+    setError(null);
+    setExito(false);
+    const r = await patchCuenta(cuenta.id, {
+      mensaje_bienvenida: bienvenida,
+      mensaje_no_entiende: noEntiende,
+      palabras_handoff: handoff,
+    });
+    setGuardando(false);
+    if ("error" in r) setError(r.error);
+    else {
+      onActualizada(r);
+      setExito(true);
+      setTimeout(() => setExito(false), 1500);
+    }
+  }
+
+  return (
+    <Tarjeta
+      titulo="Mensajes Predefinidos"
+      descripcion="Mensajes específicos para situaciones comunes."
+    >
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Campo
+          label="Mensaje de Bienvenida"
+          hint="Si está vacío, la IA improvisa según el contexto. Si lo llenás, se usa textual cuando un cliente nuevo escribe por primera vez."
+        >
+          <textarea
+            value={bienvenida}
+            onChange={(e) => setBienvenida(e.target.value)}
+            rows={4}
+            placeholder='Ej: "¡Hola! 👋 Soy Eryum del equipo. ¿En qué te puedo ayudar?"'
+            className="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900"
+          />
+        </Campo>
+        <Campo
+          label="Mensaje cuando no entiende"
+          hint="Cuando el cliente dice algo que la IA no logra interpretar."
+        >
+          <textarea
+            value={noEntiende}
+            onChange={(e) => setNoEntiende(e.target.value)}
+            rows={4}
+            placeholder='Ej: "Disculpá, no entendí bien. ¿Podés reformularlo?"'
+            className="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900"
+          />
+        </Campo>
+      </div>
+      <div className="mt-5">
+        <Campo
+          label="Palabras Clave de Transferencia (a humano)"
+          hint="Cuando el cliente escribe alguna de estas frases, el bot pasa a HUMANO automáticamente sin disparar la IA. Separá con comas."
+        >
+          <input
+            type="text"
+            value={handoff}
+            onChange={(e) => setHandoff(e.target.value)}
+            placeholder="hablar con humano, agente humano, queja urgente, asesor"
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900"
+          />
+        </Campo>
+      </div>
+      <div className="mt-4 flex items-center justify-between">
+        <MensajeEstado exito={exito} error={error} />
+        <button
+          type="button"
+          onClick={guardar}
+          disabled={guardando}
+          className="rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {guardando ? "Guardando…" : "Guardar"}
+        </button>
+      </div>
+    </Tarjeta>
+  );
+}
+
+/** Tab IA → Configuración OpenAI (modelo, temperatura, max_tokens) */
+function SeccionConfiguracionIA({ cuenta, onActualizada }: PropsSeccionBase) {
+  const [modelo, setModelo] = useState(
+    cuenta.modelo ?? "gpt-4o-2024-08-06",
+  );
+  const [modeloCustom, setModeloCustom] = useState("");
+  const [temperatura, setTemperatura] = useState(cuenta.temperatura);
+  const [maxTokens, setMaxTokens] = useState(cuenta.max_tokens);
+  const [extra, setExtra] = useState(cuenta.instrucciones_extra);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [exito, setExito] = useState(false);
+
+  const esCustom = !MODELOS_OPENAI.find((m) => m.id === modelo);
+
+  useEffect(() => {
+    setModelo(cuenta.modelo ?? "gpt-4o-2024-08-06");
+    setTemperatura(cuenta.temperatura);
+    setMaxTokens(cuenta.max_tokens);
+    setExtra(cuenta.instrucciones_extra);
+  }, [cuenta.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function guardar() {
+    setGuardando(true);
+    setError(null);
+    setExito(false);
+    const modeloFinal =
+      modelo === "__custom__" && modeloCustom.trim()
+        ? modeloCustom.trim()
+        : modelo;
+    const r = await patchCuenta(cuenta.id, {
+      modelo: modeloFinal,
+      temperatura,
+      max_tokens: maxTokens,
+      instrucciones_extra: extra,
+    });
+    setGuardando(false);
+    if ("error" in r) setError(r.error);
+    else {
+      onActualizada(r);
+      setExito(true);
+      setTimeout(() => setExito(false), 1500);
+    }
+  }
+
+  return (
+    <Tarjeta
+      titulo="Configuración OpenAI"
+      descripcion="Modelo de IA y parámetros técnicos."
+    >
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Campo
+          label="Modelo"
+          hint="Recomendamos GPT-4o (full) para captura de datos confiable. Mini tiene fallas con muchos tools."
+        >
+          <select
+            value={esCustom ? "__custom__" : modelo}
+            onChange={(e) => {
+              if (e.target.value === "__custom__") {
+                setModeloCustom(modelo);
+                setModelo("__custom__");
+              } else {
+                setModelo(e.target.value);
+              }
+            }}
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900"
+          >
+            {MODELOS_OPENAI.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label} {m.precio}
+              </option>
+            ))}
+            <option value="__custom__">— Custom (escribir manualmente) —</option>
+          </select>
+          {modelo === "__custom__" && (
+            <input
+              type="text"
+              value={modeloCustom}
+              onChange={(e) => setModeloCustom(e.target.value)}
+              placeholder="ej. gpt-4o-mini-2024-07-18"
+              className="mt-2 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 font-mono text-xs dark:border-zinc-800 dark:bg-zinc-900"
+            />
+          )}
+        </Campo>
+        <Campo
+          label="Max Tokens (longitud máxima respuesta)"
+          hint="Mínimo 500 con 12 tools strict. 2000 es buen default."
+        >
+          <input
+            type="number"
+            value={maxTokens}
+            onChange={(e) => setMaxTokens(Number(e.target.value))}
+            min={500}
+            max={8000}
+            step={100}
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 font-mono text-sm dark:border-zinc-800 dark:bg-zinc-900"
+          />
+        </Campo>
+      </div>
+
+      <div className="mt-4">
+        <Campo
+          label={`Temperatura (creatividad): ${temperatura.toFixed(2)}`}
+          hint="0.3 = info exacta, 0.7 = ventas (default), 1.0 = casual"
+        >
+          <input
+            type="range"
+            min={0}
+            max={1.5}
+            step={0.05}
+            value={temperatura}
+            onChange={(e) => setTemperatura(Number(e.target.value))}
+            className="w-full accent-emerald-600"
+          />
+          <div className="mt-1 flex justify-between text-[10px] text-zinc-500">
+            <span>0 · exacto</span>
+            <span>0.7 · ventas</span>
+            <span>1.5 · creativo</span>
+          </div>
+        </Campo>
+      </div>
+
+      <div className="mt-4">
+        <Campo
+          label="Instrucciones Personalizadas"
+          hint="Notas extra que se agregan al prompt sistema. Ej: 'No mencionar precios sin que pregunten' o 'Siempre ofrecer demo después de 3 mensajes'."
+        >
+          <textarea
+            value={extra}
+            onChange={(e) => setExtra(e.target.value)}
+            rows={5}
+            placeholder="Reglas extra del negocio que la IA debe respetar..."
+            className="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900"
+          />
+        </Campo>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between">
+        <MensajeEstado exito={exito} error={error} />
+        <button
+          type="button"
+          onClick={guardar}
+          disabled={guardando}
+          className="rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {guardando ? "Guardando…" : "Guardar"}
+        </button>
+      </div>
+    </Tarjeta>
+  );
+}
+
+function Campo({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+        {label}
+      </label>
+      <div className="mt-1">{children}</div>
+      {hint && <p className="mt-1 text-[10px] text-zinc-500">{hint}</p>}
+    </div>
+  );
+}
+
+/** VAPI unificada — junta credenciales + assistants en una sola sección
+ * con tabs internas (Credenciales | Assistants). Reemplaza tener dos
+ * cards separadas (SeccionVapi + AdminAssistantsVapi). */
+function SeccionVapiUnificada({ cuenta, onActualizada }: PropsSeccionBase) {
+  const [tabVapi, setTabVapi] = useState<"credenciales" | "assistants">(
+    "credenciales",
+  );
+  return (
+    <Tarjeta
+      titulo="Llamadas Vapi"
+      descripcion="Conexión con Vapi (llamadas automáticas) y administración de assistants."
+    >
+      <div className="mb-4 inline-flex rounded-full border border-zinc-200 p-0.5 dark:border-zinc-800">
+        {(["credenciales", "assistants"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTabVapi(t)}
+            className={`rounded-full px-3.5 py-1 text-[11px] font-semibold transition-all ${
+              tabVapi === t
+                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
+                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400"
+            }`}
+          >
+            {t === "credenciales" ? "🔑 Credenciales" : "🤖 Assistants"}
+          </button>
+        ))}
+      </div>
+      {tabVapi === "credenciales" ? (
+        <SeccionVapi cuenta={cuenta} onActualizada={onActualizada} />
+      ) : (
+        <AdminAssistantsVapi
+          idCuenta={cuenta.id}
+          vapiPublicKey={cuenta.vapi_public_key}
+        />
+      )}
+    </Tarjeta>
+  );
+}
+
+/** Prompt sistema custom — opcional, override completo. Se muestra como
+ * sección avanzada en el tab IA (no en el tab General como antes). */
+function SeccionPromptAvanzado({ cuenta, onActualizada }: PropsSeccionBase) {
+  return (
+    <details className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+      <summary className="cursor-pointer">
+        <span className="text-base font-semibold tracking-tight">
+          ⚙ Prompt sistema avanzado (override completo)
+        </span>
+        <p className="mt-0.5 text-xs text-zinc-500">
+          Solo si querés escribir un prompt custom de cero. Si lo dejás
+          vacío, el sistema arma uno automático con los datos del Tab General
+          (nombre, rol, personalidad, tono) + tus instrucciones extra.
+        </p>
+      </summary>
+      <div className="mt-4">
+        <SeccionPrompt cuenta={cuenta} onActualizada={onActualizada} />
+      </div>
+    </details>
   );
 }

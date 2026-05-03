@@ -19,6 +19,12 @@ Este documento cubre **qué se hizo en la sub-fase 6.A.1**, **cómo probarlo**, 
 | **6.C.3 — Vapi del .env (modelo SaaS) + notificaciones de desconexión** | ✅ Completada | Vapi keys en `.env` se usan como default para todas las cuentas; cada cuenta puede override. Notificaciones in-app + email (Resend) cuando una cuenta WhatsApp se desconecta. |
 | **6.D.1 — Rediseño tipo Talos Flow + páginas nuevas** | ✅ Completada | Sidebar persistente con secciones PRINCIPAL/CONFIGURACIÓN/VENTAS. Nuevas páginas: /clientes (CRM), /plantillas (envío masivo), /whatsapp (gestión QR/conexión), /conocimiento (standalone), /webhooks (n8n/Zapier). |
 | **6.D.2 — Polish visual + webhooks reales cableados** | ✅ Completada | Sidebar con accent bar gradient + hover translate. /clientes con stats hero. /whatsapp con state hero gradiente. Headers consistentes. **Webhooks ya disparan eventos reales**: mensaje_recibido, contacto_nuevo, handoff_humano, cita_agendada, llamada_terminada. |
+| **6.E.1 — CRM + Lead tracking + tools IA nuevas** | ✅ Completada | Migración 19: `lead_score`, `estado_lead` (7 estados), `paso_actual`, `datos_capturados` (JSONB) en conversaciones. 5 tools nuevas IA: `capturar_datos`, `actualizar_score`, `cambiar_estado`, `reprogramar_cita`, `cancelar_cita`. Campos custom configurables (`campos_a_capturar` con `pregunta_sugerida` y `orden`). Webhooks nuevos: `mensaje_enviado`, `contacto_actualizado`, `cita_modificada`, `cita_cancelada`. Fallback heurístico cuando la IA falla (regex nombre/email/ciudad/fecha/cantidad invitados/tipo evento). |
+| **6.E.2 — Conversaciones rediseño + drawer cliente** | ✅ Completada | Endpoint `marcar-leida`. Lista de chats estilo Talos: avatar grande gradiente + 1 letra, badge mensajes nuevos, prefix "Tu:", timestamps cortos (`ahora`/`HH:MM`/`ayer`/`DD/MM`), pill IA/H/⚠. Header del chat con avatar + paso + estado pill + lead score badge + botón perfil. **Drawer lateral derecho `PanelDetalleCliente`** con: estado del lead editable, score con slider, paso actual, datos capturados, etiquetas (asignar existentes + crear nueva inline), info conversación, eliminar conv. Click en avatar/nombre del header → vista 360 (`/contactos/[idConv]`). |
+| **6.E.3 — Agenda calendario + Conocimiento RAG-lite** | ✅ Completada | **Agenda**: 4 stat cards hero (Hoy/Esta semana/Pendientes/Completadas), toggle Lista/Semana/Mes, vista semana grid 7×15h, vista mes grid 6×7, modal Editar Cita completo. **Anti-duplicado de citas**: si ya hay una activa ±2h cerca de la fecha pedida, actualiza notas en vez de duplicar. **Auto-correct fecha**: si la IA manda año pasado por training cutoff, ajusta automáticamente al actual o próximo. Inyectamos fecha actual al prompt en cada turno. **Conocimiento**: rediseño completo estilo Talos con stats + filtros + cards con tags por categoría + modal Editor (título/categoría/activo/contenido) + modal Guía con 3 plantillas descargables (.md) + Probador de Búsqueda (keyword match) + Sincronizar. **Upload de archivos**: `.txt`, `.md`, `.pdf` (via `pdf-parse`), `.docx` (via `mammoth`) hasta 10MB. Migración 22: `categoria` y `esta_activo` en conocimiento. |
+| **6.E.4 — Reportes con CRM analytics** | ✅ Completada | Métricas extendidas: distribución por estado del lead, lead_score promedio, "casi a confirmar" (negociación o score≥75), tasa de aceptación (cerrados / decididos), tasa asistencia citas (realizadas / cerradas), citas hoy/próximas 7d/realizadas/canceladas/no_asistio. **Embudo de leads** visual con barras horizontales coloreadas por estado. **Sección "Conversaciones que necesitan atención"** roja al final con cards clickeables que llevan directo al chat. Card "Necesitan atención" del primer row es link anchor a esa sección. |
+| **6.E.5 — WhatsApp Business + Configuración con tabs** | ✅ Completada | **Página `/whatsapp-business`** estilo Talos para conectar con Meta Cloud API oficial (Phone Number ID + Business Account ID + Access Token). Endpoints: GET/PATCH credenciales, POST `/probar` (Graph API ping), POST `/suscribir-webhook`. Receiver `/api/wa-cloud/webhook` con verify_token validation + recepción placeholder. **Migración 23**: campos `wa_*` en cuentas. **Sidebar**: dos items separados — "WhatsApp Web" (Baileys) y "WhatsApp Business" (Meta). **Configuración rediseñada con 5 tabs**: General (identidad agente: nombre + rol + estilo de comunicación con personalidad/idioma/tono) · Mensajes (bienvenida/no_entiende/palabras_handoff con detección automática de handoff por keyword) · Captura de Datos · Configuración IA (modelo + temperatura slider + max_tokens + instrucciones extra + prompt sistema avanzado collapsible) · Llamadas Vapi (sub-tabs internos Credenciales/Assistants). **Migración 24**: 11 campos estructurados del agente. |
+| **6.E.6 — Fixes críticos de captura + identidad** | ✅ Completada | **max_tokens 700→2000** (con 12 tools strict, mini cortaba el JSON). **Modelo default**: `gpt-4o-2024-08-06` (mini fallaba con strict + 12 tools — confirmado en docs OpenAI). **Reglas anti-alucinación** al inicio absoluto del prompt (R1-R6: decir≠ejecutar, no re-capturar idénticos, no duplicar citas). **Fix primer mensaje**: aceptar `messages.upsert` con `type='append'`, no solo `'notify'`. **Dedupe captura**: normalización con acentos/espacios/casing. **Auto-correct UUID**: si IA manda fecha como `cita_id`, resuelve por matching de fecha en citas activas. **Identidad inviolable**: primacy+recency effect — bloque "TU NOMBRE ES X" al inicio + recordatorio al final del prompt. Migración del `prompt_sistema` viejo a `contexto_negocio` (separación de concerns: el rol del agente vs el contexto del negocio). |
 
 > **6.A.2 logrado**: cada usuario nuevo arranca de cero (0 cuentas, 0 conversaciones). Las APIs verifican `cuenta.usuario_id === auth.uid()` antes de devolver/mutar nada, y RLS por relación protege a nivel DB como segunda capa.
 
@@ -705,3 +711,244 @@ Todo responsive (mobile-first), dark mode soportado, sin imágenes externas.
 ---
 
 *Fases 6.A.1 + 6.A.2 completadas. Multi-tenant operativo en producción. Próximo: 6.A.3 — Storage y landing PRO.*
+
+---
+
+# 📋 Resumen 6.E — CRM completo + Configuración estructurada
+
+Fase grande de 6 sub-fases que llevó el SaaS al nivel de **Talos Flow** (referencia visual). El cambio mental es: pasar de un bot que solo responde, a un **CRM con agente IA estructurado** que captura datos, califica leads, agenda y mide performance.
+
+## 6.E.1 — CRM + Lead tracking + tools IA nuevas
+
+### Migración SQL `19_lead_tracking_en_conversaciones`
+```sql
+ALTER TABLE conversaciones ADD COLUMN
+  lead_score INT DEFAULT 0 CHECK (0..100),
+  estado_lead TEXT DEFAULT 'nuevo' CHECK (IN ('nuevo','contactado','calificado','interesado','negociacion','cerrado','perdido')),
+  paso_actual TEXT DEFAULT 'inicio',
+  datos_capturados JSONB DEFAULT '{}'::jsonb;
+```
+
+### 5 tools nuevas en `ESQUEMA_RESPUESTA` de `openai.ts`
+- **`capturar_datos`**: nombre, email, telefono_alt, interes, negocio, ventajas, miedos, otros (formato `clave: valor; clave: valor`)
+- **`actualizar_score`**: 0-100 con motivo
+- **`cambiar_estado`**: enum 7 estados con motivo
+- **`reprogramar_cita`**: cita_id (UUID) + nueva_fecha_iso + motivo
+- **`cancelar_cita`**: cita_id + motivo
+
+### Procesamiento en `manejador.ts`
+- Cada tool inserta un mensaje sistema visible en el chat (`✓ Datos guardados: nombre: X, email: Y` / `📊 Lead score → 25/100` / `🎯 Estado del lead → calificado`).
+- Webhook `contacto_actualizado` cuando hay cambios en el lead.
+- Anti-duplicado de captura: dedupe normalizado (sin acentos, sin casing, sin espacios extra).
+
+### Webhooks salientes nuevos
+- `mensaje_enviado` — disparado dentro de `insertarMensaje` cuando rol ∈ {asistente, humano}
+- `contacto_actualizado`, `cita_modificada`, `cita_cancelada`
+
+### Migración `20_campos_a_capturar_en_cuentas`
+Columna `campos_a_capturar JSONB` con array de `{ clave, label, descripcion, obligatorio, pregunta_sugerida, orden }`. UI: `EditorCamposCaptura.tsx` con plantillas rápidas (ciudad, presupuesto, tamaño_equipo, fecha_inicio, como_nos_conocio, industria) + drag/drop.
+
+### Fallback heurístico
+En `manejador.ts`: si la IA no captura datos evidentes, regex sobre los últimos 6 mensajes detecta:
+- Nombre por patrón "soy X / me llamo X / aquí habla X"
+- Email
+- Ciudad (lista 22 ciudades grandes Colombia + canonización tildes)
+- Cantidad de invitados ("X personas/invitados/asistentes")
+- Fecha del evento ("X de mes [de año]")
+- Tipo de evento (boda, fiesta patronal, corporativo, cumpleaños, serenata, show, etc.)
+
+## 6.E.2 — Conversaciones rediseño + drawer cliente
+
+### Migración `21_ultimo_visto_operador_en_conversaciones`
+```sql
+ALTER TABLE conversaciones ADD COLUMN ultimo_visto_operador_en TIMESTAMPTZ;
+```
+
+### Endpoint nuevo `marcar-leida`
+`POST /api/cuentas/[id]/conversaciones/[id]/marcar-leida` — setea `ultimo_visto_operador_en = NOW()`. Idempotente. Llamado fire-and-forget desde el panel cuando el operador hace click en una conv.
+
+### `ListaConversaciones.tsx` reescrita estilo Talos
+- Avatar gradiente esmeralda 12×12 con 1 letra (no 2)
+- Punto verde "en línea" si último mensaje < 5min
+- Badge numérico "1/2/9+" sobre el avatar si `mensajes_nuevos > 0`
+- Nombre bold + timestamp corto (ahora / HH:MM hoy / ayer / DD/MM)
+- Preview con prefix "Tu:" si último rol es asistente/humano
+- Pill mini IA (verde) / H (ámbar) / ⚠ (rojo)
+- Hover suave / seleccionada con fondo verde claro
+
+### Backend
+`listarConversaciones` extendido: para cada conv, calcula `mensajes_nuevos` (count de `rol='usuario'` con `creado_en > ultimo_visto_operador_en`), `vista_previa_rol` (rol del último mensaje), preview con etiquetas para media (📷/🎤/🎬/📎).
+
+### Header del chat rediseñado
+- Lado izq (clickeable a vista 360): avatar grande + nombre + paso + pill estado del lead
+- Lado der: badge ↗ score · 👤 botón perfil (drawer) · 📞 Llamar · IA/HUMANO toggle
+
+### Drawer `PanelDetalleCliente.tsx`
+Slide-in derecho con backdrop blur. Secciones:
+- Estado del Lead (`<select>` con los 7 estados, edita en vivo)
+- Puntuación (slider 0-100 + número grande)
+- Progreso del Paso
+- Datos Capturados (todos los campos del JSONB)
+- Etiquetas (pills clickeables para quitar + collapsible "+ Agregar etiqueta" con asignar existentes O crear nueva con 8 colores)
+- Información de la conversación (WA ID + creada_en)
+- CTA violeta "Ver perfil completo →" (vista 360)
+- Eliminar conversación con doble confirmación
+
+### Endpoint nuevo `conversaciones/[id]/lead`
+`PATCH` con `estado_lead`, `lead_score`, `paso_actual`, `nombre`, `datos_capturados_merge`. Validación de estados.
+
+## 6.E.3 — Agenda calendario + Conocimiento RAG-lite
+
+### `/agenda` reescrita
+- 4 stat cards hero: Hoy / Esta semana / Pendientes / Completadas
+- Toggle ☰ Lista / 📅 Semana / 🗓 Mes con navegación ‹/›/Hoy
+- **Vista Semana**: grid 7 columnas (DOM-SÁB) × 15 filas (08:00-22:00). Citas como pills con altura proporcional a duración, color según estado.
+- **Vista Mes**: grid 6 semanas × 7 días estilo calendario clásico. Hasta 3 mini-pills por día + "+X más".
+- Modal Editar Cita: título / fecha / hora / duración (preset 15-240 min) / estado / cliente / teléfono / notas.
+
+### Anti-duplicado de citas
+En `manejador.ts`: cuando la IA dispara `agendar_cita`, antes de crear se busca cita activa de la conversación dentro de ±2h de la fecha pedida. Si existe → actualiza notas (mergea con `|`); si no → crea nueva. Logs:
+- `📅 cita XXX agendada` (nueva)
+- `📅↺ cita existente XXX actualizada (no se duplicó)`
+- `📅= cita existente XXX ya tiene la misma info, no se actualiza ni duplica`
+
+### Auto-correct fecha
+`parseFechaIso` en `manejador.ts` ahora detecta cuando la IA manda año pasado (típico bug de training cutoff donde asume 2024) y mueve a año actual o próximo intentando hasta +2 años. Log: `[parseFechaIso] ✓ auto-corregido: "2024-05-12T..." → "2026-05-12T..." (año 2026)`.
+
+### Inyección de fecha actual al prompt
+`construirPrompt.ts` agrega un bloque al inicio absoluto:
+```
+AHORA MISMO ES: martes 4 de mayo de 2026, 22:36 hs.
+T1) TODAS las fechas que generes DEBEN ser POSTERIORES a 2026-05-04T22:46.
+T2) Cliente dice "6 de mayo" sin año → asumí 2026.
+T3) Cliente dice "viernes" → calculá viernes más próximo desde hoy.
+...
+```
+
+### Migración `22_conocimiento_categoria_y_activo`
+Columnas `categoria TEXT` y `esta_activo BOOLEAN` en `conocimiento`. Se inyecta al prompt agrupado por categoría, filtrando inactivos.
+
+### `/conocimiento` rediseñada
+- Stats: Total / Activos / Inactivos / Categorías
+- Buscador + filtro categoría + filtro estado
+- Cards con tag colorido por categoría (productos, precios, faqs, politicas, casos_uso)
+- **Modal Editor**: título / categoría (autocompleta con existentes) / toggle activo / contenido
+- **Modal Guía**: tips + 3 plantillas descargables como `.md` (Productos y Servicios, Preguntas Frecuentes, Políticas de Empresa) + formatos soportados
+- **Probador de Búsqueda**: search local por keyword match con score % de coincidencia
+- **Upload de archivos** `.txt` / `.md` / `.pdf` / `.docx` hasta 10MB
+
+### Endpoint upload
+`POST /api/cuentas/[id]/conocimiento/subir` con multipart/form-data:
+- `.txt` / `.md` → utf-8 directo
+- `.pdf` → import dinámico de `pdf-parse`, extrae texto solo si es seleccionable (no escaneos)
+- `.docx` → import dinámico de `mammoth.extractRawText`
+
+Dependencias nuevas: `pdf-parse` y `mammoth`.
+
+## 6.E.4 — Reportes con CRM analytics
+
+### Métricas extendidas (`obtenerMetricas`)
+- `por_estado_lead`: distribución sobre los 7 estados
+- `lead_score_promedio`
+- `casi_a_confirmar`: count de leads en negociación o con score >= 75
+- `tasa_aceptacion`: cerrados / (cerrados + perdidos) × 100
+- `conversaciones_atencion`: top 10 conversaciones con `necesita_humano = true` ordenadas por último mensaje (con id, nombre real, teléfono, score, estado)
+- `citas_total`, `citas_hoy`, `citas_proximas_7d`, `citas_realizadas`, `citas_canceladas`, `citas_no_asistio`
+- `tasa_asistencia_citas`: realizadas / (realizadas + canceladas + no_asistio) × 100
+
+### `/dashboard` UI
+- Sección **CRM · Performance del agente** con 4 KPIs (Lead score promedio / Casi a confirmar / Tasa aceptación / Cerrados)
+- **Embudo de leads** con barras horizontales coloreadas por estado
+- Sección **Agenda · Citas** con 4 KPIs
+- Sección roja **⚠ Conversaciones que necesitan atención** con cards clickeables (avatar gradiente rojo, nombre real, teléfono, último mensaje, estado, score, flecha →) que llevan a `/conversaciones?conv=ID`
+
+## 6.E.5 — WhatsApp Business + Configuración con tabs
+
+### Migración `23_whatsapp_business_cloud_api`
+Campos en `cuentas`: `wa_phone_number_id`, `wa_business_account_id`, `wa_access_token`, `wa_verify_token` (auto-generado), `wa_app_secret`, `wa_estado` (enum), `wa_verificada_en`, `wa_ultimo_error`.
+
+### Página `/whatsapp-business`
+Estilo Talos:
+- Hero verde + estado conectado/desconectado/error/verificando
+- Card editable con Phone Number ID, Business Account ID, Access Token (input password, censurado al mostrar)
+- Card Webhook con Callback URL + Verify Token (botón copiar al portapapeles)
+- Botón **⚡ Probar conexión** → `GET graph.facebook.com/v20.0/{phone_id}` con auth bearer
+- Botón **🔗 Suscribir al webhook** → `POST .../{waba_id}/subscribed_apps`
+
+### Webhook receiver
+`/api/wa-cloud/webhook`:
+- `GET` con `?hub.mode=subscribe&hub.verify_token=X&hub.challenge=Y` → busca el verify_token en DB y devuelve el challenge si matchea, sino 403
+- `POST` con eventos de Meta → loggea (la integración bidireccional con el bot es próxima fase)
+
+### Sidebar
+Dos items separados: "WhatsApp Web" (Baileys) y "WhatsApp Business" (Meta Cloud).
+
+### Migración `24_agente_ia_campos_estructurados`
+11 columnas nuevas en `cuentas`:
+- `agente_nombre`, `agente_rol`, `agente_personalidad`, `agente_idioma`
+- `agente_tono` enum (formal / casual_amigable / profesional / cercano / directo / consultivo)
+- `mensaje_bienvenida`, `mensaje_no_entiende`
+- `palabras_handoff` (CSV)
+- `temperatura` REAL, `max_tokens` INT, `instrucciones_extra`
+
+### `/configuracion` rediseñada con 5 tabs
+- **General**: Identidad del Agente (nombre + rol del agente + nombre interno cuenta) · Estilo de Comunicación (personalidad / idioma / tono) · Información del Negocio · Banner a Conocimiento
+- **Mensajes**: Mensajes Predefinidos (bienvenida + no entiende + palabras handoff) · Respuestas Rápidas · Biblioteca
+- **Captura de Datos**: EditorCamposCaptura · Etiquetas
+- **Configuración IA**: Configuración OpenAI (modelo selector + temperatura slider + max_tokens + instrucciones extra) · Comportamiento · Voz · Prompt sistema avanzado collapsible · Avanzado
+- **Llamadas Vapi**: SeccionVapiUnificada con sub-tabs internos (🔑 Credenciales / 🤖 Assistants)
+
+### Detección automática de handoff
+Antes de invocar la IA, `manejador.ts` chequea si el mensaje contiene alguna palabra de `cuenta.palabras_handoff` (case-insensitive). Si matchea → marca `necesita_humano=true`, dispara webhook `handoff_humano`, NO llama a la IA. Log: `🤝 handoff por palabra clave "X"`.
+
+## 6.E.6 — Fixes críticos de captura + identidad
+
+### max_tokens 700 → 2000
+Con 12 tools en strict mode, el JSON mínimo (todo `activar:false`) ya pesa ~500 tokens. Antes se cortaba y los tools del final (capturar_datos, actualizar_score, cambiar_estado) quedaban omitidos. Subimos a 2000.
+
+### Modelo default cambiado a `gpt-4o-2024-08-06`
+Confirmado en docs OpenAI y reportes de la comunidad: gpt-4o-mini falla con structured outputs strict cuando el schema tiene muchos campos. gpt-4o-2024-08-06 tiene 100% reliability en evals oficiales. Costo ~$0.01/mensaje vs $0.0006 con mini, totalmente sostenible para SaaS Pro $29/mes.
+
+### Reglas anti-alucinación al inicio del prompt
+6 reglas inviolables (DECIR ≠ EJECUTAR):
+- R1) NUNCA digas "te guardé el dato" sin activar `capturar_datos`
+- R2) NUNCA digas "voy a agendar" sin activar `agendar_cita`
+- R3) NUNCA digas "te paso con humano" sin activar `transferir_a_humano`
+- R4) Si el cliente comparte CUALQUIER dato → `capturar_datos` ese turno
+- R5) Captura incremental — solo datos nuevos o que cambiaron, no re-mandar idénticos
+- R6) Si ya hay cita activa para esa fecha → NO `agendar_cita` otra vez (usar `reprogramar_cita`)
+
+### Fix primer mensaje no se procesaba
+Bug: `if (type !== "notify") return` descartaba `messages.upsert` con `type='append'` que WhatsApp Web envía tras reconectar el socket. Ahora aceptamos ambos. La idempotencia por `wa_msg_id` previene duplicados.
+
+### Dedupe robusto de captura
+Normaliza acentos, casing, espacios extra. `"contratar a Joshua González"` ≡ `"contratar  a joshua gonzalez"` para el dedupe. Log explícito: `🔇 captura silenciada (datos ya guardados): [nombre, interés, ciudad]`.
+
+### Auto-correct UUID en reprogramar/cancelar cita
+La IA a veces manda fecha en `cita_id` en vez del UUID. Helper `resolverCitaId`:
+1. Si es UUID válido (regex check) → lo usa directo
+2. Si solo hay 1 cita activa → asume que es esa
+3. Si hay varias → matching por fecha (la fecha del candidato debe estar dentro de ±1 día de alguna cita)
+4. Si nada calza → log warning, no rompe
+
+### Identidad del agente inviolable
+Doble inyección en `construirPrompt.ts`:
+- **Inicio del prompt** (primacy effect): `🆔 TU NOMBRE ES X. NO sos "asistente virtual" ni ningún otro nombre — sos X. REGLAS DE IDENTIDAD INVIOLABLES...`
+- **Final del prompt** (recency effect): `RECORDATORIO FINAL — TU NOMBRE: X. Cuando alguien pregunte cómo te llamás, decí "X"...`
+
+### Migración manual `prompt_sistema → contexto_negocio`
+El prompt sistema custom de la cuenta tenía 5277 chars con descripción del negocio (manager de Joshua González) que contradecía la identidad estructurada. Lo movimos a `contexto_negocio` donde corresponde. Ahora `prompt_sistema = ""` (usa default genérico) + identidad estructurada arma el rol del agente + contexto del negocio describe lo que vende.
+
+## 🧪 Cómo verificar todo funciona
+
+1. **Reiniciá el bot completamente:** `Ctrl+C && npm run dev`. Buscá `🚀 build v2.6` en consola — sin esa línea, el código nuevo no está activo.
+2. **Captura**: mandá *"soy Juan, mi mail juan@x.com, tengo agencia de marketing en Bogotá"* → en consola vas a ver `tools=[CAPTURA[nombre="Juan", email="juan@x.com", negocio="agencia..."] SCORE→25 ESTADO→calificado]`. En `/clientes` el cliente aparece con todos los datos.
+3. **Agenda**: pedí *"un show vallenato en Cali el 25 de junio, 100 personas"* → el bot debería disparar `agendar_cita` y crear la cita. Si volvés a confirmar detalles, NO duplica — actualiza notas.
+4. **Identidad**: mandá *"hola, cómo te llamás?"* → el bot responde con el nombre configurado en `/configuracion → General → Nombre del Agente`. Si no, el bot NO se reinició.
+5. **Dashboard**: abrí `/dashboard` y mirá el embudo + KPIs. Click en una conversación con atención → te lleva al chat.
+6. **Conocimiento**: subí un `.md` o `.pdf` desde `/conocimiento`, preguntale al bot algo del archivo → debería citar la info.
+7. **Handoff por keyword**: mandá *"quiero hablar con humano"* → log `🤝 handoff por palabra clave`, conv pasa a HUMANO sin disparar IA.
+
+---
+
+*Fase 6.E completada en mayo 2026. SaaS al nivel de Talos Flow con CRM completo, captura estructurada, identidad inviolable y métricas de performance del agente. Próximo: integración bidireccional WhatsApp Business Cloud API (recibir webhook → bot → enviar respuesta vía Graph API) cuando el dueño consiga permisos de Meta aprobados.*

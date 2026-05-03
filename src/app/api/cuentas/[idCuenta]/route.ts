@@ -3,9 +3,60 @@ import {
   actualizarCuenta,
   archivarCuenta,
   obtenerCuenta,
+  type CampoCaptura,
 } from "@/lib/baseDatos";
 import { calcularBotVivo } from "@/lib/latidoBot";
 import { requerirSesion } from "@/lib/auth/sesion";
+
+/** Sanea la lista de campos a capturar que viene del cliente.
+ * Filtra los inválidos en lugar de fallar — más amistoso para la UI. */
+function sanearCamposCaptura(input: unknown): CampoCaptura[] | undefined {
+  if (!Array.isArray(input)) return undefined;
+  const out: CampoCaptura[] = [];
+  const clavesUsadas = new Set<string>();
+  for (const item of input) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const claveRaw = typeof r.clave === "string" ? r.clave : "";
+    // slug: minúsculas, alfanumérico + underscore
+    const clave = claveRaw
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40);
+    if (!clave || clavesUsadas.has(clave)) continue;
+    clavesUsadas.add(clave);
+    const label =
+      typeof r.label === "string" ? r.label.trim().slice(0, 60) : clave;
+    const descripcion =
+      typeof r.descripcion === "string"
+        ? r.descripcion.trim().slice(0, 280)
+        : "";
+    const obligatorio = r.obligatorio === true;
+    const pregunta_sugerida =
+      typeof r.pregunta_sugerida === "string"
+        ? r.pregunta_sugerida.trim().slice(0, 280)
+        : "";
+    const orden =
+      typeof r.orden === "number" && Number.isFinite(r.orden)
+        ? Math.max(1, Math.min(999, Math.floor(r.orden)))
+        : 100;
+    out.push({
+      clave,
+      label: label || clave,
+      descripcion,
+      obligatorio,
+      pregunta_sugerida,
+      orden,
+    });
+    if (out.length >= 30) break; // tope sano para no inflar el prompt
+  }
+  // Ordenamos por `orden` para que el orden lógico de captura sea
+  // estable y predecible para la IA.
+  out.sort((a, b) => (a.orden ?? 100) - (b.orden ?? 100));
+  return out;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +109,18 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     vapi_primer_mensaje?: unknown;
     vapi_max_segundos?: unknown;
     vapi_grabar?: unknown;
+    campos_a_capturar?: unknown;
+    agente_nombre?: unknown;
+    agente_rol?: unknown;
+    agente_personalidad?: unknown;
+    agente_idioma?: unknown;
+    agente_tono?: unknown;
+    mensaje_bienvenida?: unknown;
+    mensaje_no_entiende?: unknown;
+    palabras_handoff?: unknown;
+    temperatura?: unknown;
+    max_tokens?: unknown;
+    instrucciones_extra?: unknown;
   };
   try {
     payload = await req.json();
@@ -135,6 +198,62 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
       : undefined;
   const vapiGrabar =
     typeof payload.vapi_grabar === "boolean" ? payload.vapi_grabar : undefined;
+  const camposCaptura = sanearCamposCaptura(payload.campos_a_capturar);
+
+  // Campos del agente IA estructurados
+  const agente_nombre =
+    typeof payload.agente_nombre === "string"
+      ? payload.agente_nombre.trim().slice(0, 60)
+      : undefined;
+  const agente_rol =
+    typeof payload.agente_rol === "string"
+      ? payload.agente_rol.trim().slice(0, 80)
+      : undefined;
+  const agente_personalidad =
+    typeof payload.agente_personalidad === "string"
+      ? payload.agente_personalidad.trim().slice(0, 200)
+      : undefined;
+  const agente_idioma =
+    typeof payload.agente_idioma === "string"
+      ? payload.agente_idioma.trim().slice(0, 8)
+      : undefined;
+  const TONOS_VALIDOS = [
+    "formal",
+    "casual_amigable",
+    "profesional",
+    "cercano",
+    "directo",
+    "consultivo",
+  ] as const;
+  const tonoStr =
+    typeof payload.agente_tono === "string" ? payload.agente_tono : "";
+  const agente_tono = (TONOS_VALIDOS as readonly string[]).includes(tonoStr)
+    ? (tonoStr as (typeof TONOS_VALIDOS)[number])
+    : undefined;
+  const mensaje_bienvenida =
+    typeof payload.mensaje_bienvenida === "string"
+      ? payload.mensaje_bienvenida.slice(0, 800)
+      : undefined;
+  const mensaje_no_entiende =
+    typeof payload.mensaje_no_entiende === "string"
+      ? payload.mensaje_no_entiende.slice(0, 400)
+      : undefined;
+  const palabras_handoff =
+    typeof payload.palabras_handoff === "string"
+      ? payload.palabras_handoff.slice(0, 600)
+      : undefined;
+  const temperatura =
+    typeof payload.temperatura === "number" && Number.isFinite(payload.temperatura)
+      ? Math.max(0, Math.min(2, payload.temperatura))
+      : undefined;
+  const max_tokens =
+    typeof payload.max_tokens === "number" && Number.isFinite(payload.max_tokens)
+      ? Math.max(100, Math.min(8000, Math.floor(payload.max_tokens)))
+      : undefined;
+  const instrucciones_extra =
+    typeof payload.instrucciones_extra === "string"
+      ? payload.instrucciones_extra.slice(0, 4000)
+      : undefined;
 
   const actualizada = await actualizarCuenta(idCuenta, {
     etiqueta,
@@ -151,6 +270,18 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     vapi_primer_mensaje: vapiPrimerMsg,
     vapi_max_segundos: vapiMaxSeg,
     vapi_grabar: vapiGrabar,
+    campos_a_capturar: camposCaptura,
+    agente_nombre,
+    agente_rol,
+    agente_personalidad,
+    agente_idioma,
+    agente_tono,
+    mensaje_bienvenida,
+    mensaje_no_entiende,
+    palabras_handoff,
+    temperatura,
+    max_tokens,
+    instrucciones_extra,
   });
   if (!actualizada) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });

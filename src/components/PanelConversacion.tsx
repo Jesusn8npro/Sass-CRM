@@ -13,8 +13,8 @@ import { BurbujaMensaje } from "./BurbujaMensaje";
 import { InterruptorModo } from "./InterruptorModo";
 import { SelectorEmoji } from "./SelectorEmoji";
 import { GrabadoraAudio } from "./GrabadoraAudio";
-import { SelectorEtiquetas } from "./SelectorEtiquetas";
 import { BotonLlamar } from "./BotonLlamar";
+import { PanelDetalleCliente } from "./PanelDetalleCliente";
 
 interface Props {
   idCuenta: string;
@@ -38,10 +38,9 @@ export function PanelConversacion({
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [borrador, setBorrador] = useState("");
   const [enviando, setEnviando] = useState(false);
-  const [confirmandoBorrado, setConfirmandoBorrado] = useState(false);
-  const [borrando, setBorrando] = useState(false);
   const [subiendoMedia, setSubiendoMedia] = useState(false);
   const [errorMedia, setErrorMedia] = useState<string | null>(null);
+  const [detalleAbierto, setDetalleAbierto] = useState(false);
   const [emojiAbierto, setEmojiAbierto] = useState(false);
   const [respuestasAbiertas, setRespuestasAbiertas] = useState(false);
   const [respuestas, setRespuestas] = useState<RespuestaRapida[]>([]);
@@ -107,7 +106,7 @@ export function PanelConversacion({
   }, [mensajes.length]);
 
   useEffect(() => {
-    setConfirmandoBorrado(false);
+    setDetalleAbierto(false);
     setBorrador("");
     setEmojiAbierto(false);
     setRespuestasAbiertas(false);
@@ -290,23 +289,6 @@ export function PanelConversacion({
     }
   }
 
-  async function borrar() {
-    if (borrando) return;
-    setBorrando(true);
-    try {
-      const res = await fetch(
-        `/api/cuentas/${idCuenta}/conversaciones/${idConversacion}`,
-        { method: "DELETE" },
-      );
-      if (res.ok) {
-        onConversacionBorrada(idConversacion);
-      }
-    } finally {
-      setBorrando(false);
-      setConfirmandoBorrado(false);
-    }
-  }
-
   if (!conversacion) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -319,77 +301,118 @@ export function PanelConversacion({
   }
 
   const esIA = conversacion.modo === "IA";
+  const dc = conversacion.datos_capturados ?? {};
+  const nombreReal = dc.nombre?.trim() || conversacion.nombre || `+${conversacion.telefono}`;
+  const inicial = nombreReal[0]?.toUpperCase() ?? "?";
+  const score = conversacion.lead_score ?? 0;
+  const estadoLead = conversacion.estado_lead ?? "nuevo";
+  const paso = conversacion.paso_actual ?? "inicio";
+
+  // "En línea" si hubo un mensaje del cliente en los últimos 5 minutos
+  const ultimoMsg = conversacion.ultimo_mensaje_en
+    ? new Date(conversacion.ultimo_mensaje_en).getTime()
+    : 0;
+  const enLinea = Date.now() - ultimoMsg < 5 * 60 * 1000;
+
+  const colorEstado: Record<string, string> = {
+    nuevo: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+    contactado: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+    calificado: "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300",
+    interesado: "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+    negociacion: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
+    cerrado: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+    perdido: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+  };
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex shrink-0 flex-col gap-2 border-b border-zinc-200 bg-white/70 px-3 py-3 backdrop-blur-md md:flex-row md:items-center md:justify-between md:gap-4 md:px-6 md:py-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold tracking-tight text-zinc-900 md:text-base dark:text-zinc-100">
-            {conversacion.nombre ?? `+${conversacion.telefono}`}
-          </h2>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-zinc-500 dark:text-zinc-500">
-            +{conversacion.telefono}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
-          <Link
-            href={`/app/cuentas/${idCuenta}/contactos/${conversacion.id}`}
-            title="Ver perfil del contacto (Cliente 360)"
-            className="flex h-9 items-center gap-1.5 rounded-full border border-zinc-200 px-3 text-xs font-medium text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 bg-white/70 px-3 py-3 backdrop-blur-md md:px-5 md:py-3.5 dark:border-zinc-800 dark:bg-zinc-950/60">
+        {/* Lado izquierdo: avatar + nombre + paso + estado.
+            Click en avatar/nombre → vista 360 completa del cliente. */}
+        <Link
+          href={`/app/cuentas/${idCuenta}/contactos/${conversacion.id}`}
+          className="group flex min-w-0 items-center gap-3 rounded-xl px-1 py-1 -mx-1 -my-1 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/50"
+          title="Ver perfil completo del cliente"
+        >
+          <div className="relative shrink-0">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-base font-semibold text-white shadow-sm">
+              {inicial}
+            </div>
+            {enLinea && (
+              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-950" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-bold tracking-tight group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+              {nombreReal}
+            </h2>
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span className="text-zinc-500">Paso:</span>
+              <span className="font-mono font-semibold text-zinc-700 dark:text-zinc-300">
+                {paso}
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 font-semibold uppercase tracking-wider ${colorEstado[estadoLead] ?? colorEstado.nuevo}`}
+              >
+                {estadoLead}
+              </span>
+            </div>
+          </div>
+        </Link>
+
+        {/* Lado derecho: badge score + botones */}
+        <div className="flex shrink-0 items-center gap-1.5 md:gap-2">
+          {/* Lead score badge */}
+          <div
+            className="hidden items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 ring-1 ring-emerald-500/20 sm:inline-flex dark:bg-emerald-950/30 dark:text-emerald-300"
+            title="Lead score"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3 w-3">
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+              <polyline points="16 7 22 7 22 13" />
+            </svg>
+            <span className="font-mono text-xs font-bold">{score}</span>
+          </div>
+
+          {/* Botón Perfil (abre drawer) */}
+          <button
+            type="button"
+            onClick={() => setDetalleAbierto(true)}
+            title="Ver datos del cliente"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 transition-colors hover:border-emerald-500/40 hover:bg-emerald-50 hover:text-emerald-700 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-emerald-950/30"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
               <circle cx="12" cy="7" r="4" />
             </svg>
-            <span className="hidden sm:inline">Perfil</span>
-          </Link>
+          </button>
+
+          {/* Llamar */}
           <BotonLlamar
             cuenta={cuenta}
             telefono={conversacion.telefono}
             nombre={conversacion.nombre}
           />
-          <SelectorEtiquetas
-            idCuenta={idCuenta}
-            idConversacion={conversacion.id}
-          />
+
+          {/* Intervenir / IA */}
           <InterruptorModo
             idCuenta={idCuenta}
             idConversacion={conversacion.id}
             modo={conversacion.modo}
             onCambio={actualizarModo}
           />
-          {confirmandoBorrado ? (
-            <div className="flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 p-1">
-              <span className="px-2 text-[11px] text-red-700 dark:text-red-300">
-                ¿Seguro?
-              </span>
-              <button
-                type="button"
-                onClick={() => setConfirmandoBorrado(false)}
-                className="rounded-full px-2 py-1 text-[11px] text-zinc-500"
-              >
-                No
-              </button>
-              <button
-                type="button"
-                onClick={borrar}
-                disabled={borrando}
-                className="rounded-full bg-red-500/20 px-2 py-1 text-[11px] font-semibold text-red-700 disabled:opacity-50 dark:text-red-300"
-              >
-                {borrando ? "..." : "Sí"}
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmandoBorrado(true)}
-              className="rounded-full border border-zinc-200 px-3 py-1.5 text-[11px] font-medium text-zinc-500 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-700 md:text-xs dark:border-zinc-800 dark:text-zinc-400 dark:hover:text-red-300"
-            >
-              Borrar
-            </button>
-          )}
         </div>
       </header>
+
+      {/* Drawer con todos los datos del cliente */}
+      <PanelDetalleCliente
+        abierto={detalleAbierto}
+        idCuenta={idCuenta}
+        conversacion={conversacion}
+        onCerrar={() => setDetalleAbierto(false)}
+        onActualizada={(c) => setConversacion(c)}
+        onConversacionBorrada={onConversacionBorrada}
+      />
 
       <div ref={refScroll} className="flex-1 overflow-y-auto px-3 py-4 md:px-6 md:py-6">
         {mensajes.length === 0 ? (

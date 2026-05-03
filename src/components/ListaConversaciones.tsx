@@ -1,40 +1,6 @@
 "use client";
 
-import type {
-  ConversacionConPreview,
-  EtiquetaResumen,
-} from "@/lib/baseDatos";
-
-function clasesPillEtiqueta(color: string): string {
-  switch (color) {
-    case "rojo":
-      return "bg-red-500/15 text-red-700 dark:text-red-300";
-    case "ambar":
-      return "bg-amber-500/15 text-amber-700 dark:text-amber-300";
-    case "amarillo":
-      return "bg-yellow-500/15 text-yellow-700 dark:text-yellow-300";
-    case "esmeralda":
-      return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
-    case "azul":
-      return "bg-blue-500/15 text-blue-700 dark:text-blue-300";
-    case "violeta":
-      return "bg-violet-500/15 text-violet-700 dark:text-violet-300";
-    case "rosa":
-      return "bg-pink-500/15 text-pink-700 dark:text-pink-300";
-    default:
-      return "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300";
-  }
-}
-
-function PillEtiqueta({ etiqueta }: { etiqueta: EtiquetaResumen }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${clasesPillEtiqueta(etiqueta.color)}`}
-    >
-      {etiqueta.nombre}
-    </span>
-  );
-}
+import type { ConversacionConPreview } from "@/lib/baseDatos";
 
 interface Props {
   conversaciones: ConversacionConPreview[];
@@ -42,25 +8,45 @@ interface Props {
   onSeleccionar: (id: string) => void;
 }
 
-function tiempoRelativo(iso: string | null): string {
+/** Timestamp tipo Talos: "ahora" si <60s, "HH:MM" si hoy, "ayer", o
+ * fecha corta "DD/MM" para días anteriores. */
+function tiempoCorto(iso: string | null): string {
   if (!iso) return "";
-  const ahora = Date.now();
-  const ts = new Date(iso).getTime();
-  const diff = Math.max(0, Math.floor((ahora - ts) / 1000));
-  if (diff < 60) return "ahora";
-  if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
-  if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`;
-  return `hace ${Math.floor(diff / 86400)} d`;
+  const d = new Date(iso);
+  const ahora = new Date();
+  const diffMs = ahora.getTime() - d.getTime();
+  if (diffMs < 60_000) return "ahora";
+  const esHoy =
+    d.getFullYear() === ahora.getFullYear() &&
+    d.getMonth() === ahora.getMonth() &&
+    d.getDate() === ahora.getDate();
+  if (esHoy) {
+    return d.toLocaleTimeString("es-AR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  }
+  const ayer = new Date(ahora);
+  ayer.setDate(ahora.getDate() - 1);
+  const esAyer =
+    d.getFullYear() === ayer.getFullYear() &&
+    d.getMonth() === ayer.getMonth() &&
+    d.getDate() === ayer.getDate();
+  if (esAyer) return "ayer";
+  return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
 }
 
-function inicialesDe(nombre: string | null, telefono: string): string {
-  if (nombre) {
-    const partes = nombre.trim().split(/\s+/);
-    const i1 = partes[0]?.[0] ?? "";
-    const i2 = partes[1]?.[0] ?? "";
-    return (i1 + i2).toUpperCase() || telefono.slice(-2);
-  }
-  return telefono.slice(-2);
+/** Toma 1 sola letra del nombre real capturado, o nombre WhatsApp, o
+ * la última letra del teléfono. Igual que Talos. */
+function inicialDe(
+  nombreReal: string | null | undefined,
+  nombreWa: string | null,
+  telefono: string,
+): string {
+  const fuente = nombreReal?.trim() || nombreWa?.trim() || "";
+  if (fuente) return fuente.trim()[0]!.toUpperCase();
+  return telefono.slice(-1) || "?";
 }
 
 export function ListaConversaciones({
@@ -75,7 +61,7 @@ export function ListaConversaciones({
           <p className="text-sm font-medium text-zinc-900 dark:text-zinc-200">
             Sin conversaciones todavía
           </p>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-500">
+          <p className="mt-1 text-xs leading-relaxed text-zinc-500">
             Cuando alguien te escriba, aparecerá aquí.
           </p>
         </div>
@@ -84,80 +70,109 @@ export function ListaConversaciones({
   }
 
   return (
-    <ul className="flex flex-col gap-1 px-2 py-2">
+    <ul className="flex flex-col">
       {conversaciones.map((c) => {
         const seleccionada = c.id === idSeleccionada;
         const esIA = c.modo === "IA";
         const necesitaHumano = !!c.necesita_humano;
+        const sinLeer = c.mensajes_nuevos ?? 0;
+        const ultimoFueDelOperador =
+          c.vista_previa_rol === "asistente" || c.vista_previa_rol === "humano";
+
+        const nombreReal = c.datos_capturados?.nombre?.trim();
+        const nombreMostrable = nombreReal || c.nombre || `+${c.telefono}`;
+        const inicial = inicialDe(nombreReal, c.nombre, c.telefono);
+
+        const previewBruto = c.vista_previa_ultimo_mensaje ?? "";
+        const previewTexto = previewBruto.trim();
+
         return (
           <li key={c.id}>
             <button
               type="button"
               onClick={() => onSeleccionar(c.id)}
-              className={`group flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition-all duration-150 ${
+              className={`group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
                 seleccionada
-                  ? "border-zinc-300 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-800/60"
-                  : necesitaHumano
-                  ? "border-red-500/30 bg-red-500/5 hover:bg-red-500/10"
-                  : "border-transparent hover:border-zinc-200 hover:bg-white/60 dark:hover:border-zinc-800 dark:hover:bg-zinc-900/50"
+                  ? "bg-emerald-50/60 dark:bg-emerald-950/30"
+                  : "hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
               }`}
             >
-              <div
-                className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold tracking-wide ring-1 ${
-                  esIA
-                    ? "bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-300"
-                    : "bg-amber-500/10 text-amber-700 ring-amber-500/20 dark:text-amber-300"
-                }`}
-              >
-                {inicialesDe(c.nombre, c.telefono)}
-                {necesitaHumano && (
+              {/* Avatar circular grande con 1 letra + badge sin-leer */}
+              <div className="relative shrink-0">
+                <div
+                  className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-base font-semibold text-white shadow-sm"
+                  aria-hidden
+                >
+                  {inicial}
+                </div>
+                {sinLeer > 0 && (
                   <span
-                    className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 text-white ring-2 ring-white dark:ring-zinc-950"
-                    title="Necesita atención humana"
+                    className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white ring-2 ring-white dark:ring-zinc-950"
+                    title={`${sinLeer} sin responder`}
                   >
-                    <span className="h-1.5 w-1.5 animate-pulso-suave rounded-full bg-white" />
+                    {sinLeer > 9 ? "9+" : sinLeer}
                   </span>
                 )}
               </div>
+
               <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                    {c.nombre ?? c.telefono}
-                  </p>
-                  <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-600">
-                    {tiempoRelativo(c.ultimo_mensaje_en)}
-                  </span>
-                </div>
-                <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-500">
-                  {c.vista_previa_ultimo_mensaje ?? "Sin mensajes"}
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {necesitaHumano && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-red-700 dark:text-red-300">
-                      <span className="h-1 w-1 animate-pulso-suave rounded-full bg-red-500" />
-                      Atención
-                    </span>
-                  )}
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                      esIA
-                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                        : "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                {/* Línea 1: nombre + timestamp */}
+                <div className="flex items-center justify-between gap-2">
+                  <p
+                    className={`truncate text-sm ${
+                      sinLeer > 0
+                        ? "font-bold text-zinc-900 dark:text-zinc-50"
+                        : "font-semibold text-zinc-900 dark:text-zinc-100"
                     }`}
                   >
+                    {nombreMostrable}
+                  </p>
+                  <span
+                    className={`shrink-0 text-[11px] ${
+                      sinLeer > 0
+                        ? "font-semibold text-emerald-700 dark:text-emerald-400"
+                        : "font-medium text-zinc-400 dark:text-zinc-500"
+                    }`}
+                  >
+                    {tiempoCorto(c.ultimo_mensaje_en)}
+                  </span>
+                </div>
+
+                {/* Línea 2: preview + pill IA/H */}
+                <div className="mt-0.5 flex items-center justify-between gap-2">
+                  <p
+                    className={`min-w-0 truncate text-xs ${
+                      sinLeer > 0
+                        ? "font-semibold text-zinc-700 dark:text-zinc-200"
+                        : "text-zinc-500 dark:text-zinc-500"
+                    }`}
+                  >
+                    {ultimoFueDelOperador && (
+                      <span className="font-medium text-zinc-500 dark:text-zinc-500">
+                        Tu:{" "}
+                      </span>
+                    )}
+                    {previewTexto || "Sin mensajes"}
+                  </p>
+                  {/* Pill mini IA / H / Atender */}
+                  {necesitaHumano ? (
                     <span
-                      className={`h-1 w-1 rounded-full ${
-                        esIA ? "bg-emerald-500" : "bg-amber-500"
+                      className="shrink-0 rounded-full bg-red-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-700 dark:text-red-300"
+                      title="Necesita atención humana"
+                    >
+                      ⚠
+                    </span>
+                  ) : (
+                    <span
+                      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                        esIA
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
+                          : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
                       }`}
-                    />
-                    {esIA ? "IA" : "Humano"}
-                  </span>
-                  {(c.etiquetas ?? []).map((e) => (
-                    <PillEtiqueta key={e.id} etiqueta={e} />
-                  ))}
-                  <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600">
-                    +{c.telefono}
-                  </span>
+                    >
+                      {esIA ? "IA" : "H"}
+                    </span>
+                  )}
                 </div>
               </div>
             </button>
