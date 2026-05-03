@@ -13,15 +13,21 @@ build/
 .env.local
 .env*.local
 
-# datos en runtime
-data/
-auth/
+# datos en runtime (sesiones Baileys legacy en disco — ahora viven en Supabase)
+/data/
+/auth/
 
 # logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# logs de deploy / errores locales — pueden contener API keys
+# (Easy Panel imprime el `docker buildx --build-arg` con secrets)
+error_deploy.md
+deploy.log
+build.log
 
 # editor / sistema
 .vscode/
