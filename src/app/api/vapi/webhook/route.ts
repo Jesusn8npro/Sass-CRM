@@ -7,6 +7,7 @@ import {
   type EstadoLlamada,
 } from "@/lib/baseDatos";
 import { verificarSecretWebhook } from "@/lib/vapi";
+import { dispararWebhook } from "@/lib/webhooks";
 
 export const dynamic = "force-dynamic";
 
@@ -174,6 +175,21 @@ export async function POST(req: NextRequest) {
         console.error("[vapi-webhook] error insertando msg sistema:", err);
       }
     }
+    // Webhook saliente al usuario (n8n / Make / etc) — fire-and-forget
+    dispararWebhook(llamada.cuenta_id, "llamada_terminada", {
+      llamada_id: llamada.id,
+      vapi_call_id: callId,
+      conversacion_id: llamada.conversacion_id,
+      telefono: llamada.telefono,
+      direccion: llamada.direccion,
+      estado: mapearEstado(message.call?.status, message.call?.endedReason),
+      ended_reason: message.call?.endedReason ?? null,
+      duracion_seg: duracion,
+      costo_usd: typeof message.call?.cost === "number" ? message.call.cost : null,
+      transcripcion: transcript ?? null,
+      resumen: resumen ?? null,
+      audio_url: audio ?? null,
+    });
     return NextResponse.json({ ok: true });
   }
 

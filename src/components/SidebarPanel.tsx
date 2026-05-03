@@ -304,21 +304,29 @@ function ItemNav({
   actual: string | null;
   matchPaths?: string[];
 }) {
-  // Activo si el pathname termina con cualquiera de los matchPaths,
-  // o (default) con la última parte del href.
   const candidatos = matchPaths ?? [href.split("/").pop() ?? ""];
   const activo = !!actual && candidatos.some((p) => actual.includes(p));
   return (
-    <li>
+    <li className="relative">
+      {activo && (
+        <span
+          aria-hidden
+          className="absolute inset-y-1 left-0 w-[3px] rounded-r-full bg-gradient-to-b from-emerald-400 to-teal-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"
+        />
+      )}
       <Link
         href={href}
-        className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors ${
+        className={`group flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-xs transition-all ${
           activo
-            ? "bg-emerald-500/10 font-semibold text-emerald-700 dark:text-emerald-300"
-            : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+            ? "bg-gradient-to-r from-emerald-500/10 to-transparent font-semibold text-emerald-700 dark:text-emerald-300"
+            : "text-zinc-600 hover:translate-x-0.5 hover:bg-zinc-100/70 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/40 dark:hover:text-zinc-100"
         }`}
       >
-        <span className="shrink-0">{icono}</span>
+        <span
+          className={`shrink-0 transition-transform ${activo ? "scale-110" : "group-hover:scale-105"}`}
+        >
+          {icono}
+        </span>
         <span className="truncate">{etiqueta}</span>
       </Link>
     </li>

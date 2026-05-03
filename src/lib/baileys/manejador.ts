@@ -37,6 +37,7 @@ import {
 import { generarRespuesta, type RespuestaIA } from "../openai";
 import { construirPromptSistema } from "../construirPrompt";
 import { iniciarLlamadaConContexto } from "../llamadas";
+import { dispararWebhook } from "../webhooks";
 import {
   borrarTemporal,
   descargarBiblioteca,
@@ -382,6 +383,12 @@ async function generarYEnviarRespuesta(
       respuesta.transferir_a_humano.razon?.trim() || "Sin razón provista";
     console.log(`${prefijo} 🤝 HANDOFF a humano: ${razon}`);
     await marcarConversacionNecesitaHumano(conversacion.id, razon);
+    dispararWebhook(cuenta.id, "handoff_humano", {
+      conversacion_id: conversacion.id,
+      telefono: conversacion.telefono,
+      nombre: conversacion.nombre,
+      razon,
+    });
   }
 
   // Si el LLM decidió iniciar una llamada Vapi, dispararla con el
@@ -473,6 +480,16 @@ async function generarYEnviarRespuesta(
         console.log(
           `${prefijo} 📅 cita ${c.id} agendada: ${new Date(fecha).toISOString()} (${ac.tipo})`,
         );
+        dispararWebhook(cuenta.id, "cita_agendada", {
+          cita_id: c.id,
+          conversacion_id: conversacion.id,
+          cliente_nombre: c.cliente_nombre,
+          cliente_telefono: c.cliente_telefono,
+          fecha_hora: c.fecha_hora,
+          duracion_min: c.duracion_min,
+          tipo: c.tipo,
+          notas: c.notas,
+        });
         // Mensaje sistema visible en el panel
         try {
           await insertarMensaje(
@@ -882,6 +899,26 @@ export function registrarManejadores(
           media_path: mediaPath,
           wa_msg_id: msg.key.id ?? null,
         });
+
+        // Webhooks: notificar que llegó mensaje + (si la conv es nueva)
+        // que apareció contacto nuevo. Fire-and-forget — no bloquea.
+        dispararWebhook(cuentaId, "mensaje_recibido", {
+          conversacion_id: conversacion.id,
+          telefono: telefonoMostrable,
+          nombre: conversacion.nombre,
+          tipo,
+          contenido,
+          media_path: mediaPath,
+          wa_msg_id: msg.key.id ?? null,
+        });
+        if (eraConversacionNueva) {
+          dispararWebhook(cuentaId, "contacto_nuevo", {
+            conversacion_id: conversacion.id,
+            telefono: telefonoMostrable,
+            nombre: conversacion.nombre,
+            primer_mensaje: contenido,
+          });
+        }
 
         // Conversación nueva → en background traemos los últimos 50
         // mensajes de WhatsApp de este contacto. Llegan vía

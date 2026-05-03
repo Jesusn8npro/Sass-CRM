@@ -129,13 +129,13 @@ export default function PaginaWebhooks() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
-      <header className="mb-6 flex items-center justify-between">
+      <header className="mb-8 flex items-end justify-between">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-400">
             Integraciones
           </p>
-          <h1 className="text-lg font-bold tracking-tight">Webhooks</h1>
-          <p className="mt-1 text-sm text-zinc-500">
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">Webhooks</h1>
+          <p className="mt-1.5 max-w-xl text-sm text-zinc-500">
             Conectá el bot a n8n, Make, Zapier o cualquier endpoint propio.
             Recibís un POST con JSON cada vez que pasa un evento.
           </p>

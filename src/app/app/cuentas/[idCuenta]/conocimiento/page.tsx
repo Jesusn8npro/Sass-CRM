@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import type { EntradaConocimiento } from "@/lib/baseDatos";
 
 interface RespuestaConocimiento {
-  conocimiento: EntradaConocimiento[];
+  entradas: EntradaConocimiento[];
 }
 
 /**
@@ -32,7 +32,7 @@ export default function PaginaConocimiento() {
       });
       if (res.ok) {
         const d = (await res.json()) as RespuestaConocimiento;
-        setEntradas(d.conocimiento);
+        setEntradas(d.entradas ?? []);
       }
     } finally {
       setCargando(false);
@@ -81,14 +81,14 @@ export default function PaginaConocimiento() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
-      <header className="mb-6">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+      <header className="mb-8">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-400">
           Configuración
         </p>
-        <h1 className="text-lg font-bold tracking-tight">
+        <h1 className="mt-1 text-2xl font-bold tracking-tight">
           Base de conocimiento
         </h1>
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1.5 max-w-2xl text-sm text-zinc-500">
           El agente lee estas entradas y las usa para responder con
           información específica de tu negocio (FAQ, políticas, casos
           de uso, info de productos que no entran en el catálogo, etc.).

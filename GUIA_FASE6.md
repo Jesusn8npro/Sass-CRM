@@ -18,6 +18,7 @@ Este documento cubre **qué se hizo en la sub-fase 6.A.1**, **cómo probarlo**, 
 | **6.C.2 — Auth Baileys en Supabase Postgres** | ✅ Completada | Reemplaza `useMultiFileAuthState` (disco) por `useSupabaseAuthState` (DB). Sesión sobrevive reinicios del contenedor y permite multi-instancia. |
 | **6.C.3 — Vapi del .env (modelo SaaS) + notificaciones de desconexión** | ✅ Completada | Vapi keys en `.env` se usan como default para todas las cuentas; cada cuenta puede override. Notificaciones in-app + email (Resend) cuando una cuenta WhatsApp se desconecta. |
 | **6.D.1 — Rediseño tipo Talos Flow + páginas nuevas** | ✅ Completada | Sidebar persistente con secciones PRINCIPAL/CONFIGURACIÓN/VENTAS. Nuevas páginas: /clientes (CRM), /plantillas (envío masivo), /whatsapp (gestión QR/conexión), /conocimiento (standalone), /webhooks (n8n/Zapier). |
+| **6.D.2 — Polish visual + webhooks reales cableados** | ✅ Completada | Sidebar con accent bar gradient + hover translate. /clientes con stats hero. /whatsapp con state hero gradiente. Headers consistentes. **Webhooks ya disparan eventos reales**: mensaje_recibido, contacto_nuevo, handoff_humano, cita_agendada, llamada_terminada. |
 
 > **6.A.2 logrado**: cada usuario nuevo arranca de cero (0 cuentas, 0 conversaciones). Las APIs verifican `cuenta.usuario_id === auth.uid()` antes de devolver/mutar nada, y RLS por relación protege a nivel DB como segunda capa.
 

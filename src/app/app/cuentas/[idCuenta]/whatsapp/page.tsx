@@ -122,31 +122,74 @@ export default function PaginaWhatsApp() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
-      <header className="mb-6">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+      <header className="mb-8">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-400">
           Configuración
         </p>
-        <h1 className="text-lg font-bold tracking-tight">Conexión WhatsApp</h1>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight">
+          Conexión WhatsApp
+        </h1>
       </header>
 
-      {/* Estado */}
-      <section className="mb-6 rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span
-              className={`h-3 w-3 rounded-full ${estado!.color} ${cuenta.estado === "conectado" || cuenta.estado === "qr" ? "animate-pulse" : ""}`}
-            />
-            <div>
-              <p className="text-sm font-semibold">{estado!.texto}</p>
-              {cuenta.telefono && (
-                <p className="font-mono text-xs text-zinc-500">
-                  +{cuenta.telefono}
+      {/* Estado HERO */}
+      <section
+        className={`relative mb-6 overflow-hidden rounded-3xl border p-8 ${
+          cuenta.estado === "conectado"
+            ? "border-emerald-500/30 bg-gradient-to-br from-emerald-50 via-white to-teal-50 dark:from-emerald-950/40 dark:via-zinc-900 dark:to-teal-950/30"
+            : cuenta.estado === "qr" || cuenta.estado === "conectando"
+            ? "border-amber-500/30 bg-gradient-to-br from-amber-50 via-white to-orange-50 dark:from-amber-950/40 dark:via-zinc-900 dark:to-orange-950/30"
+            : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+        }`}
+      >
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.06]"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)",
+            backgroundSize: "16px 16px",
+          }}
+        />
+        <div className="relative">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div
+                className={`flex h-14 w-14 items-center justify-center rounded-2xl text-2xl shadow-lg ring-2 ${
+                  cuenta.estado === "conectado"
+                    ? "bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-emerald-500/30 ring-emerald-300/50"
+                    : "bg-zinc-100 text-zinc-500 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700"
+                }`}
+              >
+                {cuenta.estado === "conectado" ? "✓" : "📱"}
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                  {cuenta.etiqueta}
                 </p>
-              )}
+                <h2 className="text-xl font-bold tracking-tight">
+                  {estado!.texto}
+                </h2>
+                {cuenta.telefono && (
+                  <p className="mt-0.5 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+                    +{cuenta.telefono}
+                  </p>
+                )}
+              </div>
             </div>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                cuenta.estado === "conectado"
+                  ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/30"
+                  : cuenta.estado === "qr" || cuenta.estado === "conectando"
+                  ? "bg-amber-500 text-white"
+                  : "bg-zinc-300 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200"
+              }`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full bg-white ${cuenta.estado === "conectado" || cuenta.estado === "qr" ? "animate-pulse" : ""}`}
+              />
+              {cuenta.estado.toUpperCase()}
+            </span>
           </div>
-          <p className="text-xs text-zinc-500">{cuenta.etiqueta}</p>
-        </div>
 
         {/* QR */}
         {cuenta.estado === "qr" || cuenta.estado === "conectando" ? (
@@ -181,6 +224,7 @@ export default function PaginaWhatsApp() {
             </button>
           </div>
         )}
+        </div>
       </section>
 
       {/* Acciones */}
