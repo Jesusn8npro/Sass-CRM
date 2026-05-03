@@ -1292,65 +1292,130 @@ function SeccionVapi({ cuenta, onActualizada }: PropsSeccionBase) {
     }
   }
 
-  const tieneApiKey = !!cuenta.vapi_api_key?.trim();
+  // Estado efectivo Vapi (cuenta + fallback al .env del sistema).
+  // Lo consultamos al server para no tener que exponer la lógica de fallback acá.
+  const [estadoVapi, setEstadoVapi] = useState<{
+    publicKey: string | null;
+    phoneNumberId: string | null;
+    configurado: boolean;
+    origenes: {
+      api_key: "cuenta" | "env" | "ninguno";
+      public_key: "cuenta" | "env" | "ninguno";
+      phone_id: "cuenta" | "env" | "ninguno";
+    };
+  } | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/cuentas/${cuenta.id}/vapi/estado`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setEstadoVapi(d))
+      .catch(() => {});
+  }, [cuenta.id, exito]);
+
+  // tieneApiKey/tienePhone consideran TANTO cuenta como fallback al .env
+  const tieneApiKey = estadoVapi?.origenes.api_key !== "ninguno";
+  const tienePhone = estadoVapi?.origenes.phone_id !== "ninguno";
   const tieneAssistant = !!cuenta.vapi_assistant_id?.trim();
-  const tienePhone = !!cuenta.vapi_phone_id?.trim();
   const tieneVoz = !!cuenta.voz_elevenlabs?.trim();
   const todoListo = tieneApiKey && tieneAssistant && tienePhone && tieneVoz;
+  const usandoEnvKey = estadoVapi?.origenes.api_key === "env";
+  const usandoEnvPhone = estadoVapi?.origenes.phone_id === "env";
 
   return (
     <Tarjeta
       titulo="Llamadas (Vapi)"
-      descripcion="Llamadas de voz salientes con tu agente. Vapi orquesta Twilio + LLM + ElevenLabs. Cada cuenta usa su propia API key, su Phone Number ID y su Assistant — todo por negocio. Necesita además tener Voice ID configurado en la sección Voz arriba."
+      descripcion="Llamadas de voz salientes con tu agente. Vapi orquesta Twilio + LLM + ElevenLabs. Por default usa las keys del sistema (.env). Solo pegá tus propias keys abajo si querés usar una cuenta de Vapi distinta a la del sistema."
     >
+      {/* Banner si está usando .env del sistema */}
+      {(usandoEnvKey || usandoEnvPhone) && (
+        <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-800 dark:text-emerald-200">
+          ✓ <strong>Vapi listo</strong> — usando configuración del sistema
+          ({usandoEnvKey ? "API key" : ""}
+          {usandoEnvKey && usandoEnvPhone ? " + " : ""}
+          {usandoEnvPhone ? "Phone Number" : ""} desde <code className="font-mono">.env</code>).
+          No necesitás pegar nada acá. Los inputs de abajo son OPCIONALES — solo
+          se usan si querés override per-cuenta con otra cuenta de Vapi.
+        </div>
+      )}
+
       <form onSubmit={guardar} className="flex flex-col gap-4">
         <div>
-          <Etiqueta>Vapi API Key (private/secret)</Etiqueta>
+          <Etiqueta>
+            Vapi API Key (private/secret){" "}
+            <span className="ml-1 font-normal text-zinc-400 normal-case">
+              · {usandoEnvKey ? "override del .env" : "opcional"}
+            </span>
+          </Etiqueta>
           <input
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder="vapi_..."
+            placeholder={
+              usandoEnvKey
+                ? "(usando la del sistema — pegá otra solo si querés override)"
+                : "vapi_..."
+            }
             className={`${inputClases()} font-mono text-xs`}
           />
           <p className="mt-1.5 text-[11px] text-zinc-500">
-            Server-side, solo se usa desde el servidor para crear assistants
-            y disparar llamadas. La obtenés en{" "}
-            <a
-              href="https://dashboard.vapi.ai/account"
-              target="_blank"
-              rel="noreferrer"
-              className="text-emerald-700 underline dark:text-emerald-400"
-            >
-              dashboard.vapi.ai/account
-            </a>
-            .
+            {usandoEnvKey
+              ? "Hay una API key configurada a nivel sistema (.env del server). Si pegás una acá, esta cuenta usa la tuya en lugar de la del sistema."
+              : "Server-side. La obtenés en "}
+            {!usandoEnvKey && (
+              <a
+                href="https://dashboard.vapi.ai/account"
+                target="_blank"
+                rel="noreferrer"
+                className="text-emerald-700 underline dark:text-emerald-400"
+              >
+                dashboard.vapi.ai/account
+              </a>
+            )}
+            {!usandoEnvKey && "."}
           </p>
         </div>
 
         <div>
-          <Etiqueta>Vapi Public Key (opcional)</Etiqueta>
+          <Etiqueta>
+            Vapi Public Key{" "}
+            <span className="ml-1 font-normal text-zinc-400 normal-case">
+              ·{" "}
+              {estadoVapi?.origenes.public_key === "env"
+                ? "override del .env"
+                : estadoVapi?.origenes.public_key === "cuenta"
+                ? "configurada"
+                : "opcional"}
+            </span>
+          </Etiqueta>
           <input
             type="text"
             value={publicKey}
             onChange={(e) => setPublicKey(e.target.value)}
-            placeholder="sb_pub_... o UUID"
+            placeholder={
+              estadoVapi?.origenes.public_key === "env"
+                ? "(usando la del sistema — pegá otra solo si querés override)"
+                : "sb_pub_... o UUID"
+            }
             className={`${inputClases()} font-mono text-xs`}
           />
           <p className="mt-1.5 text-[11px] text-zinc-500">
-            Opcional — necesaria para probar tus assistants con el
-            micrófono desde el navegador (sin gastar minutos de outbound).
-            Es safe-to-expose por diseño de Vapi.
+            Necesaria para probar assistants con el micrófono desde el navegador
+            (sin gastar minutos de outbound). Safe-to-expose por diseño de Vapi.
           </p>
         </div>
 
         <div>
           <div className="flex items-center justify-between">
-            <Etiqueta>Phone Number ID</Etiqueta>
+            <Etiqueta>
+              Phone Number ID{" "}
+              <span className="ml-1 font-normal text-zinc-400 normal-case">
+                · {usandoEnvPhone ? "override del .env" : "opcional"}
+              </span>
+            </Etiqueta>
             <button
               type="button"
               onClick={cargarPhones}
-              disabled={!apiKey.trim() || cargandoPhones}
+              disabled={(!apiKey.trim() && !tieneApiKey) || cargandoPhones}
               className="text-[11px] text-emerald-700 underline disabled:opacity-50 dark:text-emerald-400"
             >
               {cargandoPhones ? "Cargando..." : "Buscar mis números"}
@@ -1360,7 +1425,11 @@ function SeccionVapi({ cuenta, onActualizada }: PropsSeccionBase) {
             type="text"
             value={phoneId}
             onChange={(e) => setPhoneId(e.target.value)}
-            placeholder="phone_xxxxxxxx-xxxx-..."
+            placeholder={
+              usandoEnvPhone
+                ? "(usando el del sistema — pegá otro solo si querés override)"
+                : "phone_xxxxxxxx-xxxx-..."
+            }
             className={`${inputClases()} font-mono text-xs`}
           />
           {phones.length > 0 && (
@@ -1506,8 +1575,28 @@ function SeccionVapi({ cuenta, onActualizada }: PropsSeccionBase) {
             Estado
           </p>
           <ul className="flex flex-col gap-1 text-[12px] text-zinc-700 dark:text-zinc-300">
-            <ItemEstado activo={tieneApiKey} texto="API key configurada" />
-            <ItemEstado activo={tienePhone} texto="Phone Number ID configurado" />
+            <ItemEstado
+              activo={tieneApiKey}
+              texto={
+                "API key configurada" +
+                (estadoVapi?.origenes.api_key === "env"
+                  ? " (desde sistema .env)"
+                  : estadoVapi?.origenes.api_key === "cuenta"
+                  ? " (override per-cuenta)"
+                  : "")
+              }
+            />
+            <ItemEstado
+              activo={tienePhone}
+              texto={
+                "Phone Number ID configurado" +
+                (estadoVapi?.origenes.phone_id === "env"
+                  ? " (desde sistema .env)"
+                  : estadoVapi?.origenes.phone_id === "cuenta"
+                  ? " (override per-cuenta)"
+                  : "")
+              }
+            />
             <ItemEstado
               activo={tieneVoz}
               texto="Voice ID de ElevenLabs (sección Voz)"
