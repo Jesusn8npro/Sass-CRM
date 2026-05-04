@@ -73,16 +73,18 @@ export default function PaginaWhatsApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idCuenta]);
 
-  async function desconectar(limpiarAuth: boolean) {
-    if (
-      !confirm(
-        limpiarAuth
-          ? "Vas a desconectar y BORRAR la sesión. Necesitarás reescanear QR para volver. ¿Continuar?"
-          : "Desconectar momentáneamente la cuenta?",
-      )
-    ) {
-      return;
-    }
+  async function desconectar(opciones: {
+    limpiarAuth: boolean;
+    pausar?: boolean;
+  }) {
+    const { limpiarAuth, pausar } = opciones;
+    const confirmacion = pausar
+      ? "Vas a APAGAR la cuenta. El bot deja de responder y NO se va a reconectar hasta que la reactives manualmente. ¿Continuar?"
+      : limpiarAuth
+      ? "Vas a desconectar y BORRAR la sesión. El bot va a generar un QR nuevo automáticamente. ¿Continuar?"
+      : "Desconectar momentáneamente la cuenta?";
+    if (!confirm(confirmacion)) return;
+
     setAccion(true);
     setMensaje(null);
     try {
@@ -91,15 +93,39 @@ export default function PaginaWhatsApp() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ limpiar_auth: limpiarAuth }),
+          body: JSON.stringify({ pausar: !!pausar }),
         },
       );
       if (res.ok) {
         setMensaje(
-          limpiarAuth
-            ? "Sesión borrada. Refrescá para ver el QR nuevo."
+          pausar
+            ? "Cuenta apagada. No se va a reconectar hasta que la reactives."
+            : limpiarAuth
+            ? "Sesión borrada. El bot genera QR nuevo en unos segundos."
             : "Desconectada.",
         );
+        await cargar();
+      } else {
+        const d = (await res.json().catch(() => ({}))) as { error?: string };
+        setMensaje("✗ " + (d.error ?? `HTTP ${res.status}`));
+      }
+    } finally {
+      setAccion(false);
+    }
+  }
+
+  async function reactivar() {
+    if (!confirm("Reactivar la cuenta? El bot va a generar un QR nuevo para escanear.")) return;
+    setAccion(true);
+    setMensaje(null);
+    try {
+      const res = await fetch(`/api/cuentas/${idCuenta}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ esta_activa: true }),
+      });
+      if (res.ok) {
+        setMensaje("Cuenta reactivada. Esperá unos segundos al QR.");
         await cargar();
       } else {
         const d = (await res.json().catch(() => ({}))) as { error?: string };
@@ -207,6 +233,24 @@ export default function PaginaWhatsApp() {
             ✓ Tu WhatsApp está conectado. El bot recibe y responde mensajes
             automáticamente.
           </div>
+        ) : cuenta.esta_activa === false ? (
+          <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-6 text-center">
+            <p className="mb-1 text-sm font-semibold text-amber-800 dark:text-amber-200">
+              Cuenta apagada
+            </p>
+            <p className="mb-4 text-xs text-amber-700 dark:text-amber-300/80">
+              Esta cuenta está pausada. El bot no recibe ni responde mensajes.
+              Reactivala cuando quieras volver a usarla.
+            </p>
+            <button
+              type="button"
+              onClick={reactivar}
+              disabled={accion}
+              className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-400 disabled:opacity-50"
+            >
+              Reactivar cuenta
+            </button>
+          </div>
         ) : (
           <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-6 text-center dark:border-zinc-700 dark:bg-zinc-950/50">
             <p className="mb-3 text-sm text-zinc-500">
@@ -216,7 +260,7 @@ export default function PaginaWhatsApp() {
             </p>
             <button
               type="button"
-              onClick={() => desconectar(true)}
+              onClick={() => desconectar({ limpiarAuth: true })}
               disabled={accion}
               className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-400 disabled:opacity-50"
             >
@@ -237,19 +281,19 @@ export default function PaginaWhatsApp() {
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => desconectar(false)}
+              onClick={() => desconectar({ limpiarAuth: false })}
               disabled={accion}
               className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-xs font-medium hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950"
             >
-              Desconectar (mantener sesión)
+              Regenerar QR (mantener cuenta activa)
             </button>
             <button
               type="button"
-              onClick={() => desconectar(true)}
+              onClick={() => desconectar({ limpiarAuth: true, pausar: true })}
               disabled={accion}
               className="rounded-full border border-red-300 bg-white px-4 py-2 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-700 dark:bg-zinc-950 dark:text-red-300"
             >
-              Cerrar sesión y borrar credenciales
+              Apagar cuenta (no reconecta sola)
             </button>
           </div>
           {mensaje && (

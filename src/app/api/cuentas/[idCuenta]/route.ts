@@ -282,6 +282,10 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     (MODOS_RESP as readonly string[]).includes(payload.modo_respuesta)
       ? (payload.modo_respuesta as (typeof MODOS_RESP)[number])
       : undefined;
+  const esta_activa =
+    typeof (payload as { esta_activa?: unknown }).esta_activa === "boolean"
+      ? (payload as { esta_activa: boolean }).esta_activa
+      : undefined;
 
   const actualizada = await actualizarCuenta(idCuenta, {
     etiqueta,
@@ -311,6 +315,7 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     max_tokens,
     instrucciones_extra,
     modo_respuesta,
+    esta_activa,
   });
   if (!actualizada) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });

@@ -92,6 +92,7 @@ export async function actualizarCuenta(
     wa_verificada_en: string | null;
     wa_ultimo_error: string | null;
     auto_seguimiento_activo: boolean;
+    esta_activa: boolean;
   }>,
 ): Promise<Cuenta | null> {
   const cambios: Record<string, unknown> = {};
