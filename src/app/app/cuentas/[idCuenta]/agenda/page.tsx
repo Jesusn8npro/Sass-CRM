@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import type { Cita, Cuenta, EstadoCita } from "@/lib/baseDatos";
+import { usePollingVisible } from "@/components/usePollingVisible";
 import {
   FiltroEstado,
   NOMBRES_MES,
@@ -54,11 +55,7 @@ export default function PaginaAgenda() {
     }
   }, [idCuenta]);
 
-  useEffect(() => {
-    void cargar();
-    const t = setInterval(cargar, 15000);
-    return () => clearInterval(t);
-  }, [cargar]);
+  usePollingVisible(cargar, 30000);
 
   // Stats hero
   const stats = useMemo(() => {

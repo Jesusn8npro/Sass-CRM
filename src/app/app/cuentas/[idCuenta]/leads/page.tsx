@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   ACTORS_DISPONIBLES,
   type DefinicionActor,
 } from "@/lib/apify/actors";
+import { usePollingVisible } from "@/components/usePollingVisible";
 import { LeadDetalleModal } from "./_modal";
 import { FilaRun } from "./_filaRun";
 
@@ -52,28 +53,21 @@ export default function PaginaLeads() {
   const [runs, setRuns] = useState<RunApifyUI[]>([]);
   const [leadAbierto, setLeadAbierto] = useState<LeadUI | null>(null);
 
-  useEffect(() => {
+  const cargar = useCallback(async () => {
     if (!idCuenta) return;
-    let cancelado = false;
-    async function cargar() {
-      try {
-        const r = await fetch(`/api/cuentas/${idCuenta}/apify/runs`, {
-          cache: "no-store",
-        });
-        if (!r.ok) return;
-        const d = (await r.json()) as RespuestaRuns;
-        if (!cancelado) setRuns(d.runs);
-      } catch {
-        /* ignorar */
-      }
+    try {
+      const r = await fetch(`/api/cuentas/${idCuenta}/apify/runs`, {
+        cache: "no-store",
+      });
+      if (!r.ok) return;
+      const d = (await r.json()) as RespuestaRuns;
+      setRuns(d.runs);
+    } catch {
+      /* ignorar */
     }
-    cargar();
-    const i = setInterval(cargar, 4000);
-    return () => {
-      cancelado = true;
-      clearInterval(i);
-    };
   }, [idCuenta]);
+
+  usePollingVisible(cargar, 15000);
 
   async function lanzar(e: React.FormEvent) {
     e.preventDefault();

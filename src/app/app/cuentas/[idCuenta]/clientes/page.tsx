@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import type {
   ConversacionConPreview,
@@ -8,6 +8,7 @@ import type {
   ContactoTelefonoConContexto,
   EstadoLead,
 } from "@/lib/baseDatos";
+import { usePollingVisible } from "@/components/usePollingVisible";
 
 import {
   BarraScore,
@@ -39,46 +40,38 @@ export default function PaginaClientes() {
   const [cargando, setCargando] = useState(true);
   const [seleccionada, setSeleccionada] = useState<FilaCliente | null>(null);
 
-  useEffect(() => {
-    let cancelado = false;
-    async function cargar() {
-      try {
-        const [r1, r2, r3] = await Promise.all([
-          fetch(`/api/cuentas/${idCuenta}/conversaciones`, {
-            cache: "no-store",
-          }),
-          fetch(`/api/cuentas/${idCuenta}/contactos-email`, {
-            cache: "no-store",
-          }),
-          fetch(`/api/cuentas/${idCuenta}/contactos-telefono`, {
-            cache: "no-store",
-          }),
-        ]);
-        if (cancelado) return;
-        if (r1.ok) {
-          const d = (await r1.json()) as RespuestaConvs;
-          setConvs(d.conversaciones);
-        }
-        if (r2.ok) {
-          const d = (await r2.json()) as RespuestaEmails;
-          setEmails(d.contactos);
-        }
-        if (r3.ok) {
-          const d = (await r3.json()) as RespuestaTels;
-          setTels(d.contactos);
-        }
-      } finally {
-        if (!cancelado) setCargando(false);
+  const cargar = useCallback(async () => {
+    try {
+      const [r1, r2, r3] = await Promise.all([
+        fetch(`/api/cuentas/${idCuenta}/conversaciones`, {
+          cache: "no-store",
+        }),
+        fetch(`/api/cuentas/${idCuenta}/contactos-email`, {
+          cache: "no-store",
+        }),
+        fetch(`/api/cuentas/${idCuenta}/contactos-telefono`, {
+          cache: "no-store",
+        }),
+      ]);
+      if (r1.ok) {
+        const d = (await r1.json()) as RespuestaConvs;
+        setConvs(d.conversaciones);
       }
+      if (r2.ok) {
+        const d = (await r2.json()) as RespuestaEmails;
+        setEmails(d.contactos);
+      }
+      if (r3.ok) {
+        const d = (await r3.json()) as RespuestaTels;
+        setTels(d.contactos);
+      }
+    } finally {
+      setCargando(false);
     }
-    void cargar();
-    // Auto-refresh cada 8s para ver datos capturados llegando en vivo.
-    const intv = setInterval(cargar, 8000);
-    return () => {
-      cancelado = true;
-      clearInterval(intv);
-    };
   }, [idCuenta]);
+
+  // Auto-refresh cada 20s para ver datos capturados llegando en vivo.
+  usePollingVisible(cargar, 20000);
 
   const filas: FilaCliente[] = useMemo(() => {
     const mapaEmail = new Map<string, string>();

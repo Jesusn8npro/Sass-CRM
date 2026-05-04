@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import type { Cuenta, EstadoLlamada, LlamadaVapi } from "@/lib/baseDatos";
 import { InterruptorTema } from "@/components/InterruptorTema";
 import { LlamadasProgramadas } from "@/components/LlamadasProgramadas";
+import { usePollingVisible } from "@/components/usePollingVisible";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -90,11 +91,7 @@ export default function PaginaLlamadas() {
     }
   }, [idCuenta, seleccionada]);
 
-  useEffect(() => {
-    cargarTodo();
-    const t = setInterval(cargarTodo, 5000);
-    return () => clearInterval(t);
-  }, [cargarTodo]);
+  usePollingVisible(cargarTodo, 15000);
 
   async function refrescarDetalle(id: string) {
     try {

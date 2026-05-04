@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import type {
@@ -11,6 +11,7 @@ import type {
   Mensaje,
 } from "@/lib/baseDatos";
 import { InterruptorTema } from "@/components/InterruptorTema";
+import { usePollingVisible } from "@/components/usePollingVisible";
 
 interface RespuestaCliente360 {
   conversacion: Conversacion;
@@ -75,11 +76,7 @@ export default function PaginaCliente360() {
     }
   }, [idCuenta, idConv]);
 
-  useEffect(() => {
-    cargar();
-    const t = setInterval(cargar, 8000);
-    return () => clearInterval(t);
-  }, [cargar]);
+  usePollingVisible(cargar, 20000);
 
   async function llamar() {
     if (!data) return;

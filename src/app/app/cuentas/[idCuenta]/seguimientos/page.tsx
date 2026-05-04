@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import type { Cuenta, EstadoSeguimiento, SeguimientoProgramado } from "@/lib/baseDatos";
 import { InterruptorTema } from "@/components/InterruptorTema";
+import { usePollingVisible } from "@/components/usePollingVisible";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -84,11 +85,7 @@ export default function PaginaSeguimientos() {
     }
   }, [idCuenta]);
 
-  useEffect(() => {
-    cargar();
-    const t = setInterval(cargar, 15000);
-    return () => clearInterval(t);
-  }, [cargar]);
+  usePollingVisible(cargar, 30000);
 
   async function cancelar(id: string) {
     if (!confirm("¿Cancelar este seguimiento? No se enviará al cliente."))

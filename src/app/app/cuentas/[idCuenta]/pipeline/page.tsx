@@ -2,7 +2,6 @@
 
 import {
   useCallback,
-  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -25,6 +24,7 @@ import type {
   EtapaPipeline,
 } from "@/lib/baseDatos";
 import { InterruptorTema } from "@/components/InterruptorTema";
+import { usePollingVisible } from "@/components/usePollingVisible";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -95,16 +95,9 @@ export default function PaginaPipeline() {
     }
   }, [idCuenta]);
 
-  useEffect(() => {
-    cargarTodo();
-  }, [cargarTodo]);
-
   // Polling suave para que cuando lleguen mensajes nuevos, las tarjetas
   // muevan su preview sin perder el estado del Kanban.
-  useEffect(() => {
-    const t = setInterval(cargarTodo, 8000);
-    return () => clearInterval(t);
-  }, [cargarTodo]);
+  usePollingVisible(cargarTodo, 20000);
 
   const conversacionesPorEtapa = useMemo(() => {
     const mapa = new Map<string | "sin", ConversacionConPreview[]>();

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { usePollingVisible } from "@/components/usePollingVisible";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import type {
@@ -121,11 +122,7 @@ export default function PaginaDashboard() {
     }
   }
 
-  useEffect(() => {
-    cargarTodo();
-    const t = setInterval(cargarTodo, 10000);
-    return () => clearInterval(t);
-  }, [cargarTodo]);
+  usePollingVisible(cargarTodo, 30000);
 
   const maxBarra = metricas
     ? Math.max(1, ...metricas.mensajes_por_dia.map((d) => d.count))

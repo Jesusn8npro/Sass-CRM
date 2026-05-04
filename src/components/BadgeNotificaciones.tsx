@@ -1,34 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { usePollingVisible } from "./usePollingVisible";
 
 /**
  * Badge en sidebar con count de notificaciones no leídas. Polling
- * cada 30s. Click → /app/notificaciones.
+ * cada 60s. Click → /app/notificaciones.
  */
 export function BadgeNotificaciones() {
   const [noLeidas, setNoLeidas] = useState(0);
 
-  useEffect(() => {
-    let cancelado = false;
-    async function cargar() {
-      try {
-        const res = await fetch("/api/notificaciones", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = (await res.json()) as { no_leidas: number };
-        if (!cancelado) setNoLeidas(data.no_leidas);
-      } catch {
-        // ignorar
-      }
+  const cargar = useCallback(async () => {
+    try {
+      const res = await fetch("/api/notificaciones", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { no_leidas: number };
+      setNoLeidas(data.no_leidas);
+    } catch {
+      // ignorar
     }
-    void cargar();
-    const t = setInterval(() => void cargar(), 30_000);
-    return () => {
-      cancelado = true;
-      clearInterval(t);
-    };
   }, []);
+  usePollingVisible(cargar, 60_000);
 
   return (
     <Link

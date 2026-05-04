@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { usePollingVisible } from "./usePollingVisible";
 
 interface RespuestaCreditos {
   saldo: { saldo_actual: number };
@@ -14,27 +15,19 @@ interface RespuestaCreditos {
 export function PillCreditos({ idCuenta }: { idCuenta: string }) {
   const [saldo, setSaldo] = useState<number | null>(null);
 
-  useEffect(() => {
-    let cancelado = false;
-    async function cargar() {
-      try {
-        const res = await fetch(`/api/cuentas/${idCuenta}/creditos`, {
-          cache: "no-store",
-        });
-        if (!res.ok) return;
-        const d = (await res.json()) as RespuestaCreditos;
-        if (!cancelado) setSaldo(d.saldo.saldo_actual);
-      } catch {
-        /* ignorar */
-      }
+  const cargar = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/cuentas/${idCuenta}/creditos`, {
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const d = (await res.json()) as RespuestaCreditos;
+      setSaldo(d.saldo.saldo_actual);
+    } catch {
+      /* ignorar */
     }
-    cargar();
-    const i = setInterval(cargar, 30_000);
-    return () => {
-      cancelado = true;
-      clearInterval(i);
-    };
   }, [idCuenta]);
+  usePollingVisible(cargar, 60_000);
 
   const bajo = saldo !== null && saldo < 10;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type {
   ConversacionConPreview,
@@ -9,6 +9,7 @@ import type {
 import { ModalNuevaConversacion } from "./ModalNuevaConversacion";
 import { ListaConversaciones } from "./ListaConversaciones";
 import { PanelConversacion } from "./PanelConversacion";
+import { usePollingVisible } from "./usePollingVisible";
 
 interface CuentaConEstado extends Cuenta {
   bot_vivo?: boolean;
@@ -44,91 +45,36 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
   const [confirmarAbierto, setConfirmarAbierto] = useState(false);
   const refDeepLinkAplicado = useRef(false);
 
-  // Polling de cuenta (estado de conexión, etc) cada 8s
-  useEffect(() => {
-    let cancelado = false;
-    async function cargar() {
-      try {
-        const res = await fetch(`/api/cuentas/${idCuenta}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as RespuestaCuenta;
-        if (!cancelado) setCuenta(data.cuenta);
-      } catch {
-        /* ignorar */
-      }
+  // Polling de cuenta (estado de conexión, etc) cada 15s
+  const cargarCuenta = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/cuentas/${idCuenta}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as RespuestaCuenta;
+      setCuenta(data.cuenta);
+    } catch {
+      /* ignorar */
     }
-    cargar();
-    let intervalo: NodeJS.Timeout | null = null;
-    const arrancar = () => {
-      if (intervalo) clearInterval(intervalo);
-      intervalo = setInterval(cargar, 8000);
-    };
-    const detener = () => {
-      if (intervalo) {
-        clearInterval(intervalo);
-        intervalo = null;
-      }
-    };
-    const onVis = () => {
-      if (document.visibilityState === "visible") {
-        cargar();
-        arrancar();
-      } else detener();
-    };
-    if (document.visibilityState === "visible") arrancar();
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      cancelado = true;
-      detener();
-      document.removeEventListener("visibilitychange", onVis);
-    };
   }, [idCuenta]);
+  usePollingVisible(cargarCuenta, 15000);
 
-  // Polling de conversaciones cada 6s, solo si la cuenta está conectada
-  useEffect(() => {
-    if (cuenta?.estado !== "conectado") return;
-    let cancelado = false;
-    async function cargar() {
-      try {
-        const res = await fetch(
-          `/api/cuentas/${idCuenta}/conversaciones`,
-          { cache: "no-store" },
-        );
-        if (!res.ok) return;
-        const data = (await res.json()) as RespuestaConversaciones;
-        if (!cancelado) setConversaciones(data.conversaciones);
-      } catch {
-        /* ignorar */
-      }
+  // Polling de conversaciones cada 12s, solo si la cuenta está conectada
+  const cargarConversaciones = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/cuentas/${idCuenta}/conversaciones`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as RespuestaConversaciones;
+      setConversaciones(data.conversaciones);
+    } catch {
+      /* ignorar */
     }
-    cargar();
-    let intervalo: NodeJS.Timeout | null = null;
-    const arrancar = () => {
-      if (intervalo) clearInterval(intervalo);
-      intervalo = setInterval(cargar, 6000);
-    };
-    const detener = () => {
-      if (intervalo) {
-        clearInterval(intervalo);
-        intervalo = null;
-      }
-    };
-    const onVis = () => {
-      if (document.visibilityState === "visible") {
-        cargar();
-        arrancar();
-      } else detener();
-    };
-    if (document.visibilityState === "visible") arrancar();
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      cancelado = true;
-      detener();
-      document.removeEventListener("visibilitychange", onVis);
-    };
-  }, [idCuenta, cuenta?.estado]);
+  }, [idCuenta]);
+  usePollingVisible(cargarConversaciones, 12000, cuenta?.estado === "conectado");
 
   // Deep link ?conv=X
   useEffect(() => {
