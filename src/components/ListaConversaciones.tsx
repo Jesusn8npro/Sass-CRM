@@ -1,6 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import type { ConversacionConPreview } from "@/lib/baseDatos";
+import { MenuContextoConversacion } from "./MenuContextoConversacion";
+import { useLongPress } from "./useLongPress";
 
 interface Props {
   conversaciones: ConversacionConPreview[];
@@ -11,6 +14,10 @@ interface Props {
   modoSeleccion?: boolean;
   seleccionadas?: Set<string>;
   onToggleSeleccion?: (id: string) => void;
+  /** Disparado cuando el user pide eliminar via long-press / right-click. */
+  onEliminar?: (id: string) => void;
+  /** Disparado cuando el user pide marcar como leída via menú. */
+  onMarcarLeida?: (id: string) => void;
 }
 
 /** Timestamp tipo Talos: "ahora" si <60s, "HH:MM" si hoy, "ayer", o
@@ -61,7 +68,13 @@ export function ListaConversaciones({
   modoSeleccion = false,
   seleccionadas,
   onToggleSeleccion,
+  onEliminar,
+  onMarcarLeida,
 }: Props) {
+  const [menu, setMenu] = useState<{
+    idConv: string;
+    pos: { x: number; y: number };
+  } | null>(null);
   if (conversaciones.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center px-6 text-center">
@@ -77,134 +90,203 @@ export function ListaConversaciones({
     );
   }
 
+  const convDelMenu = menu
+    ? conversaciones.find((c) => c.id === menu.idConv)
+    : null;
+
   return (
-    <ul className="flex flex-col">
-      {conversaciones.map((c) => {
-        const seleccionada = c.id === idSeleccionada;
-        const esIA = c.modo === "IA";
-        const necesitaHumano = !!c.necesita_humano;
-        const sinLeer = c.mensajes_nuevos ?? 0;
-        const ultimoFueDelOperador =
-          c.vista_previa_rol === "asistente" || c.vista_previa_rol === "humano";
+    <>
+      <ul className="flex flex-col">
+        {conversaciones.map((c) => (
+          <ItemConversacion
+            key={c.id}
+            c={c}
+            seleccionada={c.id === idSeleccionada}
+            checked={seleccionadas?.has(c.id) ?? false}
+            modoSeleccion={modoSeleccion}
+            onClickPrincipal={() =>
+              modoSeleccion
+                ? onToggleSeleccion?.(c.id)
+                : onSeleccionar(c.id)
+            }
+            onLongPress={(pos) => {
+              if (modoSeleccion) return; // long-press desactivado en modo selección
+              setMenu({ idConv: c.id, pos });
+            }}
+          />
+        ))}
+      </ul>
 
-        const nombreReal = c.datos_capturados?.nombre?.trim();
-        const nombreMostrable = nombreReal || c.nombre || `+${c.telefono}`;
-        const inicial = inicialDe(nombreReal, c.nombre, c.telefono);
+      {menu && convDelMenu && (
+        <MenuContextoConversacion
+          posicion={menu.pos}
+          onCerrar={() => setMenu(null)}
+          acciones={[
+            ...((convDelMenu.mensajes_nuevos ?? 0) > 0 && onMarcarLeida
+              ? [
+                  {
+                    etiqueta: "Marcar como leída",
+                    icono: "✓",
+                    onClick: () => onMarcarLeida(convDelMenu.id),
+                  },
+                ]
+              : []),
+            {
+              etiqueta: "Abrir conversación",
+              icono: "💬",
+              onClick: () => onSeleccionar(convDelMenu.id),
+            },
+            ...(onEliminar
+              ? [
+                  {
+                    etiqueta: "Eliminar conversación",
+                    icono: "🗑",
+                    destructiva: true,
+                    onClick: () => onEliminar(convDelMenu.id),
+                  },
+                ]
+              : []),
+          ]}
+        />
+      )}
+    </>
+  );
+}
 
-        const previewBruto = c.vista_previa_ultimo_mensaje ?? "";
-        const previewTexto = previewBruto.trim();
+// ============================================================
+// Item de la lista (componente interno para poder usar useLongPress
+// per-instancia sin violar reglas de hooks)
+// ============================================================
 
-        const checked = seleccionadas?.has(c.id) ?? false;
+function ItemConversacion({
+  c,
+  seleccionada,
+  checked,
+  modoSeleccion,
+  onClickPrincipal,
+  onLongPress,
+}: {
+  c: ConversacionConPreview;
+  seleccionada: boolean;
+  checked: boolean;
+  modoSeleccion: boolean;
+  onClickPrincipal: () => void;
+  onLongPress: (pos: { x: number; y: number }) => void;
+}) {
+  const longPress = useLongPress(onLongPress);
 
-        return (
-          <li key={c.id}>
-            <button
-              type="button"
-              onClick={() =>
-                modoSeleccion
-                  ? onToggleSeleccion?.(c.id)
-                  : onSeleccionar(c.id)
-              }
-              className={`group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
-                modoSeleccion && checked
-                  ? "bg-rose-50/60 dark:bg-rose-950/30"
-                  : seleccionada && !modoSeleccion
-                  ? "bg-emerald-50/60 dark:bg-emerald-950/30"
-                  : "hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+  const esIA = c.modo === "IA";
+  const necesitaHumano = !!c.necesita_humano;
+  const sinLeer = c.mensajes_nuevos ?? 0;
+  const ultimoFueDelOperador =
+    c.vista_previa_rol === "asistente" || c.vista_previa_rol === "humano";
+
+  const nombreReal = c.datos_capturados?.nombre?.trim();
+  const nombreMostrable = nombreReal || c.nombre || `+${c.telefono}`;
+  const inicial = inicialDe(nombreReal, c.nombre, c.telefono);
+
+  const previewBruto = c.vista_previa_ultimo_mensaje ?? "";
+  const previewTexto = previewBruto.trim();
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onClickPrincipal}
+        {...longPress}
+        className={`group flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left transition-colors ${
+          modoSeleccion && checked
+            ? "bg-rose-50/60 dark:bg-rose-950/30"
+            : seleccionada && !modoSeleccion
+            ? "bg-emerald-50/60 dark:bg-emerald-950/30"
+            : "hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+        }`}
+      >
+        {modoSeleccion && (
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={onClickPrincipal}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Seleccionar conversación ${c.nombre ?? c.telefono}`}
+            className="h-4 w-4 shrink-0 accent-rose-500"
+          />
+        )}
+        <div className="relative shrink-0">
+          <div
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-base font-semibold text-white shadow-sm"
+            aria-hidden
+          >
+            {inicial}
+          </div>
+          {sinLeer > 0 && (
+            <span
+              className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white ring-2 ring-white dark:ring-zinc-950"
+              title={`${sinLeer} sin responder`}
+            >
+              {sinLeer > 9 ? "9+" : sinLeer}
+            </span>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <p
+              className={`min-w-0 flex-1 truncate text-sm [overflow-wrap:anywhere] ${
+                sinLeer > 0
+                  ? "font-bold text-zinc-900 dark:text-zinc-50"
+                  : "font-semibold text-zinc-900 dark:text-zinc-100"
               }`}
             >
-              {modoSeleccion && (
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => onToggleSeleccion?.(c.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label={`Seleccionar conversación ${c.nombre ?? c.telefono}`}
-                  className="h-4 w-4 shrink-0 accent-rose-500"
-                />
+              {nombreMostrable}
+            </p>
+            <span
+              className={`shrink-0 text-[11px] ${
+                sinLeer > 0
+                  ? "font-semibold text-emerald-700 dark:text-emerald-400"
+                  : "font-medium text-zinc-400 dark:text-zinc-500"
+              }`}
+            >
+              {tiempoCorto(c.ultimo_mensaje_en)}
+            </span>
+          </div>
+
+          <div className="mt-0.5 flex min-w-0 items-center justify-between gap-2">
+            <p
+              className={`min-w-0 flex-1 truncate text-xs ${
+                sinLeer > 0
+                  ? "font-semibold text-zinc-700 dark:text-zinc-200"
+                  : "text-zinc-500 dark:text-zinc-500"
+              }`}
+            >
+              {ultimoFueDelOperador && (
+                <span className="font-medium text-zinc-500 dark:text-zinc-500">
+                  Tu:{" "}
+                </span>
               )}
-              {/* Avatar circular grande con 1 letra + badge sin-leer */}
-              <div className="relative shrink-0">
-                <div
-                  className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-base font-semibold text-white shadow-sm"
-                  aria-hidden
-                >
-                  {inicial}
-                </div>
-                {sinLeer > 0 && (
-                  <span
-                    className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white ring-2 ring-white dark:ring-zinc-950"
-                    title={`${sinLeer} sin responder`}
-                  >
-                    {sinLeer > 9 ? "9+" : sinLeer}
-                  </span>
-                )}
-              </div>
-
-              <div className="min-w-0 flex-1">
-                {/* Línea 1: nombre + timestamp */}
-                <div className="flex items-center justify-between gap-2">
-                  <p
-                    className={`truncate text-sm ${
-                      sinLeer > 0
-                        ? "font-bold text-zinc-900 dark:text-zinc-50"
-                        : "font-semibold text-zinc-900 dark:text-zinc-100"
-                    }`}
-                  >
-                    {nombreMostrable}
-                  </p>
-                  <span
-                    className={`shrink-0 text-[11px] ${
-                      sinLeer > 0
-                        ? "font-semibold text-emerald-700 dark:text-emerald-400"
-                        : "font-medium text-zinc-400 dark:text-zinc-500"
-                    }`}
-                  >
-                    {tiempoCorto(c.ultimo_mensaje_en)}
-                  </span>
-                </div>
-
-                {/* Línea 2: preview + pill IA/H */}
-                <div className="mt-0.5 flex items-center justify-between gap-2">
-                  <p
-                    className={`min-w-0 truncate text-xs ${
-                      sinLeer > 0
-                        ? "font-semibold text-zinc-700 dark:text-zinc-200"
-                        : "text-zinc-500 dark:text-zinc-500"
-                    }`}
-                  >
-                    {ultimoFueDelOperador && (
-                      <span className="font-medium text-zinc-500 dark:text-zinc-500">
-                        Tu:{" "}
-                      </span>
-                    )}
-                    {previewTexto || "Sin mensajes"}
-                  </p>
-                  {/* Pill mini IA / H / Atender */}
-                  {necesitaHumano ? (
-                    <span
-                      className="shrink-0 rounded-full bg-red-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-700 dark:text-red-300"
-                      title="Necesita atención humana"
-                    >
-                      ⚠
-                    </span>
-                  ) : (
-                    <span
-                      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                        esIA
-                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
-                          : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
-                      }`}
-                    >
-                      {esIA ? "IA" : "H"}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+              {previewTexto || "Sin mensajes"}
+            </p>
+            {necesitaHumano ? (
+              <span
+                className="shrink-0 rounded-full bg-red-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-700 dark:text-red-300"
+                title="Necesita atención humana"
+              >
+                ⚠
+              </span>
+            ) : (
+              <span
+                className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                  esIA
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
+                    : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
+                }`}
+              >
+                {esIA ? "IA" : "H"}
+              </span>
+            )}
+          </div>
+        </div>
+      </button>
+    </li>
   );
 }

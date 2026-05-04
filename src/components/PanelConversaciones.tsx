@@ -292,6 +292,28 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
               return n;
             });
           }}
+          onEliminar={(id) => {
+            // Reusamos el modal de confirmación bulk-delete con un solo id.
+            setSeleccionadas(new Set([id]));
+            setConfirmarAbierto(true);
+          }}
+          onMarcarLeida={(id) => {
+            setConversaciones((prev) =>
+              prev.map((c) =>
+                c.id === id
+                  ? {
+                      ...c,
+                      mensajes_nuevos: 0,
+                      ultimo_visto_operador_en: new Date().toISOString(),
+                    }
+                  : c,
+              ),
+            );
+            void fetch(
+              `/api/cuentas/${idCuenta}/conversaciones/${id}/marcar-leida`,
+              { method: "POST" },
+            ).catch(() => {});
+          }}
           onSeleccionar={(id) => {
             setIdConvSeleccionada(id);
             // Optimistic UI: bajamos el badge a 0 inmediatamente.
