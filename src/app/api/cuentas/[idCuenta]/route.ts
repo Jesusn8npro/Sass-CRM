@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import QRCode from "qrcode";
 import {
   actualizarCuenta,
   archivarCuenta,
@@ -76,8 +77,28 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
   if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
+
+  // Pre-renderizar el QR como PNG cuando hay uno pendiente. Sin esto
+  // la pagina /whatsapp recibe solo cadena_qr y no tiene como mostrar
+  // el codigo (la string sola no es renderizable).
+  let qr_png: string | null = null;
+  if (
+    cuenta.cadena_qr &&
+    (cuenta.estado === "qr" || cuenta.estado === "conectando")
+  ) {
+    try {
+      qr_png = await QRCode.toDataURL(cuenta.cadena_qr, {
+        width: 320,
+        margin: 2,
+        color: { dark: "#fafafa", light: "#0a0a0a" },
+      });
+    } catch {
+      qr_png = null;
+    }
+  }
+
   return NextResponse.json({
-    cuenta: { ...cuenta, bot_vivo: calcularBotVivo(cuenta) },
+    cuenta: { ...cuenta, bot_vivo: calcularBotVivo(cuenta), qr_png },
   });
 }
 
