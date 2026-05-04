@@ -1,10 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   listarInteresadosEnProducto,
-  obtenerCuenta,
   obtenerProducto,
 } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { verificarAccesoCuenta } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -13,16 +12,11 @@ interface Contexto {
 }
 
 export async function GET(_req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idProducto } = await params;
-  if (!idCuenta || !idProducto) {
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  if (!idProducto) {
     return NextResponse.json({ error: "IDs inválidos" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   const prod = await obtenerProducto(idProducto);
   if (!prod || prod.cuenta_id !== idCuenta) {

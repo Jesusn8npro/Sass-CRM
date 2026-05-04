@@ -2,10 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   actualizarLead,
   obtenerConversacionPorId,
-  obtenerCuenta,
   type EstadoLead,
 } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { parsearJSON, verificarAccesoCuenta } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -33,14 +32,9 @@ const ESTADOS_VALIDOS: EstadoLead[] = [
  *   - datos capturados (merge — solo los campos que mande)
  */
 export async function PATCH(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idConversacion } = await params;
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
   const conv = await obtenerConversacionPorId(idConversacion);
   if (!conv || conv.cuenta_id !== idCuenta) {
     return NextResponse.json(
@@ -49,18 +43,14 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     );
   }
 
-  let payload: {
+  const payload = await parsearJSON<{
     estado_lead?: unknown;
     lead_score?: unknown;
     paso_actual?: unknown;
     nombre?: unknown;
     datos_capturados_merge?: unknown;
-  };
-  try {
-    payload = await req.json();
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
+  }>(req);
+  if (payload instanceof NextResponse) return payload;
 
   const cambios: Parameters<typeof actualizarLead>[1] = {};
 

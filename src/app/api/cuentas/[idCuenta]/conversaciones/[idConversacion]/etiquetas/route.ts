@@ -7,7 +7,7 @@ import {
   obtenerConversacionPorId,
   obtenerCuenta,
 } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { parsearJSON, requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -54,12 +54,8 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   const err = await verificarAcceso(idCuenta, idConversacion, auth.id);
   if (err) return err;
 
-  let payload: { etiqueta_id?: unknown };
-  try {
-    payload = await req.json();
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
+  const payload = await parsearJSON<{ etiqueta_id?: unknown }>(req);
+  if (payload instanceof NextResponse) return payload;
 
   const etiquetaId =
     typeof payload.etiqueta_id === "string" ? payload.etiqueta_id : "";

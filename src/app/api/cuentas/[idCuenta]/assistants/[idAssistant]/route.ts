@@ -5,7 +5,7 @@ import {
   obtenerAssistantLocal,
   obtenerCuenta,
 } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { parsearJSON, requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -45,12 +45,8 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   }
 
-  let payload: Record<string, unknown>;
-  try {
-    payload = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
+  const payload = await parsearJSON<Record<string, unknown>>(req);
+  if (payload instanceof NextResponse) return payload;
 
   const cambios: Parameters<typeof actualizarAssistantLocal>[1] = {};
   if (typeof payload.nombre === "string") cambios.nombre = payload.nombre.trim();

@@ -1,9 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   cancelarLlamadaProgramada,
-  obtenerCuenta,
 } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { verificarAccesoCuenta } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -17,14 +16,9 @@ interface Contexto {
  * estado='pendiente').
  */
 export async function DELETE(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idLlamada } = await params;
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
 
   let razon = "cancelada por el operador";
   try {

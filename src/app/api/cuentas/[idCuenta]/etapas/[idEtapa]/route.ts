@@ -2,10 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   actualizarEtapa,
   borrarEtapa,
-  obtenerCuenta,
   obtenerEtapa,
 } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { parsearJSON, verificarAccesoCuenta } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -25,23 +24,18 @@ const COLORES_VALIDOS = new Set([
 ]);
 
 export async function PATCH(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idEtapa } = await params;
-  if (!idCuenta || !idEtapa) {
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  if (!idEtapa) {
     return NextResponse.json({ error: "IDs inválidos" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   const etapa = await obtenerEtapa(idEtapa);
   if (!etapa || etapa.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "Etapa no encontrada" }, { status: 404 });
   }
 
-  let payload: {
+  const payload = await parsearJSON<{
     nombre?: unknown;
     color?: unknown;
     orden?: unknown;
@@ -50,12 +44,8 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     criterio_transicion?: unknown;
     objetivos?: unknown;
     descripcion?: unknown;
-  };
-  try {
-    payload = await req.json();
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
+  }>(req);
+  if (payload instanceof NextResponse) return payload;
 
   const slugify = (s: string) =>
     s
@@ -117,16 +107,11 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idEtapa } = await params;
-  if (!idCuenta || !idEtapa) {
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  if (!idEtapa) {
     return NextResponse.json({ error: "IDs inválidos" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   const etapa = await obtenerEtapa(idEtapa);
   if (!etapa || etapa.cuenta_id !== idCuenta) {

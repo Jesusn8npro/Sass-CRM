@@ -111,19 +111,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, ignorado: true });
   }
 
-  // Validar secret contra el de la cuenta dueña
+  // Validar secret contra el de la cuenta dueña. Sin secret configurado
+  // rechazamos — el webhook es público y no podemos confiar en payloads
+  // sin firmar (riesgo de inyección de transcripciones / costos falsos).
   const cuentaDueña = await obtenerCuenta(llamada.cuenta_id);
-  if (cuentaDueña?.vapi_webhook_secret) {
-    const ok = verificarSecretWebhook(
-      headerSecret,
-      cuentaDueña.vapi_webhook_secret,
+  if (!cuentaDueña?.vapi_webhook_secret) {
+    return NextResponse.json(
+      { error: "Webhook no autorizado: configurá vapi_webhook_secret" },
+      { status: 401 },
     );
-    if (!ok) {
-      console.warn(
-        `[vapi-webhook] secret inválido para call ${callId} (cuenta ${llamada.cuenta_id})`,
-      );
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  }
+  if (!verificarSecretWebhook(headerSecret, cuentaDueña.vapi_webhook_secret)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const tipo = message.type ?? "";

@@ -7,7 +7,6 @@ import {
   listarConocimientoDeCuenta,
   listarProductosActivos,
   obtenerAssistantLocal,
-  obtenerCuenta,
 } from "@/lib/baseDatos";
 import {
   actualizarAssistant,
@@ -15,7 +14,7 @@ import {
   obtenerAssistant as obtenerAssistantVapi,
 } from "@/lib/vapi";
 import { construirPromptSistema } from "@/lib/construirPrompt";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { verificarAccesoCuenta } from "@/lib/auth/sesion";
 import { resolverCredencialesVapi } from "@/lib/vapi-credenciales";
 
 export const dynamic = "force-dynamic";
@@ -54,14 +53,10 @@ INSTRUCCIONES ADICIONALES — ESTÁS EN UNA LLAMADA DE VOZ:
  * prompt_extra y primer_mensaje propios del assistant.
  */
 export async function POST(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idAssistant } = await params;
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  const { cuenta } = acceso;
   const assistant = await obtenerAssistantLocal(idAssistant);
   if (!assistant || assistant.cuenta_id !== idCuenta) {
     return NextResponse.json(

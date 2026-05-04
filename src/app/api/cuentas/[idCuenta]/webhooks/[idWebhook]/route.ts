@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { obtenerCuenta } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { parsearJSON, verificarAccesoCuenta } from "@/lib/auth/sesion";
 import { crearClienteAdmin } from "@/lib/supabase/cliente-servidor";
 
 export const dynamic = "force-dynamic";
@@ -14,20 +13,12 @@ function db() {
 }
 
 export async function PATCH(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
   const { idCuenta, idWebhook } = await params;
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
 
-  let payload: Record<string, unknown>;
-  try {
-    payload = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
+  const payload = await parsearJSON<Record<string, unknown>>(req);
+  if (payload instanceof NextResponse) return payload;
 
   const cambios: Record<string, unknown> = {};
   if (typeof payload.nombre === "string")
@@ -53,13 +44,9 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
   const { idCuenta, idWebhook } = await params;
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
   await db()
     .from("webhooks_salientes")
     .delete()

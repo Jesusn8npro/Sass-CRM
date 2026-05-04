@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import crypto from "node:crypto";
 import { crearClienteAdmin } from "@/lib/supabase/cliente-servidor";
 
 export const dynamic = "force-dynamic";
@@ -6,69 +7,120 @@ export const runtime = "nodejs";
 
 /** GET — Verificación inicial del webhook por parte de Meta.
  *
- * Meta hace GET con `?hub.mode=subscribe&hub.verify_token=X&hub.challenge=Y`.
- * Si `verify_token` matchea uno de los `wa_verify_token` guardados en la
- * tabla `cuentas`, devolvemos el `challenge` en texto plano.
- *
- * El `verify_token` es compartido por TODAS las cuentas del SaaS — la
- * primera que matchee el query param queda asociada vía DB. */
+ * URL esperada: /api/wa-cloud/webhook?cuenta=<id>&hub.mode=subscribe&...
+ * Si la URL no incluye `?cuenta=<id>`, caemos al matcheo legacy por
+ * verify_token (compatibilidad con cuentas ya configuradas).
+ */
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const mode = url.searchParams.get("hub.mode");
   const token = url.searchParams.get("hub.verify_token");
   const challenge = url.searchParams.get("hub.challenge");
+  const idCuenta = url.searchParams.get("cuenta");
 
   if (mode !== "subscribe" || !token || !challenge) {
-    return NextResponse.json(
-      { error: "Solicitud inválida" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
   }
 
   const supabase = crearClienteAdmin();
-  const { data } = await supabase
-    .from("cuentas")
-    .select("id")
-    .eq("wa_verify_token", token)
-    .limit(1)
-    .maybeSingle();
+  let q = supabase.from("cuentas").select("id, wa_verify_token").limit(1);
+  if (idCuenta) q = q.eq("id", idCuenta);
+  else q = q.eq("wa_verify_token", token);
+  const { data } = await q.maybeSingle();
 
-  if (!data) {
-    console.warn(
-      "[wa-cloud webhook] verify_token no matchea ninguna cuenta:",
-      token.slice(0, 8) + "…",
-    );
+  if (!data || !data.wa_verify_token) {
+    return new NextResponse("Forbidden", { status: 403 });
+  }
+  if (!timingSafeEqualStr(data.wa_verify_token, token)) {
     return new NextResponse("Forbidden", { status: 403 });
   }
 
-  // Respondemos el challenge en texto plano (lo exige Meta)
   return new NextResponse(challenge, {
     status: 200,
     headers: { "Content-Type": "text/plain" },
   });
 }
 
-/** POST — Eventos entrantes de Meta (mensajes recibidos, status updates,
- * etc.). El payload viene firmado con `X-Hub-Signature-256`. Para v1
- * SOLO loggeamos — la integración real con el bot (insertar mensaje
- * en DB, disparar respuesta IA) se hace en una próxima fase. */
+/** POST — Eventos entrantes de Meta. Validamos firma `X-Hub-Signature-256`
+ * contra `wa_app_secret` de la cuenta (resuelta por `?cuenta=<id>` o por
+ * el primer phone_number_id que aparezca en el payload). */
 export async function POST(req: NextRequest) {
-  let cuerpo: unknown;
+  const rawBody = await req.text();
+  const firma = req.headers.get("x-hub-signature-256") ?? "";
+
+  const url = new URL(req.url);
+  const idCuenta = url.searchParams.get("cuenta");
+
+  let payload: WaPayload;
   try {
-    cuerpo = await req.json();
+    payload = JSON.parse(rawBody) as WaPayload;
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
-  // TODO (próxima fase): validar firma X-Hub-Signature-256 contra
-  // wa_app_secret y procesar eventos:
-  //   - messages → insertarMensaje + disparar respuesta IA
-  //   - statuses → tracking de delivered/read
-  console.log(
-    "[wa-cloud webhook] evento recibido:",
-    JSON.stringify(cuerpo).slice(0, 500),
-  );
+  const phoneNumberId = extraerPhoneNumberId(payload);
+  const supabase = crearClienteAdmin();
 
-  // Meta exige respuesta 200 rápida, sino reintenta y duplica
+  let cuenta: { id: string; wa_app_secret: string | null } | null = null;
+  if (idCuenta) {
+    const { data } = await supabase
+      .from("cuentas")
+      .select("id, wa_app_secret")
+      .eq("id", idCuenta)
+      .maybeSingle();
+    cuenta = data ?? null;
+  } else if (phoneNumberId) {
+    const { data } = await supabase
+      .from("cuentas")
+      .select("id, wa_app_secret")
+      .eq("wa_phone_number_id", phoneNumberId)
+      .maybeSingle();
+    cuenta = data ?? null;
+  }
+
+  if (!cuenta || !cuenta.wa_app_secret) {
+    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+
+  if (!verificarFirmaMeta(rawBody, firma, cuenta.wa_app_secret)) {
+    return NextResponse.json({ error: "Firma inválida" }, { status: 401 });
+  }
+
+  // Procesamiento real del evento se hace en otra fase. Meta exige 200
+  // rápido para no reintentar.
   return NextResponse.json({ ok: true });
+}
+
+interface WaPayload {
+  entry?: Array<{
+    changes?: Array<{
+      value?: { metadata?: { phone_number_id?: string } };
+    }>;
+  }>;
+}
+
+function extraerPhoneNumberId(p: WaPayload): string | null {
+  return p.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id ?? null;
+}
+
+function verificarFirmaMeta(
+  rawBody: string,
+  firmaHeader: string,
+  appSecret: string,
+): boolean {
+  if (!firmaHeader.startsWith("sha256=")) return false;
+  const hex = firmaHeader.slice(7);
+  const esperado = crypto
+    .createHmac("sha256", appSecret)
+    .update(rawBody, "utf8")
+    .digest("hex");
+  if (hex.length !== esperado.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(hex), Buffer.from(esperado));
+}
+
+function timingSafeEqualStr(a: string, b: string): boolean {
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
 }

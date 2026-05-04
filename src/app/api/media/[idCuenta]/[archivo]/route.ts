@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { descargarMediaChat } from "@/lib/baileys/medios";
+import { verificarAccesoCuenta } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -8,30 +9,22 @@ interface Contexto {
 }
 
 /**
- * Sirve archivos multimedia de chats (audio entrante transcrito,
- * imágenes recibidas, etc).
- * Lee de Supabase Storage primero, fallback a disco local legacy.
+ * Sirve archivos multimedia de chats. Requiere sesión + ownership de la
+ * cuenta. Antes era público — abría a cualquiera con UUID adivinable
+ * los audios/imágenes privados de los contactos.
  */
 export async function GET(_req: NextRequest, { params }: Contexto) {
   const { idCuenta, archivo } = await params;
-  if (!idCuenta || !archivo) {
-    return NextResponse.json({ error: "Ruta inválida" }, { status: 400 });
-  }
-  if (
-    archivo.includes("..") ||
-    archivo.includes("/") ||
-    archivo.includes("\\")
-  ) {
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+
+  if (!archivo || archivo.includes("..") || archivo.includes("/") || archivo.includes("\\")) {
     return NextResponse.json({ error: "Nombre inválido" }, { status: 400 });
   }
 
-  const rutaRelativa = `${idCuenta}/${archivo}`;
-  const descargado = await descargarMediaChat(rutaRelativa);
+  const descargado = await descargarMediaChat(`${idCuenta}/${archivo}`);
   if (!descargado) {
-    return NextResponse.json(
-      { error: "Archivo no encontrado" },
-      { status: 404 },
-    );
+    return NextResponse.json({ error: "Archivo no encontrado" }, { status: 404 });
   }
 
   return new NextResponse(new Uint8Array(descargado.buffer), {

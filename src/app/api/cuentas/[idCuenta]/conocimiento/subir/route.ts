@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { crearConocimiento, obtenerCuenta } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { crearConocimiento } from "@/lib/baseDatos";
+import { verificarAccesoCuenta } from "@/lib/auth/sesion";
+import { verificarRateLimit } from "@/lib/auth/rateLimit";
 import { indexarEntrada } from "@/lib/rag/indexar";
 
 export const dynamic = "force-dynamic";
@@ -57,14 +58,12 @@ async function extraerTexto(
  * parsea con la librería apropiada (pdf-parse, mammoth) — al final
  * todo se guarda como texto plano en `conocimiento.contenido`. */
 export async function POST(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta } = await params;
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+
+  const limite = verificarRateLimit(`${acceso.auth.id}:conocimiento-subir`, 10, 60);
+  if (limite) return limite;
 
   let formData: FormData;
   try {

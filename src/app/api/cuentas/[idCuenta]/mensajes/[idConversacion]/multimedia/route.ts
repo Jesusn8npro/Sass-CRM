@@ -3,7 +3,6 @@ import {
   encolarBandejaSalida,
   insertarMensaje,
   obtenerConversacionPorId,
-  obtenerCuenta,
   type TipoMensaje,
 } from "@/lib/baseDatos";
 import {
@@ -12,7 +11,7 @@ import {
   guardarMediaSubido,
 } from "@/lib/baileys/medios";
 import { asegurarFormatoVoz } from "@/lib/baileys/conversion";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { verificarAccesoCuenta } from "@/lib/auth/sesion";
 import { readFile as fsReadFileAsync } from "node:fs/promises";
 
 export const dynamic = "force-dynamic";
@@ -80,16 +79,11 @@ function detectarTipo(mime: string, nombreArchivo: string): TipoMensaje {
 const TAMANO_MAX_MB = 50;
 
 export async function POST(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idConversacion } = await params;
-  if (!idCuenta || !idConversacion) {
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  if (!idConversacion) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   const conv = await obtenerConversacionPorId(idConversacion);
   if (!conv || conv.cuenta_id !== idCuenta) {

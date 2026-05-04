@@ -4,9 +4,8 @@ import fs from "node:fs";
 import {
   actualizarCuenta,
   actualizarEstadoCuenta,
-  obtenerCuenta,
 } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { verificarAccesoCuenta } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -23,17 +22,9 @@ interface Body {
 }
 
 export async function POST(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta } = await params;
-  if (!idCuenta) {
-    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
 
   let body: Body = {};
   try {

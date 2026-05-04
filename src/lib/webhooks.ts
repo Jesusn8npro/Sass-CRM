@@ -11,6 +11,8 @@
  * en `webhooks_salientes.total_fallos` pero no fallan al caller.
  */
 
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import { crearClienteAdmin } from "./supabase/cliente-servidor";
 
 export type EventoWebhook =
@@ -92,20 +94,25 @@ async function disparar1(
 
   let resultado: string;
   let ok = false;
-  try {
-    const res = await fetch(webhook.url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    ok = res.ok;
-    resultado = ok
-      ? `✓ ${res.status} OK`
-      : `✗ HTTP ${res.status}`;
-  } catch (err) {
-    const det = err instanceof Error ? err.message : String(err);
-    resultado = `✗ ${det.slice(0, 200)}`;
+
+  const motivo = await urlSeguraParaWebhook(webhook.url);
+  if (motivo) {
+    resultado = `✗ url-bloqueada: ${motivo}`;
+  } else {
+    try {
+      const res = await fetch(webhook.url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+        redirect: "manual",
+      });
+      ok = res.ok;
+      resultado = ok ? `✓ ${res.status} OK` : `✗ HTTP ${res.status}`;
+    } catch (err) {
+      const det = err instanceof Error ? err.message : String(err);
+      resultado = `✗ ${det.slice(0, 200)}`;
+    }
   }
 
   // Actualizar stats — best effort, no bloquea si falla
@@ -122,4 +129,75 @@ async function disparar1(
   } catch {
     /* ignorar */
   }
+}
+
+/**
+ * Devuelve null si la URL es segura. En caso contrario, devuelve un
+ * motivo legible. Bloquea: protocolos no-http, hosts privados/loopback/
+ * link-local/metadata cloud — incluyendo lo que resuelva por DNS a
+ * rangos privados (defensa contra DNS rebinding).
+ */
+async function urlSeguraParaWebhook(rawUrl: string): Promise<string | null> {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return "url-malformada";
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return `protocolo no permitido (${url.protocol})`;
+  }
+  const host = url.hostname.toLowerCase();
+  if (host === "localhost" || host === "ip6-localhost" || host === "ip6-loopback") {
+    return "host loopback";
+  }
+  if (host === "metadata.google.internal" || host.endsWith(".internal")) {
+    return "host metadata interno";
+  }
+
+  // Resolver TODAS las IPs y validar cada una. Si alguna es privada,
+  // bloqueamos.
+  const ips: string[] = isIP(host)
+    ? [host]
+    : (await lookup(host, { all: true, verbatim: true }).catch(() => []))
+        .map((r) => r.address);
+
+  if (ips.length === 0) return "host sin resolución DNS";
+  for (const ip of ips) {
+    if (esIpPrivada(ip)) return `IP privada/reservada (${ip})`;
+  }
+  return null;
+}
+
+function esIpPrivada(ip: string): boolean {
+  const v = isIP(ip);
+  if (v === 4) return esIpv4Privada(ip);
+  if (v === 6) return esIpv6Privada(ip);
+  return true;
+}
+
+function esIpv4Privada(ip: string): boolean {
+  const partes = ip.split(".").map((n) => parseInt(n, 10));
+  if (partes.length !== 4 || partes.some((n) => Number.isNaN(n))) return true;
+  const [a, b] = partes as [number, number, number, number];
+  if (a === 10) return true;
+  if (a === 127) return true;
+  if (a === 0) return true;
+  if (a === 169 && b === 254) return true; // link-local + AWS metadata
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+  if (a >= 224) return true; // multicast / reserved
+  return false;
+}
+
+function esIpv6Privada(ip: string): boolean {
+  const lower = ip.toLowerCase();
+  if (lower === "::1" || lower === "::") return true;
+  if (lower.startsWith("fc") || lower.startsWith("fd")) return true; // ULA
+  if (lower.startsWith("fe80")) return true; // link-local
+  if (lower.startsWith("ff")) return true; // multicast
+  // IPv4-mapped (::ffff:a.b.c.d)
+  if (lower.startsWith("::ffff:")) return esIpv4Privada(lower.slice(7));
+  return false;
 }

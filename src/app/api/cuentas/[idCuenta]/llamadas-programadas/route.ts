@@ -4,9 +4,8 @@ import {
   listarLlamadasProgramadasDeCuenta,
   obtenerAssistantLocal,
   obtenerConversacionPorId,
-  obtenerCuenta,
 } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { parsearJSON, verificarAccesoCuenta } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -15,40 +14,26 @@ interface Contexto {
 }
 
 export async function GET(_req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta } = await params;
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
   const llamadas = await listarLlamadasProgramadasDeCuenta(idCuenta);
   return NextResponse.json({ llamadas });
 }
 
 export async function POST(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta } = await params;
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
 
-  let payload: {
+  const payload = await parsearJSON<{
     conversacion_id?: unknown;
     assistant_id?: unknown;
     telefono_destino?: unknown;
     motivo?: unknown;
     programada_para?: unknown;
-  };
-  try {
-    payload = await req.json();
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
+  }>(req);
+  if (payload instanceof NextResponse) return payload;
 
   const programadaPara =
     typeof payload.programada_para === "string"

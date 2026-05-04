@@ -3,10 +3,9 @@ import {
   encolarBandejaSalida,
   insertarMensaje,
   obtenerConversacionPorId,
-  obtenerCuenta,
   obtenerMensajes,
 } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { parsearJSON, verificarAccesoCuenta } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -15,16 +14,11 @@ interface Contexto {
 }
 
 export async function GET(_req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idConversacion } = await params;
-  if (!idCuenta || !idConversacion) {
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  if (!idConversacion) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   const conv = await obtenerConversacionPorId(idConversacion);
   if (!conv || conv.cuenta_id !== idCuenta) {
@@ -39,16 +33,11 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
 }
 
 export async function POST(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idConversacion } = await params;
-  if (!idCuenta || !idConversacion) {
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  if (!idConversacion) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   const conv = await obtenerConversacionPorId(idConversacion);
   if (!conv || conv.cuenta_id !== idCuenta) {
@@ -58,12 +47,8 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     );
   }
 
-  let payload: { contenido?: unknown };
-  try {
-    payload = await req.json();
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
+  const payload = await parsearJSON<{ contenido?: unknown }>(req);
+  if (payload instanceof NextResponse) return payload;
 
   const contenido =
     typeof payload.contenido === "string" ? payload.contenido.trim() : "";

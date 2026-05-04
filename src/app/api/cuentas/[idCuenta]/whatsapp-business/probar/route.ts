@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { actualizarCuenta, obtenerCuenta } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { actualizarCuenta } from "@/lib/baseDatos";
+import { verificarAccesoCuenta } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -17,14 +17,10 @@ interface Contexto {
  * Si responde 200 con `display_phone_number` → marca wa_estado='conectado'.
  * Si falla → wa_estado='error' y guarda el mensaje. */
 export async function POST(_req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta } = await params;
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  const { cuenta } = acceso;
 
   if (!cuenta.wa_phone_number_id || !cuenta.wa_access_token) {
     return NextResponse.json(

@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { actualizarCuenta, obtenerCuenta } from "@/lib/baseDatos";
+import { actualizarCuenta } from "@/lib/baseDatos";
 import { clonarVoz } from "@/lib/elevenlabs";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { verificarAccesoCuenta } from "@/lib/auth/sesion";
+import { verificarRateLimit } from "@/lib/auth/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -18,17 +19,13 @@ const BYTES_MAX = 30 * 1024 * 1024; // 30MB — IVC acepta archivos grandes
  * Requiere plan Starter+ en ElevenLabs.
  */
 export async function POST(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta } = await params;
-  if (!idCuenta) {
-    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+
+  const limite = verificarRateLimit(`${acceso.auth.id}:voz-clonar`, 5, 300);
+  if (limite) return limite;
+
   if (!process.env.ELEVENLABS_API_KEY) {
     return NextResponse.json(
       { error: "Falta ELEVENLABS_API_KEY en .env.local" },
@@ -97,10 +94,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
       { status: 201 },
     );
   } catch (err) {
-    const detalle = err instanceof Error ? err.message : String(err);
-    return NextResponse.json(
-      { error: detalle.slice(0, 500) },
-      { status: 502 },
-    );
+    console.error("[voz:clonar]", err);
+    return NextResponse.json({ error: "error_clonando_voz" }, { status: 502 });
   }
 }

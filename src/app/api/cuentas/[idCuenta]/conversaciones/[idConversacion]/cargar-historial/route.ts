@@ -1,10 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   obtenerConversacionPorId,
-  obtenerCuenta,
   obtenerMensajeMasViejoConWaId,
 } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { verificarAccesoCuenta } from "@/lib/auth/sesion";
 import { obtenerGestor } from "@/lib/baileys/gestor";
 import { pedirMasHistorialConversacion } from "@/lib/baileys/manejador";
 
@@ -25,17 +24,12 @@ interface Contexto {
  *   o       : { ok: false, error: string }
  */
 export async function POST(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idConversacion } = await params;
-  if (!idCuenta || !idConversacion) {
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  const { cuenta } = acceso;
+  if (!idConversacion) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   const conv = await obtenerConversacionPorId(idConversacion);
   if (!conv || conv.cuenta_id !== idCuenta) {

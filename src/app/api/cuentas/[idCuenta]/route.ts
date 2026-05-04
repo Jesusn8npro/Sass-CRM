@@ -3,11 +3,10 @@ import QRCode from "qrcode";
 import {
   actualizarCuenta,
   archivarCuenta,
-  obtenerCuenta,
   type CampoCaptura,
 } from "@/lib/baseDatos";
 import { calcularBotVivo } from "@/lib/latidoBot";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { parsearJSON, verificarAccesoCuenta } from "@/lib/auth/sesion";
 
 /** Sanea la lista de campos a capturar que viene del cliente.
  * Filtra los inválidos en lugar de fallar — más amistoso para la UI. */
@@ -66,17 +65,10 @@ interface Contexto {
 }
 
 export async function GET(_req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta } = await params;
-  if (!idCuenta) {
-    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  const { cuenta } = acceso;
 
   // Pre-renderizar el QR como PNG cuando hay uno pendiente. Sin esto
   // la pagina /whatsapp recibe solo cadena_qr y no tiene como mostrar
@@ -103,19 +95,11 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
 }
 
 export async function PATCH(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta } = await params;
-  if (!idCuenta) {
-    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-  const cuentaActual = await obtenerCuenta(idCuenta);
-  if (!cuentaActual || cuentaActual.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
 
-  let payload: {
+  const payload = await parsearJSON<{
     etiqueta?: unknown;
     prompt_sistema?: unknown;
     contexto_negocio?: unknown;
@@ -143,12 +127,8 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     max_tokens?: unknown;
     instrucciones_extra?: unknown;
     modo_respuesta?: unknown;
-  };
-  try {
-    payload = await req.json();
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
+  }>(req);
+  if (payload instanceof NextResponse) return payload;
 
   const etiqueta =
     typeof payload.etiqueta === "string" ? payload.etiqueta : undefined;
@@ -324,17 +304,9 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta } = await params;
-  if (!idCuenta) {
-    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
   await archivarCuenta(idCuenta);
   return NextResponse.json({ ok: true });
 }

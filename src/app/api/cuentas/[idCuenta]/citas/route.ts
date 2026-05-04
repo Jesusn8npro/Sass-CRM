@@ -2,9 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   crearCita,
   listarCitasDeCuenta,
-  obtenerCuenta,
 } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { parsearJSON, verificarAccesoCuenta } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -13,35 +12,19 @@ interface Contexto {
 }
 
 export async function GET(_req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta } = await params;
-  if (!idCuenta) {
-    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
   const citas = await listarCitasDeCuenta(idCuenta);
   return NextResponse.json({ citas });
 }
 
 export async function POST(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta } = await params;
-  if (!idCuenta) {
-    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
 
-  let payload: {
+  const payload = await parsearJSON<{
     conversacion_id?: unknown;
     cliente_nombre?: unknown;
     cliente_telefono?: unknown;
@@ -50,12 +33,8 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     duracion_min?: unknown;
     tipo?: unknown;
     notas?: unknown;
-  };
-  try {
-    payload = await req.json();
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
+  }>(req);
+  if (payload instanceof NextResponse) return payload;
 
   const cliente_nombre =
     typeof payload.cliente_nombre === "string"

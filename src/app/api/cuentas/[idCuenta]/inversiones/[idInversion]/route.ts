@@ -2,10 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   actualizarInversion,
   borrarInversion,
-  obtenerCuenta,
   obtenerInversion,
 } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { parsearJSON, verificarAccesoCuenta } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -14,28 +13,19 @@ interface Contexto {
 }
 
 export async function PATCH(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idInversion } = await params;
-  if (!idCuenta || !idInversion) {
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  if (!idInversion) {
     return NextResponse.json({ error: "IDs inválidos" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   const inv = await obtenerInversion(idInversion);
   if (!inv || inv.cuenta_id !== idCuenta) {
     return NextResponse.json({ error: "Inversión no encontrada" }, { status: 404 });
   }
 
-  let payload: Record<string, unknown>;
-  try {
-    payload = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
+  const payload = await parsearJSON<Record<string, unknown>>(req);
+  if (payload instanceof NextResponse) return payload;
 
   const cambios: Parameters<typeof actualizarInversion>[1] = {};
   if (typeof payload.concepto === "string" && payload.concepto.trim()) {
@@ -66,16 +56,11 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idInversion } = await params;
-  if (!idCuenta || !idInversion) {
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  if (!idInversion) {
     return NextResponse.json({ error: "IDs inválidos" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   const inv = await obtenerInversion(idInversion);
   if (!inv || inv.cuenta_id !== idCuenta) {

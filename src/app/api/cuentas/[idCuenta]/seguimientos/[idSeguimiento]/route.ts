@@ -1,10 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   cancelarSeguimiento,
-  obtenerCuenta,
   obtenerSeguimiento,
 } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { verificarAccesoCuenta } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -14,16 +13,11 @@ interface Contexto {
 
 /** Cancelar un seguimiento pendiente. */
 export async function DELETE(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idSeguimiento } = await params;
-  if (!idCuenta || !idSeguimiento) {
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  if (!idSeguimiento) {
     return NextResponse.json({ error: "IDs inválidos" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   const s = await obtenerSeguimiento(idSeguimiento);
   if (!s || s.cuenta_id !== idCuenta) {

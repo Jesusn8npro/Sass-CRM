@@ -1,9 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   actualizarCuenta,
-  obtenerCuenta,
 } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { parsearJSON, verificarAccesoCuenta } from "@/lib/auth/sesion";
 import { randomBytes } from "node:crypto";
 
 export const dynamic = "force-dynamic";
@@ -18,14 +17,10 @@ interface Contexto {
  * completos: los censuramos a "***últimos 4". El verify_token sí va
  * porque el dueño lo necesita ver para configurarlo en Meta. */
 export async function GET(_req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta } = await params;
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  const { cuenta } = acceso;
 
   // Si no tiene verify_token, generamos uno automático (idempotente —
   // solo la primera vez). Es lo que el dueño usa para validar el webhook
@@ -53,26 +48,17 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
  * Access Token, App Secret). El verify_token NO se edita acá — se
  * genera automáticamente desde el GET. */
 export async function PATCH(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta } = await params;
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-  }
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
 
-  let payload: {
+  const payload = await parsearJSON<{
     phone_number_id?: unknown;
     business_account_id?: unknown;
     access_token?: unknown;
     app_secret?: unknown;
-  };
-  try {
-    payload = await req.json();
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
+  }>(req);
+  if (payload instanceof NextResponse) return payload;
 
   const cambios: Parameters<typeof actualizarCuenta>[1] = {};
   if (typeof payload.phone_number_id === "string") {

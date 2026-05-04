@@ -6,7 +6,7 @@ import {
   obtenerCuenta,
   type EstadoCita,
 } from "@/lib/baseDatos";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { parsearJSON, requerirSesion } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -39,12 +39,8 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     return NextResponse.json({ error: "Cita no encontrada" }, { status: 404 });
   }
 
-  let payload: Record<string, unknown>;
-  try {
-    payload = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
+  const payload = await parsearJSON<Record<string, unknown>>(req);
+  if (payload instanceof NextResponse) return payload;
 
   const cambios: Parameters<typeof actualizarCita>[1] = {};
   if (

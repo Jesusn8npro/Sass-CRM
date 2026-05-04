@@ -2,11 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   actualizarDescripcionMedio,
   borrarMedioBiblioteca,
-  obtenerCuenta,
   obtenerMedioBiblioteca,
 } from "@/lib/baseDatos";
 import { borrarMedioBibliotecaArchivo } from "@/lib/baileys/medios";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { parsearJSON, verificarAccesoCuenta } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
 
@@ -15,16 +14,11 @@ interface Contexto {
 }
 
 export async function PATCH(req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idMedio } = await params;
-  if (!idCuenta || !idMedio) {
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  if (!idMedio) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
 
   const medio = await obtenerMedioBiblioteca(idMedio);
@@ -32,12 +26,8 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   }
 
-  let payload: { descripcion?: unknown };
-  try {
-    payload = await req.json();
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
+  const payload = await parsearJSON<{ descripcion?: unknown }>(req);
+  if (payload instanceof NextResponse) return payload;
   const descripcion =
     typeof payload.descripcion === "string"
       ? payload.descripcion.trim()
@@ -53,16 +43,11 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idMedio } = await params;
-  if (!idCuenta || !idMedio) {
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  if (!idMedio) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
 
   const medio = await obtenerMedioBiblioteca(idMedio);

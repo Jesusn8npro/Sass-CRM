@@ -2,12 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   actualizarLlamadaPorCallId,
   borrarLlamada,
-  obtenerCuenta,
   obtenerLlamadaPorId,
   type EstadoLlamada,
 } from "@/lib/baseDatos";
 import { obtenerLlamada } from "@/lib/vapi";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { verificarAccesoCuenta } from "@/lib/auth/sesion";
 import { resolverCredencialesVapi } from "@/lib/vapi-credenciales";
 
 export const dynamic = "force-dynamic";
@@ -37,16 +36,12 @@ function mapearEstado(estadoVapi: string | undefined): EstadoLlamada {
  * cuenta tiene API key, refresca contra Vapi para tener el último estado.
  */
 export async function GET(_req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idLlamada } = await params;
-  if (!idCuenta || !idLlamada) {
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  const { cuenta } = acceso;
+  if (!idLlamada) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   const llamada = await obtenerLlamadaPorId(idLlamada);
   if (!llamada || llamada.cuenta_id !== idCuenta) {
@@ -93,16 +88,11 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Contexto) {
-  const auth = await requerirSesion();
-  if (auth instanceof NextResponse) return auth;
-
   const { idCuenta, idLlamada } = await params;
-  if (!idCuenta || !idLlamada) {
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+  if (!idLlamada) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-  const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
-    return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
   const llamada = await obtenerLlamadaPorId(idLlamada);
   if (!llamada || llamada.cuenta_id !== idCuenta) {
