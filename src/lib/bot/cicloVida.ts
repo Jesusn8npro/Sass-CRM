@@ -67,6 +67,31 @@ async function emitirHeartbeats(): Promise<void> {
   }
 }
 
+/**
+ * Detecta unhandledRejections "ruidosas" pero benignas de Baileys.
+ * Cuando el socket muere mientras hay queries internas pendientes
+ * (sendPassiveIq, waitForMessage), esas Promises rechazan despues
+ * con "Timed Out" o "Connection Closed". No rompen nada — el gestor
+ * detecta el close y reconecta — pero ensucian los logs.
+ *
+ * Match patterns: stack frames internos de Baileys.
+ */
+function esRechazoBenignoBaileys(razon: unknown): boolean {
+  if (!razon || typeof razon !== "object") return false;
+  const msg = (razon as { message?: string }).message;
+  const stack = (razon as { stack?: string }).stack ?? "";
+  if (!msg) return false;
+  const esTimedOutOClosed =
+    msg.includes("Timed Out") ||
+    msg.includes("Connection Closed") ||
+    msg.includes("Connection Terminated");
+  const vienedeBaileys =
+    stack.includes("@whiskeysockets/baileys") ||
+    stack.includes("baileys/lib/Socket") ||
+    stack.includes("baileys/lib/Utils");
+  return esTimedOutOClosed && vienedeBaileys;
+}
+
 function instalarGuardias(): void {
   if (estado.guardiasInstalados) return;
   estado.guardiasInstalados = true;
@@ -74,6 +99,12 @@ function instalarGuardias(): void {
     console.error("[bot] uncaughtException:", err);
   });
   process.on("unhandledRejection", (razon) => {
+    if (esRechazoBenignoBaileys(razon)) {
+      // Log compacto, no spam con stack completo
+      const m = (razon as { message?: string }).message ?? "?";
+      console.warn(`[bot] socket interno (benigno): ${m}`);
+      return;
+    }
     console.error("[bot] unhandledRejection:", razon);
   });
   const apagar = async () => {
