@@ -260,7 +260,11 @@ class GestorCuentas {
     const entrada = this.sockets.get(cuentaId);
     if (!entrada) return;
     if (entrada.temporizadorReconexion) return;
-    const espera = codigo === 440 ? 15000 : 5000;
+    // 440 = "Replaced" (otro device se conecto). Antes esperabamos 15s
+    // pero eso deja al cliente sin respuesta del bot 15+s. Bajado a 4s
+    // — combinado con el retry de envio en manejadorEnvio.ts da
+    // recuperacion total en ~5-7s, aceptable para chat.
+    const espera = codigo === 440 ? 4000 : 5000;
     console.log(
       `[bot:${entrada.etiqueta}] reintentando conexión en ${espera / 1000}s...`,
     );

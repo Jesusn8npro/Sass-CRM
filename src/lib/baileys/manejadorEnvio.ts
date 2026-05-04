@@ -183,8 +183,8 @@ async function enviarTextoConRetry(
       detalle.includes("440");
     if (!conexionCerrada) throw err;
 
-    // Esperar un toque a que el gestor reconecte (su loop chequea cada 3s)
-    await dormir(2000);
+    // 4s delay del gestor + 2s extra para handshake del nuevo sock.
+    await dormir(6000);
     const sockFresco = obtenerGestor().obtenerSocket(cuentaId);
     if (!sockFresco) throw err;
     console.log(
@@ -272,10 +272,52 @@ export async function enviarParteAudio(
       seconds: meta.seconds,
       waveform: meta.waveform,
     } as unknown as Parameters<typeof sock.sendMessage>[1];
+
     // Sock fresco del gestor — el del closure pudo morir mientras TTS.
-    const sockActual = obtenerGestor().obtenerSocket(cuenta.id) ?? sock;
-    const msgId = reservarMsgId(sockActual, cuenta.id, conversacionId);
-    await sockActual.sendMessage(jid, contenidoTTS, { messageId: msgId });
+    let sockActual = obtenerGestor().obtenerSocket(cuenta.id) ?? sock;
+    let msgId = reservarMsgId(sockActual, cuenta.id, conversacionId);
+
+    // Retry sobre sock.sendMessage si "Connection Closed" / 440 / 428.
+    // El TTS ya gastó plata en ElevenLabs, no queremos perderlo.
+    try {
+      await sockActual.sendMessage(jid, contenidoTTS, { messageId: msgId });
+    } catch (err) {
+      const detalle = err instanceof Error ? err.message : String(err);
+      const conexionCerrada =
+        detalle.includes("Connection Closed") ||
+        detalle.includes("Precondition Required") ||
+        detalle.includes("428") ||
+        detalle.includes("440") ||
+        detalle.includes("Timed Out");
+      if (!conexionCerrada) throw err;
+
+      console.warn(
+        `${prefijo} ⚠ envío audio falló por "${detalle.slice(0, 60)}" — esperando 6s a reconexión y retry`,
+      );
+      // 4s delay del gestor + 2s extra para handshake = 6s total.
+      await dormir(6000);
+      const sockFresco = obtenerGestor().obtenerSocket(cuenta.id);
+      if (!sockFresco) {
+        console.error(
+          `${prefijo} sin sock fresco tras esperar — cae a texto`,
+        );
+        return false;
+      }
+      sockActual = sockFresco;
+      // Generar msgId nuevo asociado al sock nuevo
+      msgId = reservarMsgId(sockActual, cuenta.id, conversacionId);
+      try {
+        await sockActual.sendMessage(jid, contenidoTTS, { messageId: msgId });
+        console.log(`${prefijo} ↻ retry audio OK con sock fresco`);
+      } catch (err2) {
+        const detalle2 = err2 instanceof Error ? err2.message : String(err2);
+        console.error(
+          `${prefijo} retry audio tambien fallo: ${detalle2.slice(0, 100)} — cae a texto`,
+        );
+        return false;
+      }
+    }
+
     // Insertar después del send para no desincronizar panel con WhatsApp.
     await insertarMensaje(cuenta.id, conversacionId, "asistente", texto, {
       tipo: "audio",
@@ -288,12 +330,10 @@ export async function enviarParteAudio(
     return true;
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);
-    // Solo log en consola — no insertamos mensaje "sistema" en el panel
-    // porque genera ruido visual sin valor para el operador. El caller
-    // ya hace fallback a texto si devolvemos false.
+    // El error puede venir de ElevenLabs O de Baileys (sock.sendMessage).
+    // Logueamos sin atribuir mal — el caller ya hace fallback a texto.
     console.error(
-      `${prefijo} error parte ${numParte} audio (ElevenLabs):`,
-      detalle,
+      `${prefijo} error parte ${numParte} audio: ${detalle.slice(0, 200)}`,
     );
     return false;
   } finally {
