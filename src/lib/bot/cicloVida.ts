@@ -144,6 +144,18 @@ function instalarGuardias(): void {
  */
 export async function arrancarBotEnProceso(): Promise<void> {
   if (estado.arrancado || estado.arrancando) return;
+
+  // Kill switch para dev local: si vas a trabajar solo en la UI sin
+  // pisar la sesión que está corriendo en producción (Easy Panel),
+  // poné BOT_ENABLED=false en tu .env.local. El panel sigue funcionando
+  // pero el bot Baileys NO arranca → no compite por la sesión.
+  if (process.env.BOT_ENABLED === "false") {
+    console.log(
+      "[bot] ⏸ BOT_ENABLED=false — bot deshabilitado. UI funciona, Baileys no arranca.",
+    );
+    return;
+  }
+
   estado.arrancando = true;
   instalarGuardias();
   try {

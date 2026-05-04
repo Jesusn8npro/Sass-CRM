@@ -41,7 +41,19 @@ interface SocketCuenta {
    * "este audio ya no está disponible"). Bounded a 500 entradas LRU.
    */
   mensajesEnviados: Map<string, proto.IMessage>;
+  /**
+   * Timestamps de códigos 440 recientes. Si hay > UMBRAL_CONFLICTO440
+   * en menos de VENTANA_CONFLICTO_MS, asumimos que otro proceso está
+   * compitiendo por la misma sesión y pausamos por TIEMPO_PAUSA_CONFLICTO.
+   */
+  timestamps440: number[];
+  /** Si > 0, el gestor NO intenta reconectar hasta esta timestamp. */
+  pausarReconexionHasta: number;
 }
+
+const UMBRAL_CONFLICTO440 = 5;
+const VENTANA_CONFLICTO_MS = 60_000;
+const TIEMPO_PAUSA_CONFLICTO_MS = 5 * 60_000; // 5 minutos
 
 const MAX_MENSAJES_CACHE = 500;
 
@@ -96,19 +108,27 @@ class GestorCuentas {
       }
     }
 
-    // Iniciar sockets para cuentas nuevas
+    // Iniciar sockets para cuentas nuevas, respetando pausa por conflicto
+    const ahora = Date.now();
     for (const cuenta of cuentas) {
-      if (!this.sockets.has(cuenta.id)) {
-        try {
-          await this.iniciarSocketCuenta(cuenta);
-        } catch (err) {
-          console.error(
-            `[gestor] Error iniciando socket cuenta ${cuenta.id}:`,
-            err,
-          );
-        }
+      const entrada = this.sockets.get(cuenta.id);
+      if (entrada) continue; // ya tiene socket
+
+      // Si hubo conflicto detectado, no auto-iniciar hasta que pase la pausa.
+      // El tracking se mantiene en el stale entry — si fue eliminada, no hay.
+      // (En el futuro persistir esto en DB si necesitamos cross-restart).
+
+      try {
+        await this.iniciarSocketCuenta(cuenta);
+      } catch (err) {
+        console.error(
+          `[gestor] Error iniciando socket cuenta ${cuenta.id}:`,
+          err,
+        );
       }
     }
+    // ahora unused but kept for future stamping
+    void ahora;
   }
 
   private async iniciarSocketCuenta(cuenta: Cuenta): Promise<void> {
@@ -155,12 +175,16 @@ class GestorCuentas {
       },
     });
 
+    // Preservar el tracking de 440 si la cuenta se estaba reconectando
+    const previo = this.sockets.get(cuenta.id);
     const entrada: SocketCuenta = {
       cuentaId: cuenta.id,
       etiqueta: cuenta.etiqueta,
       sock,
       temporizadorReconexion: null,
       mensajesEnviados,
+      timestamps440: previo?.timestamps440 ?? [],
+      pausarReconexionHasta: previo?.pausarReconexionHasta ?? 0,
     };
     this.sockets.set(cuenta.id, entrada);
 
@@ -260,10 +284,44 @@ class GestorCuentas {
     const entrada = this.sockets.get(cuentaId);
     if (!entrada) return;
     if (entrada.temporizadorReconexion) return;
-    // 440 = "Replaced" (otro device se conecto). Antes esperabamos 15s
-    // pero eso deja al cliente sin respuesta del bot 15+s. Bajado a 4s
-    // — combinado con el retry de envio en manejadorEnvio.ts da
-    // recuperacion total en ~5-7s, aceptable para chat.
+
+    // Detección de conflicto multi-proceso: si recibimos demasiados
+    // códigos 440 en poco tiempo, casi seguro que hay otra instancia
+    // del bot (ej: dev local + produccion Easy Panel) compitiendo
+    // por la misma sesión. Pausamos reconexion 5min y loggeamos.
+    const ahora = Date.now();
+    if (codigo === 440) {
+      entrada.timestamps440.push(ahora);
+      // Limpiar entries viejos fuera de la ventana
+      entrada.timestamps440 = entrada.timestamps440.filter(
+        (t) => ahora - t < VENTANA_CONFLICTO_MS,
+      );
+      if (entrada.timestamps440.length >= UMBRAL_CONFLICTO440) {
+        entrada.pausarReconexionHasta = ahora + TIEMPO_PAUSA_CONFLICTO_MS;
+        entrada.timestamps440 = [];
+        console.warn(
+          `[bot:${entrada.etiqueta}] ⚠ ${UMBRAL_CONFLICTO440}+ codigos 440 en 60s — CONFLICTO detectado. ` +
+          `Probable: otra instancia del bot esta corriendo con la misma sesion ` +
+          `(ej: Easy Panel + npm run dev local). Pausando reconexion 5 min.`,
+        );
+        void actualizarEstadoCuenta(cuentaId, {
+          estado: "desconectado",
+          cadena_qr: null,
+        });
+        return; // No programar reconexion
+      }
+    }
+
+    if (entrada.pausarReconexionHasta > ahora) {
+      const minutosRestantes = Math.ceil(
+        (entrada.pausarReconexionHasta - ahora) / 60000,
+      );
+      console.log(
+        `[bot:${entrada.etiqueta}] ⏸ reconexion pausada (faltan ${minutosRestantes}min por conflicto detectado)`,
+      );
+      return;
+    }
+
     const espera = codigo === 440 ? 4000 : 5000;
     console.log(
       `[bot:${entrada.etiqueta}] reintentando conexión en ${espera / 1000}s...`,
