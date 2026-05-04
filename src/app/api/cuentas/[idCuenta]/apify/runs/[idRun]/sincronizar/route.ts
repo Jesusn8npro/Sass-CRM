@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   actualizarRunApify,
   agregarCreditos,
+  listarLeadsDeRun,
   obtenerCuenta,
   obtenerRunApify,
 } from "@/lib/baseDatos";
@@ -48,8 +49,21 @@ export async function POST(_req: NextRequest, { params }: Contexto) {
       { status: 400 },
     );
   }
+
+  // Si el run ya está "completado" pero la bandeja está vacía (caso:
+  // se completó con código viejo o la inserción falló), permitimos
+  // re-importar desde Apify. Si ya tiene leads en bandeja, no hacemos
+  // nada para evitar duplicados.
   if (run.estado === "completado") {
-    return NextResponse.json({ ok: true, ya_completado: true });
+    const yaTiene = await listarLeadsDeRun(idRun);
+    if (yaTiene.length > 0) {
+      return NextResponse.json({
+        ok: true,
+        ya_completado: true,
+        leads_en_bandeja: yaTiene.length,
+      });
+    }
+    // Re-importar: la bandeja está vacía → vamos a leer Apify de nuevo
   }
 
   const estado = await obtenerEstadoRun(run.apify_run_id);
@@ -62,6 +76,9 @@ export async function POST(_req: NextRequest, { params }: Contexto) {
 
   const ahora = new Date().toISOString();
   const def = obtenerDefinicionActor(run.actor_id);
+  // Es re-importacion si el run ya estaba completado de antes (no tocamos
+  // creditos ni status — solo persistimos los leads en bandeja).
+  const esReimportacion = run.estado === "completado";
 
   if (estado.status === "SUCCEEDED" && estado.defaultDatasetId) {
     try {
@@ -72,33 +89,40 @@ export async function POST(_req: NextRequest, { params }: Contexto) {
         actorIdInterno: run.actor_id,
       });
 
-      const itemsReales = resumen.leads_guardados;
-      const itemsCobrados = run.costo_creditos / (def?.creditosPorItem ?? 1);
-      if (itemsReales < itemsCobrados && def) {
-        const reintegrar = Math.floor(
-          (itemsCobrados - itemsReales) * def.creditosPorItem,
-        );
-        if (reintegrar > 0) {
-          await agregarCreditos(run.cuenta_id, reintegrar);
+      if (!esReimportacion) {
+        const itemsReales = resumen.leads_guardados;
+        const itemsCobrados = run.costo_creditos / (def?.creditosPorItem ?? 1);
+        if (itemsReales < itemsCobrados && def) {
+          const reintegrar = Math.floor(
+            (itemsCobrados - itemsReales) * def.creditosPorItem,
+          );
+          if (reintegrar > 0) {
+            await agregarCreditos(run.cuenta_id, reintegrar);
+          }
         }
-      }
 
-      await actualizarRunApify(run.id, {
-        estado: "completado",
-        apify_dataset_id: estado.defaultDatasetId,
-        items_count: itemsReales,
-        costo_usd: itemsReales * (def?.costoUsdPorItem ?? 0),
-        completado_en: ahora,
-      });
-      return NextResponse.json({ ok: true, resumen });
+        await actualizarRunApify(run.id, {
+          estado: "completado",
+          apify_dataset_id: estado.defaultDatasetId,
+          items_count: itemsReales,
+          costo_usd: itemsReales * (def?.costoUsdPorItem ?? 0),
+          completado_en: ahora,
+        });
+      }
+      return NextResponse.json({ ok: true, resumen, reimportado: esReimportacion });
     } catch (err) {
-      await actualizarRunApify(run.id, {
-        estado: "fallido",
-        error: err instanceof Error ? err.message : String(err),
-        completado_en: ahora,
-      });
+      if (!esReimportacion) {
+        await actualizarRunApify(run.id, {
+          estado: "fallido",
+          error: err instanceof Error ? err.message : String(err),
+          completado_en: ahora,
+        });
+      }
       return NextResponse.json(
-        { error: "error_importando" },
+        {
+          error: "error_importando",
+          mensaje: err instanceof Error ? err.message : String(err),
+        },
         { status: 500 },
       );
     }

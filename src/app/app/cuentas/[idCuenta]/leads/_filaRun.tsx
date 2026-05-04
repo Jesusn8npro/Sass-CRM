@@ -149,6 +149,13 @@ export function FilaRun({ run, idCuenta, onAbrirLead }: Props) {
           leads={leads}
           cargando={cargandoRes}
           onAbrir={onAbrirLead}
+          onReimportar={async () => {
+            await sincronizar();
+            // Re-cargar la lista forzando refetch
+            setLeads(null);
+            await cargarLeads(true);
+          }}
+          reimportando={sincronizando}
         />
       )}
     </li>
@@ -159,10 +166,14 @@ function ListaLeads({
   leads,
   cargando,
   onAbrir,
+  onReimportar,
+  reimportando,
 }: {
   leads: LeadUI[] | null;
   cargando: boolean;
   onAbrir: (lead: LeadUI) => void;
+  onReimportar: () => void;
+  reimportando: boolean;
 }) {
   if (cargando) {
     return (
@@ -171,7 +182,23 @@ function ListaLeads({
   }
   if (!leads || leads.length === 0) {
     return (
-      <p className="mt-3 px-3 text-xs text-zinc-500">Sin leads en bandeja.</p>
+      <div className="mt-3 rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 px-4 py-3">
+        <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+          Sin leads en bandeja
+        </p>
+        <p className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-400">
+          Este run terminó antes del cambio de flow o falló al guardar. Si Apify
+          todavía tiene el dataset (lo guarda 7 días), podés re-importarlo.
+        </p>
+        <button
+          type="button"
+          onClick={onReimportar}
+          disabled={reimportando}
+          className="mt-2 rounded-full border border-emerald-500/40 px-3 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-500/10 disabled:opacity-50 dark:text-emerald-300"
+        >
+          {reimportando ? "Re-importando…" : "↻ Re-importar de Apify"}
+        </button>
+      </div>
     );
   }
   return (
