@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { crearConocimiento, obtenerCuenta } from "@/lib/baseDatos";
 import { requerirSesion } from "@/lib/auth/sesion";
+import { indexarEntrada } from "@/lib/rag/indexar";
 
 export const dynamic = "force-dynamic";
 // PDF parsing puede ser pesado — corremos en runtime nodejs explícito
@@ -134,6 +135,21 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     contenido,
     { categoria, esta_activo: true },
   );
+
+  // Indexar para RAG en background. PDFs grandes pueden tardar varios
+  // segundos chunkeando + embeddando — no bloqueamos la respuesta.
+  void indexarEntrada({
+    conocimientoId: entrada.id,
+    cuentaId: idCuenta,
+    titulo: entrada.titulo,
+    contenido: entrada.contenido,
+  }).then((r) => {
+    console.log(
+      `[conocimiento] indexado ${entrada.id}: ${r.chunks_generados} chunks, ${r.bytes_indexados} bytes`,
+    );
+  }).catch((err) => {
+    console.error("[conocimiento] indexar fallo (no bloqueante):", err);
+  });
 
   return NextResponse.json({
     entrada,

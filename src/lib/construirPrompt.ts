@@ -20,6 +20,7 @@ import { PROMPT_SISTEMA_DEFAULT } from "./promptSistema";
  *    de la conversación actual. Se incluye si se pasa `conversacion`.
  */
 import { REGLAS_ANTI_ALUCINACION, bloqueFechaActual } from "./construirPrompt-bloques";
+import type { ResultadoBusquedaChunk } from "./baseDatos";
 
 
 export function construirPromptSistema(
@@ -29,6 +30,9 @@ export function construirPromptSistema(
   productos: Producto[] = [],
   conversacion?: Conversacion | null,
   citasActivas: Cita[] = [],
+  /** Si se pasan chunks via RAG, los usamos en vez del dump completo
+   *  de conocimiento. Si llega array vacío o undefined, fallback a dump. */
+  chunksRAG?: ResultadoBusquedaChunk[],
 ): string {
   const partes: string[] = [];
 
@@ -203,25 +207,35 @@ ${partesAudio}${partesMedia}- Datos exactos (precios, links, mails, números) SI
     partes.push("\n\n# Información del negocio\n\n" + contexto);
   }
 
-  // Solo inyectamos al prompt entradas ACTIVAS con título y contenido.
-  // El dueño puede desactivar una entrada (esta_activo=false) sin
-  // borrarla, para excluirla del agente sin perder el contenido.
-  const entradasValidas = conocimiento.filter(
-    (e) => e.esta_activo !== false && e.titulo.trim() && e.contenido.trim(),
-  );
-  if (entradasValidas.length > 0) {
-    partes.push("\n\n# Información clave de referencia\n");
-    // Agrupamos por categoría para que el prompt sea más legible
-    const porCat = new Map<string, EntradaConocimiento[]>();
-    for (const e of entradasValidas) {
-      const cat = e.categoria?.trim() || "general";
-      if (!porCat.has(cat)) porCat.set(cat, []);
-      porCat.get(cat)!.push(e);
+  // Modo RAG: si vinieron chunks pre-buscados por similitud semántica,
+  // los usamos en vez del dump completo. Es lo más eficiente.
+  if (chunksRAG && chunksRAG.length > 0) {
+    partes.push("\n\n# Información clave de referencia (relevante a la consulta)\n");
+    for (const c of chunksRAG) {
+      partes.push(
+        `\n## ${c.titulo} ${c.categoria !== "general" ? `· ${c.categoria}` : ""}\n\n${c.contenido}\n`,
+      );
     }
-    for (const [cat, items] of porCat) {
-      if (porCat.size > 1) partes.push(`\n### Categoría: ${cat}\n`);
-      for (const e of items) {
-        partes.push(`\n## ${e.titulo.trim()}\n\n${e.contenido.trim()}\n`);
+  } else {
+    // Modo dump (fallback): la cuenta no tiene RAG indexado todavia,
+    // o la búsqueda devolvió cero matches. Inyectamos todo el
+    // conocimiento activo agrupado por categoría.
+    const entradasValidas = conocimiento.filter(
+      (e) => e.esta_activo !== false && e.titulo.trim() && e.contenido.trim(),
+    );
+    if (entradasValidas.length > 0) {
+      partes.push("\n\n# Información clave de referencia\n");
+      const porCat = new Map<string, EntradaConocimiento[]>();
+      for (const e of entradasValidas) {
+        const cat = e.categoria?.trim() || "general";
+        if (!porCat.has(cat)) porCat.set(cat, []);
+        porCat.get(cat)!.push(e);
+      }
+      for (const [cat, items] of porCat) {
+        if (porCat.size > 1) partes.push(`\n### Categoría: ${cat}\n`);
+        for (const e of items) {
+          partes.push(`\n## ${e.titulo.trim()}\n\n${e.contenido.trim()}\n`);
+        }
       }
     }
   }

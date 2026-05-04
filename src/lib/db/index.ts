@@ -43,3 +43,4 @@ export * from "./runsApify";
 export * from "./threadsConfig";
 export * from "./leadsExtraidos";
 export * from "./autoSeguimientos";
+export * from "./conocimientoChunks";

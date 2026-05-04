@@ -6,8 +6,10 @@ import {
   obtenerCuenta,
 } from "@/lib/baseDatos";
 import { requerirSesion } from "@/lib/auth/sesion";
+import { indexarEntrada } from "@/lib/rag/indexar";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 interface Contexto {
   params: Promise<{ idCuenta: string; idEntrada: string }>;
@@ -78,6 +80,20 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
       { status: 500 },
     );
   }
+
+  // Re-indexar si cambio titulo o contenido (no si solo cambio
+  // categoria/orden/activo).
+  if (titulo !== undefined || contenido !== undefined) {
+    void indexarEntrada({
+      conocimientoId: actualizada.id,
+      cuentaId: idCuenta,
+      titulo: actualizada.titulo,
+      contenido: actualizada.contenido,
+    }).catch((err) => {
+      console.error("[conocimiento] re-indexar fallo (no bloqueante):", err);
+    });
+  }
+
   return NextResponse.json({ entrada: actualizada });
 }
 

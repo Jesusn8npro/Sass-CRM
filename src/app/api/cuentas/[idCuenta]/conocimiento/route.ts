@@ -5,8 +5,10 @@ import {
   obtenerCuenta,
 } from "@/lib/baseDatos";
 import { requerirSesion } from "@/lib/auth/sesion";
+import { indexarEntrada } from "@/lib/rag/indexar";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 interface Contexto {
   params: Promise<{ idCuenta: string }>;
@@ -77,5 +79,18 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     categoria,
     esta_activo,
   });
+
+  // Indexar para RAG en background — no bloqueamos la respuesta. Si
+  // falla (por ej OpenAI rate limit), el log queda pero el user recibe
+  // OK y la entrada igual queda creada (modo dump como fallback).
+  void indexarEntrada({
+    conocimientoId: entrada.id,
+    cuentaId: idCuenta,
+    titulo: entrada.titulo,
+    contenido: entrada.contenido,
+  }).catch((err) => {
+    console.error("[conocimiento] indexar fallo (no bloqueante):", err);
+  });
+
   return NextResponse.json({ entrada });
 }

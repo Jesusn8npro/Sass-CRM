@@ -20,6 +20,7 @@ import {
 } from "../baseDatos";
 import { construirPromptSistema } from "../construirPrompt";
 import { generarRespuesta, type RespuestaIA } from "../openai";
+import { buscarConocimientoRelevante } from "../rag/buscar";
 import {
   dormir,
   enviarMedioBiblioteca,
@@ -53,6 +54,20 @@ export async function generarYEnviarRespuesta(
   const biblioteca = await listarBiblioteca(cuenta.id);
   const productos = await listarProductosActivos(cuenta.id);
   const citasActivas = await listarCitasActivasDeConversacion(conversacion.id);
+
+  // RAG: tomamos los últimos 3 mensajes del usuario (reciente contexto)
+  // y buscamos chunks similares. Si la cuenta no tiene chunks indexados
+  // o la búsqueda no da matches, buscarConocimientoRelevante devuelve
+  // [] y construirPromptSistema cae al modo dump tradicional.
+  const ultimosUsuario = historial
+    .filter((m) => m.rol === "usuario")
+    .slice(-3)
+    .map((m) => m.contenido)
+    .join("\n");
+  const chunksRAG = ultimosUsuario
+    ? await buscarConocimientoRelevante(cuenta.id, ultimosUsuario, { k: 5 })
+    : [];
+
   const promptCompleto = construirPromptSistema(
     cuenta,
     conocimiento,
@@ -60,7 +75,14 @@ export async function generarYEnviarRespuesta(
     productos,
     conversacion,
     citasActivas,
+    chunksRAG,
   );
+
+  if (chunksRAG.length > 0) {
+    console.log(
+      `${prefijo} 🔍 RAG: ${chunksRAG.length} chunks relevantes (top similitud ${chunksRAG[0]!.similitud.toFixed(2)})`,
+    );
+  }
 
   const inicio = Date.now();
   let respuesta: RespuestaIA;
