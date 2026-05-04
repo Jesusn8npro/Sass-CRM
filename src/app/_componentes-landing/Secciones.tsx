@@ -32,9 +32,10 @@ export function Hero() {
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-zinc-600 md:text-lg dark:text-zinc-400">
-          IA que responde, agenda, llama y cierra ventas en WhatsApp 24/7.
-          Multi-cuenta, multi-negocio, todo en un panel. Conectás tu número en
-          30 segundos y arranca a trabajar para vos.
+          IA que responde, agenda, llama y cierra ventas en WhatsApp 24/7. Y
+          ahora también <strong>busca clientes nuevos</strong>, <strong>genera
+          fotos profesionales</strong> de tus productos y se <strong>configura
+          conversando con vos</strong>. Todo en un panel.
         </p>
 
         <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -287,6 +288,24 @@ export function Funciones() {
         </div>
         <div className="mt-12 grid gap-4 md:mt-16 md:grid-cols-3">
           <TarjetaFuncion
+            icono="🔍"
+            titulo="Captación de leads con IA"
+            descripcion="Buscá restaurantes en Bogotá, abogados en CDMX, lo que quieras. Te trae nombre, teléfono, email y web — listo para escribirles."
+            destacada
+          />
+          <TarjetaFuncion
+            icono="🎨"
+            titulo="Estudio de imágenes IA"
+            descripcion="Subís foto de tu producto, elegís un preset (fondo blanco, lifestyle, premium) y la IA te genera la versión profesional."
+            destacada
+          />
+          <TarjetaFuncion
+            icono="💬"
+            titulo="Configurás conversando"
+            descripcion="Olvidate de formularios largos. Charlás con la IA y ella te arma el agente: nombre, tono, mensaje de bienvenida, contexto."
+            destacada
+          />
+          <TarjetaFuncion
             icono="🤖"
             titulo="IA multimodal"
             descripcion="GPT-4o ve imágenes, escucha audios, responde en texto y voz. Mezcla todo en una conversación natural."
@@ -312,6 +331,11 @@ export function Funciones() {
             descripcion="La IA agenda citas. Una hora antes manda recordatorio automático. Cero no-show."
           />
           <TarjetaFuncion
+            icono="💳"
+            titulo="Sistema de créditos"
+            descripcion="Pay-as-you-go. Cada lead, cada imagen, cada audio descuenta créditos. Sin sorpresas en la factura."
+          />
+          <TarjetaFuncion
             icono="💼"
             titulo="Multi-cuenta de WhatsApp"
             descripcion="Conectás N números desde el mismo panel. Cada uno con su prompt, voz y catálogo."
@@ -320,11 +344,6 @@ export function Funciones() {
             icono="📧"
             titulo="Captura automática"
             descripcion="La IA detecta emails y teléfonos en los mensajes y los guarda en tu CRM sin que muevas un dedo."
-          />
-          <TarjetaFuncion
-            icono="⏰"
-            titulo="Seguimientos programados"
-            descripcion="Programás un mensaje para mañana a las 10am. Si el cliente respondió antes, se cancela solo."
           />
           <TarjetaFuncion
             icono="🚫"
@@ -341,13 +360,26 @@ export function TarjetaFuncion({
   icono,
   titulo,
   descripcion,
+  destacada = false,
 }: {
   icono: string;
   titulo: string;
   descripcion: string;
+  destacada?: boolean;
 }) {
   return (
-    <div className="group rounded-2xl border border-zinc-200 bg-white p-5 transition-all hover:-translate-y-0.5 hover:border-emerald-500/30 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-950">
+    <div
+      className={`group relative rounded-2xl border p-5 transition-all hover:-translate-y-0.5 hover:shadow-md ${
+        destacada
+          ? "border-emerald-500/40 bg-gradient-to-br from-emerald-500/5 via-white to-white shadow-sm hover:border-emerald-500/60 dark:from-emerald-500/10 dark:via-zinc-950 dark:to-zinc-950"
+          : "border-zinc-200 bg-white hover:border-emerald-500/30 dark:border-zinc-800 dark:bg-zinc-950"
+      }`}
+    >
+      {destacada && (
+        <span className="absolute -top-2 right-4 rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm">
+          Nuevo
+        </span>
+      )}
       <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10 text-2xl ring-1 ring-emerald-500/20">
         {icono}
       </div>

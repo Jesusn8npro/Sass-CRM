@@ -6,6 +6,11 @@ interface Props {
   conversaciones: ConversacionConPreview[];
   idSeleccionada: string | null;
   onSeleccionar: (id: string) => void;
+  /** Si está activo, cada item muestra checkbox y el click toggle-a
+   *  selección en lugar de abrir la conversación. */
+  modoSeleccion?: boolean;
+  seleccionadas?: Set<string>;
+  onToggleSeleccion?: (id: string) => void;
 }
 
 /** Timestamp tipo Talos: "ahora" si <60s, "HH:MM" si hoy, "ayer", o
@@ -53,6 +58,9 @@ export function ListaConversaciones({
   conversaciones,
   idSeleccionada,
   onSeleccionar,
+  modoSeleccion = false,
+  seleccionadas,
+  onToggleSeleccion,
 }: Props) {
   if (conversaciones.length === 0) {
     return (
@@ -86,17 +94,35 @@ export function ListaConversaciones({
         const previewBruto = c.vista_previa_ultimo_mensaje ?? "";
         const previewTexto = previewBruto.trim();
 
+        const checked = seleccionadas?.has(c.id) ?? false;
+
         return (
           <li key={c.id}>
             <button
               type="button"
-              onClick={() => onSeleccionar(c.id)}
+              onClick={() =>
+                modoSeleccion
+                  ? onToggleSeleccion?.(c.id)
+                  : onSeleccionar(c.id)
+              }
               className={`group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
-                seleccionada
+                modoSeleccion && checked
+                  ? "bg-rose-50/60 dark:bg-rose-950/30"
+                  : seleccionada && !modoSeleccion
                   ? "bg-emerald-50/60 dark:bg-emerald-950/30"
                   : "hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
               }`}
             >
+              {modoSeleccion && (
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => onToggleSeleccion?.(c.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={`Seleccionar conversación ${c.nombre ?? c.telefono}`}
+                  className="h-4 w-4 shrink-0 accent-rose-500"
+                />
+              )}
               {/* Avatar circular grande con 1 letra + badge sin-leer */}
               <div className="relative shrink-0">
                 <div

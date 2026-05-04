@@ -257,6 +257,25 @@ export async function borrarConversacion(id: string): Promise<void> {
   if (error) lanzar(error, "borrarConversacion");
 }
 
+/**
+ * Borrado masivo. Filtra por cuenta_id como guard de seguridad — aunque
+ * el caller ya valida la pertenencia, esto evita borrar accidentalmente
+ * conversaciones de otra cuenta si pasaron IDs mezclados.
+ */
+export async function borrarConversaciones(
+  cuentaId: string,
+  ids: string[],
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const { error, count } = await db()
+    .from("conversaciones")
+    .delete({ count: "exact" })
+    .eq("cuenta_id", cuentaId)
+    .in("id", ids);
+  if (error) lanzar(error, "borrarConversaciones");
+  return count ?? 0;
+}
+
 export async function cambiarEtapaConversacion(
   conversacionId: string,
   etapaId: string | null,
