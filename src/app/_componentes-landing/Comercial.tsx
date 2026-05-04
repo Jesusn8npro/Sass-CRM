@@ -1,188 +1,124 @@
 import Link from "next/link";
 
+// ============================================================
+// PRECIOS — tres planes, plan central destacado
+// ============================================================
+const PLANES = [
+  {
+    n: "Gratis",
+    p: "$0",
+    u: "siempre",
+    d: "Para validar el sistema con un número.",
+    items: ["1 cuenta WhatsApp", "100 conversaciones/mes", "GPT-4o-mini", "Pipeline + agenda + productos", "Soporte por chat"],
+    cta: "Empezar gratis",
+    destacado: false,
+  },
+  {
+    n: "Pro",
+    p: "$29",
+    u: "/mes · cuenta",
+    d: "Para emprendedores que ya venden por WhatsApp.",
+    items: ["WhatsApp ilimitados", "Conversaciones ilimitadas", "Voz clonada + Vapi", "Multi-modelo (GPT-4o · Claude)", "Soporte prioritario"],
+    cta: "Probar 7 días",
+    destacado: true,
+  },
+  {
+    n: "Business",
+    p: "Custom",
+    u: "white-label",
+    d: "Agencias y SaaS que revenden a sus clientes.",
+    items: ["Dominio propio + branding", "API completa", "Multi-usuario por tenant", "Onboarding dedicado", "SLA 99.9%"],
+    cta: "Hablar con ventas",
+    destacado: false,
+  },
+];
+
 export function Precios() {
   return (
-    <section id="precios" className="border-y border-zinc-200 bg-zinc-50/50 py-20 md:py-28 dark:border-zinc-800 dark:bg-zinc-900/30">
-      <div className="mx-auto max-w-6xl px-4 md:px-6">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-            Precios simples. Sin letra chica.
+    <section id="precios" className="border-y border-white/[0.06] bg-[#080808]">
+      <div className="mx-auto max-w-6xl px-6 py-24 md:py-32">
+        <div className="mb-14 max-w-2xl">
+          <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-400">// pricing</p>
+          <h2 className="text-4xl tracking-[-0.02em] text-white md:text-5xl">
+            Precios{" "}
+            <span className="font-display italic text-white/70">simples</span>.
+            Sin letra chica.
           </h2>
-          <p className="mt-4 text-base text-zinc-600 dark:text-zinc-400">
-            Empezás gratis. Cuando vendas más, escalás.
-          </p>
         </div>
-
-        <div className="mx-auto mt-12 grid max-w-5xl gap-6 md:mt-16 md:grid-cols-3">
-          <PlanPrecio
-            nombre="Gratis"
-            precio="$0"
-            unidad="para siempre"
-            descripcion="Para probar el sistema con un número de WhatsApp."
-            beneficios={[
-              "1 cuenta de WhatsApp",
-              "Hasta 100 conversaciones/mes",
-              "IA con GPT-4o-mini",
-              "Pipeline + productos + agenda",
-              "Comunidad y soporte por chat",
-            ]}
-            cta="Empezar gratis"
-            destacado={false}
-          />
-          <PlanPrecio
-            nombre="Pro"
-            precio="$29"
-            unidad="/mes por cuenta"
-            descripcion="Para emprendedores que ya venden por WhatsApp."
-            beneficios={[
-              "WhatsApp ilimitados",
-              "Conversaciones ilimitadas",
-              "Voz clonada + llamadas Vapi",
-              "Multi-modelo (GPT-4o, Claude)",
-              "Soporte prioritario",
-            ]}
-            cta="Probar Pro 7 días"
-            destacado={true}
-          />
-          <PlanPrecio
-            nombre="Business"
-            precio="A medida"
-            unidad="white-label"
-            descripcion="Agencias y SaaS que revenden el producto a sus clientes."
-            beneficios={[
-              "Dominio propio + branding",
-              "API completa",
-              "Multi-usuario por tenant",
-              "Onboarding dedicado",
-              "SLA 99.9%",
-            ]}
-            cta="Hablar con ventas"
-            destacado={false}
-          />
+        <div className="grid gap-6 md:grid-cols-3">
+          {PLANES.map((plan) => (
+            <article
+              key={plan.n}
+              className={`relative flex flex-col rounded-2xl border p-7 transition-all ${
+                plan.destacado
+                  ? "border-emerald-400/40 bg-gradient-to-b from-emerald-400/[0.04] to-transparent shadow-[0_0_60px_-20px_rgba(52,211,153,0.5)]"
+                  : "border-white/[0.08] bg-black hover:border-white/20"
+              }`}
+            >
+              {plan.destacado && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full border border-emerald-400/40 bg-black px-3 py-1 font-mono text-[9px] uppercase tracking-[0.22em] text-emerald-300">
+                  más popular
+                </div>
+              )}
+              <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/60">{plan.n}</h3>
+              <div className="mt-5 flex items-baseline gap-2">
+                <span className="font-display text-6xl tracking-tight text-white">{plan.p}</span>
+                <span className="font-mono text-[11px] tracking-wide text-white/40">{plan.u}</span>
+              </div>
+              <p className="mt-3 text-sm text-white/55">{plan.d}</p>
+              <ul className="mt-7 flex-1 space-y-2.5">
+                {plan.items.map((it) => (
+                  <li key={it} className="flex items-start gap-2.5 text-[13px] text-white/75">
+                    <span className="mt-[7px] h-px w-3 shrink-0 bg-emerald-400" />
+                    <span>{it}</span>
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/signup"
+                className={`mt-8 block rounded-full px-4 py-2.5 text-center text-sm font-semibold transition-all ${
+                  plan.destacado
+                    ? "bg-emerald-400 text-black shadow-[0_0_28px_-4px_rgba(52,211,153,0.6)] hover:bg-emerald-300"
+                    : "border border-white/15 text-white/85 hover:border-white/40 hover:bg-white/[0.04]"
+                }`}
+              >
+                {plan.cta}
+              </Link>
+            </article>
+          ))}
         </div>
       </div>
     </section>
   );
 }
 
-export function PlanPrecio({
-  nombre,
-  precio,
-  unidad,
-  descripcion,
-  beneficios,
-  cta,
-  destacado,
-}: {
-  nombre: string;
-  precio: string;
-  unidad: string;
-  descripcion: string;
-  beneficios: string[];
-  cta: string;
-  destacado: boolean;
-}) {
-  return (
-    <div
-      className={`relative flex flex-col rounded-2xl border p-6 ${
-        destacado
-          ? "border-emerald-500 bg-white shadow-xl shadow-emerald-500/20 dark:bg-zinc-950"
-          : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
-      }`}
-    >
-      {destacado && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-emerald-500 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-          Más popular
-        </div>
-      )}
-      <h3 className="text-lg font-semibold">{nombre}</h3>
-      <div className="mt-3 flex items-baseline gap-1">
-        <span className="text-4xl font-bold tracking-tight">{precio}</span>
-        <span className="text-sm text-zinc-500">{unidad}</span>
-      </div>
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{descripcion}</p>
-      <ul className="mt-6 flex-1 space-y-2.5 text-sm">
-        {beneficios.map((b) => (
-          <li key={b} className="flex items-start gap-2">
-            <svg
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500"
-            >
-              <path
-                fillRule="evenodd"
-                clipRule="evenodd"
-                d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z"
-              />
-            </svg>
-            <span className="text-zinc-700 dark:text-zinc-300">{b}</span>
-          </li>
-        ))}
-      </ul>
-      <Link
-        href="/signup"
-        className={`mt-6 block rounded-full px-4 py-2.5 text-center text-sm font-semibold transition-colors ${
-          destacado
-            ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/30 hover:bg-emerald-400"
-            : "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-        }`}
-      >
-        {cta}
-      </Link>
-    </div>
-  );
-}
-
 // ============================================================
 // FAQ
 // ============================================================
+const PREGUNTAS = [
+  { q: "¿Esto banea mi WhatsApp?", a: "No. WhatsApp Web (no API oficial), límites diarios, jitter humano, horarios respetados. Diseñado para no quemar números." },
+  { q: "¿Necesito saber programar?", a: "No. Todo desde el panel: catálogo, prompt en lenguaje natural, integraciones pegando keys. Cero código." },
+  { q: "¿Mis datos están seguros?", a: "Sí. Postgres con Row Level Security y encriptación. Cada usuario ve solo sus cuentas. Las claves de IA son privadas por cuenta." },
+  { q: "¿Puedo migrar de n8n / Wati / Botmaker?", a: "Sí. Te ayudamos a importar contactos y conversaciones. Curva de aprendizaje: 1 día comparado con n8n." },
+  { q: "¿Cuánto tarda el setup?", a: "2 minutos crear cuenta + escanear QR. 30 minutos configurar catálogo y prompt. Vendiendo el mismo día." },
+  { q: "¿Hay descuentos por volumen?", a: "Sí. Desde 10 cuentas hay descuento progresivo. Para agencias, ver plan Business (white-label)." },
+];
+
 export function PreguntasFrecuentes() {
-  const preguntas: Array<{ q: string; a: string }> = [
-    {
-      q: "¿Esto banea mi WhatsApp?",
-      a: "No. Usamos WhatsApp Web (no API oficial), respetamos límites diarios, jitter entre envíos y horarios humanos. Diseñado específicamente para no quemar números.",
-    },
-    {
-      q: "¿Necesito saber programar?",
-      a: "No. Todo se configura desde el panel: subís catálogo, escribís el prompt en lenguaje natural, conectás Vapi pegando una key. Cero código.",
-    },
-    {
-      q: "¿Mis datos están seguros?",
-      a: "Sí. Todo en Postgres con Row Level Security y encriptación. Cada usuario ve solo sus cuentas. Las claves de IA y voz son privadas por cuenta.",
-    },
-    {
-      q: "¿Puedo migrar de n8n / Wati / Botmaker?",
-      a: "Sí. Te ayudamos a importar contactos y conversaciones. La curva de aprendizaje es de 1 día comparada con n8n.",
-    },
-    {
-      q: "¿Cuánto tarda el setup?",
-      a: "2 minutos para crear cuenta + escanear QR. 30 minutos para cargar catálogo y prompt. Listo para vender el mismo día.",
-    },
-    {
-      q: "¿Hay descuentos por volumen?",
-      a: "Sí. A partir de 10 cuentas hay descuento progresivo. Para agencias, ver plan Business (white-label).",
-    },
-  ];
   return (
-    <section id="faq" className="mx-auto max-w-3xl px-4 py-20 md:px-6 md:py-28">
-      <div className="text-center">
-        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-          Preguntas frecuentes
-        </h2>
-      </div>
-      <div className="mt-10 space-y-3 md:mt-12">
-        {preguntas.map((p) => (
-          <details
-            key={p.q}
-            className="group rounded-xl border border-zinc-200 bg-white p-4 open:border-emerald-500/30 open:shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
-          >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold">
-              {p.q}
-              <span className="text-zinc-400 transition-transform group-open:rotate-180">▼</span>
+    <section id="faq" className="mx-auto max-w-3xl px-6 py-24 md:py-32">
+      <p className="mb-4 text-center font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-400">// faq</p>
+      <h2 className="text-center text-4xl tracking-[-0.02em] text-white md:text-5xl">
+        Preguntas <span className="font-display italic text-white/70">frecuentes</span>.
+      </h2>
+      <div className="mt-12 divide-y divide-white/[0.06] border-y border-white/[0.06]">
+        {PREGUNTAS.map((p) => (
+          <details key={p.q} className="group py-5">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[15px] font-medium text-white/90">
+              <span>{p.q}</span>
+              <span className="font-mono text-xs text-white/30 transition-transform group-open:rotate-45">+</span>
             </summary>
-            <p className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-              {p.a}
-            </p>
+            <p className="mt-3 text-sm leading-relaxed text-white/55">{p.a}</p>
           </details>
         ))}
       </div>
@@ -195,38 +131,42 @@ export function PreguntasFrecuentes() {
 // ============================================================
 export function CtaFinal() {
   return (
-    <section className="mx-auto max-w-5xl px-4 pb-20 md:px-6 md:pb-28">
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-500 via-teal-600 to-cyan-700 p-10 text-center text-white shadow-2xl shadow-emerald-500/30 md:p-16">
+    <section className="mx-auto max-w-6xl px-6 pb-24 md:pb-32">
+      <div className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-emerald-400/[0.08] via-black to-black p-10 md:p-16">
         <div
-          className="pointer-events-none absolute inset-0 opacity-20"
+          className="pointer-events-none absolute inset-0 opacity-30"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 20% 30%, white 1px, transparent 1px), radial-gradient(circle at 80% 70%, white 1px, transparent 1px)",
-            backgroundSize: "32px 32px",
+              "radial-gradient(circle at 15% 20%, rgba(52,211,153,0.18) 0, transparent 40%), radial-gradient(circle at 85% 80%, rgba(192,132,252,0.12) 0, transparent 40%)",
           }}
         />
-        <h2 className="relative text-3xl font-bold tracking-tight md:text-5xl">
-          Tus competidores ya están automatizando.
-          <br />
-          <span className="text-emerald-100">¿Vos qué esperás?</span>
-        </h2>
-        <p className="relative mx-auto mt-5 max-w-xl text-base text-emerald-50">
-          Probalo gratis, sin tarjeta. Si no te gusta, lo desconectás en
-          1 click.
-        </p>
-        <div className="relative mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Link
-            href="/signup"
-            className="rounded-full bg-white px-7 py-3 text-base font-bold text-emerald-700 shadow-lg transition-all hover:scale-105"
-          >
-            Crear cuenta gratis →
-          </Link>
-          <Link
-            href="/login"
-            className="rounded-full border border-white/30 bg-white/10 px-7 py-3 text-base font-medium text-white backdrop-blur hover:bg-white/20"
-          >
-            Ya tengo cuenta
-          </Link>
+        <div className="relative max-w-2xl">
+          <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-300">
+            // empezá hoy
+          </p>
+          <h2 className="text-4xl leading-[1.05] tracking-[-0.02em] text-white md:text-6xl">
+            Tus competidores ya están automatizando.{" "}
+            <span className="font-display italic text-emerald-300">¿Vos qué esperás?</span>
+          </h2>
+          <p className="mt-6 max-w-xl text-base text-white/55">
+            Probalo gratis, sin tarjeta. Si no te convence, lo desconectás
+            en un click.
+          </p>
+          <div className="mt-10 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+            <Link
+              href="/signup"
+              className="group inline-flex items-center gap-3 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black shadow-[0_0_44px_-8px_rgba(255,255,255,0.5)] transition-all hover:bg-emerald-300 hover:shadow-[0_0_60px_-8px_rgba(52,211,153,0.7)]"
+            >
+              Crear cuenta gratis
+              <span className="font-mono text-xs opacity-60 transition-transform group-hover:translate-x-0.5">→</span>
+            </Link>
+            <Link
+              href="/login"
+              className="inline-flex items-center rounded-full border border-white/15 px-6 py-3 text-sm font-medium text-white/80 transition-colors hover:border-white/40 hover:text-white"
+            >
+              Ya tengo cuenta
+            </Link>
+          </div>
         </div>
       </div>
     </section>

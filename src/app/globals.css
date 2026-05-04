@@ -4,7 +4,8 @@
 
 @theme {
   --font-sans: var(--fuente-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --font-mono: var(--fuente-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: var(--fuente-display), ui-serif, Georgia, serif;
 }
 
 /* ============================================================

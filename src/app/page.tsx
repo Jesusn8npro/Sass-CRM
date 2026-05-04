@@ -13,14 +13,12 @@ import {
 } from "./_componentes-landing/Comercial";
 
 /**
- * Landing pública.
- * Server component puro: sin estado, sin JS extra, máximo SEO.
- * Estructura: Nav · Hero · Métricas · Cómo funciona · Funciones ·
- * Casos de uso · Precios · FAQ · CTA final · Footer.
+ * Landing pública. Server component puro: dark editorial cyber.
+ * Forza fondo negro independiente del tema global de la app.
  */
 export default function PaginaLanding() {
   return (
-    <main className="min-h-screen bg-white text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100">
+    <main className="min-h-screen bg-black font-sans text-white antialiased [color-scheme:dark]">
       <Navegacion />
       <Hero />
       <Metricas />
