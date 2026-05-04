@@ -17,6 +17,7 @@ import {
   textareaClases,
 } from "./compartido";
 import { SeccionBiblioteca } from "./Biblioteca";
+import { SeccionAutoSeguimientos } from "./SeccionAutoSeguimientos";
 
 export function SeccionMensajesPredefinidos({
   cuenta,
@@ -381,6 +382,7 @@ export function TabMensajes({
   return (
     <>
       <SeccionMensajesPredefinidos cuenta={cuenta} onActualizada={setCuenta} />
+      <SeccionAutoSeguimientos idCuenta={cuenta.id} />
       <SeccionRespuestasRapidas
         idCuenta={cuenta.id}
         respuestas={respuestas}

@@ -16,6 +16,7 @@ import {
   obtenerOCrearConversacion,
   obtenerConversacionPorId,
   obtenerCuenta,
+  resetearPasoAutoSeguimiento,
   vincularEcoHumanoReciente,
   type Conversacion,
   type TipoMensaje,
@@ -359,6 +360,15 @@ export function registrarManejadores(
           media_path: mediaPath,
           wa_msg_id: msg.key.id ?? null,
         });
+
+        // El cliente respondió → resetear contador de auto-seguimientos
+        // para que si el bot vuelve a mandar y el cliente vuelve a
+        // callarse, los recordatorios arranquen desde el paso 1.
+        try {
+          await resetearPasoAutoSeguimiento(conversacion.id);
+        } catch (err) {
+          console.error(`${prefijo} error reseteando auto-seg:`, err);
+        }
 
         // Handoff inmediato por palabras clave configuradas en /configuracion.
         // Si el cliente escribe "hablar con humano", "agente humano", etc.,

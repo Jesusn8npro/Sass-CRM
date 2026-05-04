@@ -24,6 +24,9 @@ export interface Conversacion {
   estado_lead: EstadoLead;
   paso_actual: string;
   datos_capturados: DatosCapturados;
+  /** Cantidad de pasos de auto-seguimiento ya disparados en esta
+   *  conversacion. Se resetea a 0 cuando el cliente responde. */
+  auto_seg_paso_enviado: number;
 }
 
 export interface ConversacionConPreview extends Conversacion {

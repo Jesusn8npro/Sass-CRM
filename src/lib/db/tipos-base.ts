@@ -165,6 +165,10 @@ export interface Cuenta {
   wa_ultimo_error: string | null;
   esta_activa: boolean;
   esta_archivada: boolean;
+  /** Si true, el procesador de auto-seguimientos puede agendar
+   *  recordatorios para conversaciones de esta cuenta. Los pasos
+   *  configurados viven en `auto_seguimientos_pasos`. */
+  auto_seguimiento_activo: boolean;
   creada_en: string;
   actualizada_en: string;
 }

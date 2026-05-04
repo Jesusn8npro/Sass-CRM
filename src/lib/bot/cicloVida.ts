@@ -8,6 +8,7 @@ import {
   procesarRecordatoriosCitas,
   procesarSeguimientosPendientes,
 } from "./procesadores";
+import { procesarAutoSeguimientos } from "./procesarAutoSeguimientos";
 
 interface EstadoCicloVida {
   arrancando: boolean;
@@ -16,6 +17,7 @@ interface EstadoCicloVida {
   intervaloHeartbeat: NodeJS.Timeout | null;
   intervaloSincronizacion: NodeJS.Timeout | null;
   intervaloSeguimientos: NodeJS.Timeout | null;
+  intervaloAutoSeguimientos: NodeJS.Timeout | null;
   intervaloRecordatoriosCitas: NodeJS.Timeout | null;
   intervaloLlamadasProgramadas: NodeJS.Timeout | null;
   apagado: boolean;
@@ -37,6 +39,7 @@ if (!g[claveGlobal]) {
     intervaloHeartbeat: null,
     intervaloSincronizacion: null,
     intervaloSeguimientos: null,
+    intervaloAutoSeguimientos: null,
     intervaloRecordatoriosCitas: null,
     intervaloLlamadasProgramadas: null,
     apagado: false,
@@ -83,6 +86,8 @@ function instalarGuardias(): void {
       clearInterval(estado.intervaloSincronizacion);
     if (estado.intervaloSeguimientos)
       clearInterval(estado.intervaloSeguimientos);
+    if (estado.intervaloAutoSeguimientos)
+      clearInterval(estado.intervaloAutoSeguimientos);
     if (estado.intervaloRecordatoriosCitas)
       clearInterval(estado.intervaloRecordatoriosCitas);
     if (estado.intervaloLlamadasProgramadas)
@@ -167,6 +172,14 @@ export async function arrancarBotEnProceso(): Promise<void> {
         console.error("[bot] error procesando seguimientos:", err);
       });
     }, 30_000);
+
+    // Auto-seguimientos: cada 2 min revisa qué conversaciones merecen
+    // un recordatorio automatico segun los pasos configurados.
+    estado.intervaloAutoSeguimientos = setInterval(() => {
+      void procesarAutoSeguimientos().catch((err) => {
+        console.error("[bot] error en auto-seguimientos:", err);
+      });
+    }, 120_000);
 
     // Recordatorios de citas: cada 60s revisa citas en la próxima hora
     estado.intervaloRecordatoriosCitas = setInterval(() => {
