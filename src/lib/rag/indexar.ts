@@ -13,6 +13,7 @@ import {
 } from "../baseDatos";
 import { chunkear } from "./chunker";
 import { generarEmbeddingsBatch } from "./embeddings";
+import { invalidarCacheChunks } from "./buscar";
 
 export interface ResumenIndexacion {
   conocimiento_id: string;
@@ -71,6 +72,10 @@ export async function indexarEntrada(input: {
   }));
 
   await insertarChunks(filas);
+  // Si era la primera entrada con chunks de esta cuenta, el cache
+  // tiene "no hay chunks" — invalidamos para que el próximo mensaje
+  // use RAG inmediatamente.
+  invalidarCacheChunks(input.cuentaId);
 
   resumen.chunks_generados = filas.length;
   resumen.bytes_indexados = chunks.reduce((acc, c) => acc + c.length, 0);

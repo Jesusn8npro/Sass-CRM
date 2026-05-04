@@ -161,12 +161,33 @@ export async function generarYEnviarRespuesta(
   );
 
   // Despachar cada parte según su tipo. La AI eligió una mezcla de
-  // texto / audio / media (ver instrucciones en openai.ts). Ya no hay
-  // "modo espejo binario" que convierta toda la respuesta a voz.
+  // texto / audio / media (ver instrucciones en openai.ts).
   const tieneVoz =
     !!cuenta.voz_elevenlabs && cuenta.voz_elevenlabs.trim().length > 0;
   const tieneApiKeyEleven = !!process.env.ELEVENLABS_API_KEY;
   const puedeUsarVoz = tieneVoz && tieneApiKeyEleven;
+
+  // Post-procesador para modo espejo_voz: si el cliente mandó audio
+  // y la IA NO eligió ninguna parte tipo="audio" (a veces se olvida
+  // de la instrucción), forzamos la primera parte de texto a audio.
+  // Esto convierte el "soft constraint" del prompt en "hard guarantee".
+  if (
+    cuenta.modo_respuesta === "espejo_voz" &&
+    puedeUsarVoz &&
+    historial[historial.length - 1]?.tipo === "audio" &&
+    !respuesta.partes.some((p) => p.tipo === "audio" && p.contenido.trim())
+  ) {
+    const idxPrimerTexto = respuesta.partes.findIndex(
+      (p) =>
+        (p.tipo === "texto" || !p.tipo) && p.contenido.trim().length > 0,
+    );
+    if (idxPrimerTexto >= 0) {
+      respuesta.partes[idxPrimerTexto]!.tipo = "audio";
+      console.log(
+        `${prefijo} 🔊 espejo_voz: forzando parte ${idxPrimerTexto + 1} a audio (cliente mandó audio, IA no respondió con voz)`,
+      );
+    }
+  }
 
   for (let i = 0; i < respuesta.partes.length; i++) {
     const parte = respuesta.partes[i]!;

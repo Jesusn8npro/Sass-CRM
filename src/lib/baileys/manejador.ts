@@ -362,12 +362,14 @@ export function registrarManejadores(
         });
 
         // El cliente respondió → resetear contador de auto-seguimientos
-        // para que si el bot vuelve a mandar y el cliente vuelve a
-        // callarse, los recordatorios arranquen desde el paso 1.
-        try {
-          await resetearPasoAutoSeguimiento(conversacion.id);
-        } catch (err) {
-          console.error(`${prefijo} error reseteando auto-seg:`, err);
+        // SOLO si la cuenta tiene la feature activa (evita query inútil
+        // y errores ruidosos si la migración 05 todavía no se aplicó).
+        if (cuenta.auto_seguimiento_activo === true) {
+          try {
+            await resetearPasoAutoSeguimiento(conversacion.id);
+          } catch (err) {
+            console.error(`${prefijo} error reseteando auto-seg:`, err);
+          }
         }
 
         // Handoff inmediato por palabras clave configuradas en /configuracion.
