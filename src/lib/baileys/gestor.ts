@@ -479,13 +479,23 @@ class GestorCuentas {
   }
 }
 
-let gestorSingleton: GestorCuentas | null = null;
+// Singleton persistido en globalThis para sobrevivir Next.js HMR.
+// Sin esto, cada vez que editás cualquier archivo que importa gestor.ts,
+// el módulo se recarga, el singleton se reinicia desde cero, los
+// timers de reconexión se pierden, las pausas por conflicto se
+// olvidan, y todas las cuentas se reinician en simultáneo. En dev
+// eso causa el loop "abierta/cerrada/abierta/cerrada" sin parar.
+const claveGlobalGestor = "__gestorBaileysSingleton" as const;
+type GlobalConGestor = typeof globalThis & {
+  [claveGlobalGestor]?: GestorCuentas;
+};
+const gGestor = globalThis as GlobalConGestor;
 
 export function obtenerGestor(): GestorCuentas {
-  if (!gestorSingleton) {
-    gestorSingleton = new GestorCuentas();
+  if (!gGestor[claveGlobalGestor]) {
+    gGestor[claveGlobalGestor] = new GestorCuentas();
   }
-  return gestorSingleton;
+  return gGestor[claveGlobalGestor]!;
 }
 
 export type { GestorCuentas };
