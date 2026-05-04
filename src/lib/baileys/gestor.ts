@@ -51,12 +51,12 @@ interface SocketCuenta {
   pausarReconexionHasta: number;
 }
 
-// Detección de conflicto multi-instancia más agresiva. Antes solo
-// contaba 440, pero a veces el close viene con código undefined o
-// distinto. Cualquier cierre rapido entra al contador.
-const UMBRAL_CONFLICTO440 = 3;
-const VENTANA_CONFLICTO_MS = 30_000;
-const TIEMPO_PAUSA_CONFLICTO_MS = 10 * 60_000; // 10 minutos
+// Detección de conflicto multi-instancia. 2 closes en 20s ya es
+// señal clara de que algo compite por la sesión — pausamos rápido
+// para no spamear el terminal.
+const UMBRAL_CONFLICTO440 = 2;
+const VENTANA_CONFLICTO_MS = 20_000;
+const TIEMPO_PAUSA_CONFLICTO_MS = 15 * 60_000; // 15 minutos
 
 const MAX_MENSAJES_CACHE = 500;
 
@@ -90,6 +90,12 @@ function extraerTelefonoDeJID(jid: string | undefined): string | null {
 class GestorCuentas {
   private sockets = new Map<string, SocketCuenta>();
   private detenido = false;
+  /**
+   * Cuentas pausadas por conflicto detectado. Si el timestamp es
+   * futuro, sincronizar NO arranca el socket. Una vez que pasa, se
+   * limpia automaticamente.
+   */
+  private pausasPorConflicto = new Map<string, number>();
 
   async iniciar(): Promise<void> {
     await this.sincronizar();
@@ -114,12 +120,18 @@ class GestorCuentas {
     // Iniciar sockets para cuentas nuevas, respetando pausa por conflicto
     const ahora = Date.now();
     for (const cuenta of cuentas) {
-      const entrada = this.sockets.get(cuenta.id);
-      if (entrada) continue; // ya tiene socket
+      if (this.sockets.has(cuenta.id)) continue;
 
-      // Si hubo conflicto detectado, no auto-iniciar hasta que pase la pausa.
-      // El tracking se mantiene en el stale entry — si fue eliminada, no hay.
-      // (En el futuro persistir esto en DB si necesitamos cross-restart).
+      // Si hay pausa por conflicto activa, skip.
+      const pausaHasta = this.pausasPorConflicto.get(cuenta.id) ?? 0;
+      if (pausaHasta > ahora) continue;
+      if (pausaHasta > 0 && pausaHasta <= ahora) {
+        // Pausa expiró — limpiar y volver a intentar normalmente
+        this.pausasPorConflicto.delete(cuenta.id);
+        console.log(
+          `[gestor] pausa por conflicto expiró para cuenta ${cuenta.id} — reintentando`,
+        );
+      }
 
       try {
         await this.iniciarSocketCuenta(cuenta);
@@ -130,8 +142,6 @@ class GestorCuentas {
         );
       }
     }
-    // ahora unused but kept for future stamping
-    void ahora;
   }
 
   private async iniciarSocketCuenta(cuenta: Cuenta): Promise<void> {
@@ -231,12 +241,14 @@ class GestorCuentas {
 
       if (connection === "open") {
         const telefono = extraerTelefonoDeJID(sock.user?.id);
-        // Solo loggear "conectado" si es la primera vez en esta sesión —
-        // si está reconectándose en loop, evita spam.
+        // Anti-flap: solo loggear "conectado" si NO hubo desconexiones
+        // recientes (< 30s). Si el bot está flapping, los logs no aportan.
         const entradaActual = this.sockets.get(cuenta.id);
-        const esPrimeraVez =
-          !entradaActual || entradaActual.timestamps440.length === 0;
-        if (esPrimeraVez) {
+        const ahora = Date.now();
+        const huboCierreReciente =
+          entradaActual?.timestamps440.some((t) => ahora - t < 30_000) ??
+          false;
+        if (!huboCierreReciente) {
           console.log(
             `${prefijo} ✓ conectado al número ${telefono ?? "?"}`,
           );
@@ -339,6 +351,13 @@ class GestorCuentas {
         estado: "desconectado",
         cadena_qr: null,
       });
+      // Registramos la pausa en el map dedicado y limpiamos el socket.
+      // Sincronizar ya no va a re-iniciar hasta que pase pausarHasta.
+      this.pausasPorConflicto.set(
+        cuentaId,
+        ahora + TIEMPO_PAUSA_CONFLICTO_MS,
+      );
+      void this.apagarSocket(cuentaId);
       return; // No programar reconexion
     }
 
@@ -353,11 +372,11 @@ class GestorCuentas {
     }
 
     const espera = codigo === 440 ? 4000 : 5000;
-    // Solo loggear el primer intento — si está en loop, los demás
-    // los suprimimos hasta que llegue al umbral de conflicto.
-    if (entrada.timestamps440.length <= 1) {
+    // Solo loggear UNA vez al inicio del ciclo (no en cada reintento).
+    // Si esta en loop, el banner de conflicto va a aparecer pronto.
+    if (entrada.timestamps440.length === 1) {
       console.log(
-        `[bot:${entrada.etiqueta}] desconectado (codigo ${codigo ?? "?"}). Reintentando en ${espera / 1000}s...`,
+        `[bot:${entrada.etiqueta}] desconectado (codigo ${codigo ?? "?"}). Reintentando...`,
       );
     }
     entrada.temporizadorReconexion = setTimeout(async () => {

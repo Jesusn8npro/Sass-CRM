@@ -99,12 +99,11 @@ function instalarGuardias(): void {
     console.error("[bot] uncaughtException:", err);
   });
   process.on("unhandledRejection", (razon) => {
-    if (esRechazoBenignoBaileys(razon)) {
-      // Log compacto, no spam con stack completo
-      const m = (razon as { message?: string }).message ?? "?";
-      console.warn(`[bot] socket interno (benigno): ${m}`);
-      return;
-    }
+    // Suprimimos TOTAL los rejections internos de Baileys. No loggeamos
+    // ni siquiera versiones compactas — son timeouts de queries WS
+    // pendientes cuando el socket muere, totalmente benignos. El
+    // gestor maneja los closes y reconexiones por separado.
+    if (esRechazoBenignoBaileys(razon)) return;
     console.error("[bot] unhandledRejection:", razon);
   });
   const apagar = async () => {
