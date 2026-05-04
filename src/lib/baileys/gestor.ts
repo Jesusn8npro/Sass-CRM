@@ -51,9 +51,12 @@ interface SocketCuenta {
   pausarReconexionHasta: number;
 }
 
-const UMBRAL_CONFLICTO440 = 5;
-const VENTANA_CONFLICTO_MS = 60_000;
-const TIEMPO_PAUSA_CONFLICTO_MS = 5 * 60_000; // 5 minutos
+// Detección de conflicto multi-instancia más agresiva. Antes solo
+// contaba 440, pero a veces el close viene con código undefined o
+// distinto. Cualquier cierre rapido entra al contador.
+const UMBRAL_CONFLICTO440 = 3;
+const VENTANA_CONFLICTO_MS = 30_000;
+const TIEMPO_PAUSA_CONFLICTO_MS = 10 * 60_000; // 10 minutos
 
 const MAX_MENSAJES_CACHE = 500;
 
@@ -228,7 +231,16 @@ class GestorCuentas {
 
       if (connection === "open") {
         const telefono = extraerTelefonoDeJID(sock.user?.id);
-        console.log(`${prefijo} conexión abierta. Número: ${telefono ?? "?"}`);
+        // Solo loggear "conectado" si es la primera vez en esta sesión —
+        // si está reconectándose en loop, evita spam.
+        const entradaActual = this.sockets.get(cuenta.id);
+        const esPrimeraVez =
+          !entradaActual || entradaActual.timestamps440.length === 0;
+        if (esPrimeraVez) {
+          console.log(
+            `${prefijo} ✓ conectado al número ${telefono ?? "?"}`,
+          );
+        }
         void actualizarEstadoCuenta(cuenta.id, {
           estado: "conectado",
           cadena_qr: null,
@@ -243,9 +255,9 @@ class GestorCuentas {
       if (connection === "close") {
         const error = lastDisconnect?.error as ErrorConCodigo | undefined;
         const codigo = error?.output?.statusCode ?? error?.statusCode;
-        console.log(
-          `${prefijo} conexión cerrada. Código: ${codigo ?? "desconocido"}`,
-        );
+        // No loggear el close ruidoso aca — programarReconexion va a
+        // emitir un mensaje compacto de "reintentando" o el banner
+        // de conflicto detectado si llega al umbral.
 
         if (codigo === DisconnectReason.loggedOut) {
           console.log(
@@ -285,31 +297,49 @@ class GestorCuentas {
     if (!entrada) return;
     if (entrada.temporizadorReconexion) return;
 
-    // Detección de conflicto multi-proceso: si recibimos demasiados
-    // códigos 440 en poco tiempo, casi seguro que hay otra instancia
-    // del bot (ej: dev local + produccion Easy Panel) compitiendo
-    // por la misma sesión. Pausamos reconexion 5min y loggeamos.
+    // Detección de conflicto multi-proceso: si el socket se cierra
+    // rapido varias veces (sea 440 o cualquier otro codigo), casi
+    // seguro hay otra instancia del bot compitiendo. Pausamos.
     const ahora = Date.now();
-    if (codigo === 440) {
-      entrada.timestamps440.push(ahora);
-      // Limpiar entries viejos fuera de la ventana
-      entrada.timestamps440 = entrada.timestamps440.filter(
-        (t) => ahora - t < VENTANA_CONFLICTO_MS,
+    entrada.timestamps440.push(ahora);
+    entrada.timestamps440 = entrada.timestamps440.filter(
+      (t) => ahora - t < VENTANA_CONFLICTO_MS,
+    );
+    if (entrada.timestamps440.length >= UMBRAL_CONFLICTO440) {
+      entrada.pausarReconexionHasta = ahora + TIEMPO_PAUSA_CONFLICTO_MS;
+      entrada.timestamps440 = [];
+      console.warn(
+        `\n[bot:${entrada.etiqueta}] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
       );
-      if (entrada.timestamps440.length >= UMBRAL_CONFLICTO440) {
-        entrada.pausarReconexionHasta = ahora + TIEMPO_PAUSA_CONFLICTO_MS;
-        entrada.timestamps440 = [];
-        console.warn(
-          `[bot:${entrada.etiqueta}] ⚠ ${UMBRAL_CONFLICTO440}+ codigos 440 en 60s — CONFLICTO detectado. ` +
-          `Probable: otra instancia del bot esta corriendo con la misma sesion ` +
-          `(ej: Easy Panel + npm run dev local). Pausando reconexion 5 min.`,
-        );
-        void actualizarEstadoCuenta(cuentaId, {
-          estado: "desconectado",
-          cadena_qr: null,
-        });
-        return; // No programar reconexion
-      }
+      console.warn(
+        `[bot:${entrada.etiqueta}] ⚠ CONFLICTO DETECTADO`,
+      );
+      console.warn(
+        `[bot:${entrada.etiqueta}]   ${UMBRAL_CONFLICTO440}+ desconexiones en ${VENTANA_CONFLICTO_MS / 1000}s.`,
+      );
+      console.warn(
+        `[bot:${entrada.etiqueta}]   Probable: otra instancia del bot corre con la misma sesion`,
+      );
+      console.warn(
+        `[bot:${entrada.etiqueta}]   (ej: Easy Panel produccion + npm run dev local).`,
+      );
+      console.warn(
+        `[bot:${entrada.etiqueta}]   Solucion: agrega BOT_ENABLED=false en .env.local del entorno`,
+      );
+      console.warn(
+        `[bot:${entrada.etiqueta}]   donde NO queres que arranque el bot, y reinicia.`,
+      );
+      console.warn(
+        `[bot:${entrada.etiqueta}] ⏸ Reconexion pausada ${TIEMPO_PAUSA_CONFLICTO_MS / 60000} minutos.`,
+      );
+      console.warn(
+        `[bot:${entrada.etiqueta}] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`,
+      );
+      void actualizarEstadoCuenta(cuentaId, {
+        estado: "desconectado",
+        cadena_qr: null,
+      });
+      return; // No programar reconexion
     }
 
     if (entrada.pausarReconexionHasta > ahora) {
@@ -323,9 +353,13 @@ class GestorCuentas {
     }
 
     const espera = codigo === 440 ? 4000 : 5000;
-    console.log(
-      `[bot:${entrada.etiqueta}] reintentando conexión en ${espera / 1000}s...`,
-    );
+    // Solo loggear el primer intento — si está en loop, los demás
+    // los suprimimos hasta que llegue al umbral de conflicto.
+    if (entrada.timestamps440.length <= 1) {
+      console.log(
+        `[bot:${entrada.etiqueta}] desconectado (codigo ${codigo ?? "?"}). Reintentando en ${espera / 1000}s...`,
+      );
+    }
     entrada.temporizadorReconexion = setTimeout(async () => {
       entrada.temporizadorReconexion = null;
       const cuenta = await obtenerCuenta(cuentaId);
