@@ -135,7 +135,14 @@ export async function enviarParteTexto(
   const sockActual = obtenerGestor().obtenerSocket(cuentaId) ?? sock;
   try {
     const msgId = reservarMsgId(sockActual, cuentaId, conversacionId);
-    await sockActual.sendMessage(jid, { text: contenido }, { messageId: msgId });
+    await enviarTextoConRetry(
+      sockActual,
+      cuentaId,
+      jid,
+      contenido,
+      msgId,
+      prefijo,
+    );
     // Insertamos en DB DESPUÉS del envío para que el panel no muestre
     // mensajes que el cliente nunca recibió (caso conexión muerta).
     await insertarMensaje(cuentaId, conversacionId, "asistente", contenido, {
@@ -143,7 +150,47 @@ export async function enviarParteTexto(
     });
     console.log(`${prefijo} → parte ${numParte} (texto) enviada`);
   } catch (err) {
-    console.error(`${prefijo} error enviando parte ${numParte} texto:`, err);
+    console.error(
+      `${prefijo} error enviando parte ${numParte} texto (tras retry):`,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+}
+
+/**
+ * Envía un texto via sock.sendMessage con retry de 1 intento si la
+ * primera vez devuelve "Connection Closed" / 428 / 440. Refresca el
+ * sock del gestor antes del retry — si Baileys reconectó después del
+ * primer intento, el sock viejo del closure ya no sirve.
+ */
+async function enviarTextoConRetry(
+  sock: WASocket,
+  cuentaId: string,
+  jid: string,
+  contenido: string,
+  msgId: string,
+  prefijo: string,
+): Promise<void> {
+  try {
+    await sock.sendMessage(jid, { text: contenido }, { messageId: msgId });
+  } catch (err) {
+    const detalle = err instanceof Error ? err.message : String(err);
+    const conexionCerrada =
+      detalle.includes("Connection Closed") ||
+      detalle.includes("Precondition Required") ||
+      detalle.includes("428") ||
+      detalle.includes("Timed Out") ||
+      detalle.includes("440");
+    if (!conexionCerrada) throw err;
+
+    // Esperar un toque a que el gestor reconecte (su loop chequea cada 3s)
+    await dormir(2000);
+    const sockFresco = obtenerGestor().obtenerSocket(cuentaId);
+    if (!sockFresco) throw err;
+    console.log(
+      `${prefijo} ↻ retry texto tras "Connection Closed" con sock fresco`,
+    );
+    await sockFresco.sendMessage(jid, { text: contenido }, { messageId: msgId });
   }
 }
 
@@ -169,7 +216,27 @@ export async function enviarParteAudio(
       await sock.sendPresenceUpdate("recording", jid);
     } catch {}
     const ttsInicio = Date.now();
-    const tts = await generarAudioTTS(texto, cuenta.voz_elevenlabs!);
+    // Retry 1 vez si ElevenLabs falla con error de red transitorio
+    // (Connection Closed, ECONNRESET, timeout). Con backoff de 800ms.
+    let tts;
+    try {
+      tts = await generarAudioTTS(texto, cuenta.voz_elevenlabs!);
+    } catch (err) {
+      const detalle = err instanceof Error ? err.message : String(err);
+      const transient =
+        detalle.includes("Connection Closed") ||
+        detalle.includes("ECONNRESET") ||
+        detalle.includes("ETIMEDOUT") ||
+        detalle.includes("fetch failed") ||
+        detalle.includes("socket hang up") ||
+        detalle.includes("Timed Out");
+      if (!transient) throw err;
+      console.warn(
+        `${prefijo} ⚠ ElevenLabs falló (${detalle.slice(0, 80)}) — retry en 800ms`,
+      );
+      await dormir(800);
+      tts = await generarAudioTTS(texto, cuenta.voz_elevenlabs!);
+    }
     const ttsDur = Date.now() - ttsInicio;
     console.log(
       `${prefijo} 🔊 parte ${numParte} TTS (${tts.buffer.length}b, ${ttsDur}ms)`,
@@ -221,19 +288,13 @@ export async function enviarParteAudio(
     return true;
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);
+    // Solo log en consola — no insertamos mensaje "sistema" en el panel
+    // porque genera ruido visual sin valor para el operador. El caller
+    // ya hace fallback a texto si devolvemos false.
     console.error(
       `${prefijo} error parte ${numParte} audio (ElevenLabs):`,
       detalle,
     );
-    try {
-      await insertarMensaje(
-        cuenta.id,
-        conversacionId,
-        "sistema",
-        `[ElevenLabs falló: ${detalle.slice(0, 200)}] — fallback a texto.`,
-        { tipo: "sistema" },
-      );
-    } catch {}
     return false;
   } finally {
     if (archivoTempEntrada) borrarTemporal(archivoTempEntrada);
