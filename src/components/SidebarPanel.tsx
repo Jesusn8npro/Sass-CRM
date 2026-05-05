@@ -248,6 +248,13 @@ export function SidebarPanel({
             href={`/app/cuentas/${idCuentaActual}/webhooks`}
             actual={pathname}
           />
+          <ItemNav
+            icono={<IconoWebhooks />}
+            etiqueta="API Keys"
+            href={`/app/cuentas/${idCuentaActual}/api-keys`}
+            actual={pathname}
+            matchPaths={["/api-keys"]}
+          />
         </SeccionNav>
 
         <SeccionNav titulo="Ventas">
