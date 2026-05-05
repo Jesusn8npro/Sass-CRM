@@ -413,9 +413,21 @@ export async function procesarAlertasDesconexionOperador(): Promise<void> {
     return;
   }
 
+  // Cooldown agresivo: 1 alerta cada 6 horas para evitar spam si la
+  // caída se prolonga. Antes era 1 por hora pero seguía spameando
+  // demasiado en escenarios de reconexión flaky (bucle 440).
+  const COOLDOWN_HORAS = 6;
+  // Umbral de detección — solo alertar si la desconexión lleva >= 10
+  // minutos. Evita falsos positivos por blips de reconexión normal
+  // (los "código 440" típicos duran <1 min).
+  const UMBRAL_DESCONEXION_MIN = 10;
+
   const ahora = new Date();
-  const hace5min = Date.now() - 5 * 60 * 1000;
-  const ventana = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")} ${String(ahora.getHours()).padStart(2, "0")}`;
+  const haceUmbralMs = Date.now() - UMBRAL_DESCONEXION_MIN * 60 * 1000;
+  // Marcador con granularidad de bloque de 6h (00, 06, 12, 18) para
+  // garantizar dedupe aunque el server reinicie o haya jitter.
+  const bloque6h = Math.floor(ahora.getHours() / COOLDOWN_HORAS) * COOLDOWN_HORAS;
+  const ventana = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}T${String(bloque6h).padStart(2, "0")}`;
   const marcador = `[alerta_operador_caida:${ventana}]`;
 
   for (const cuenta of cuentas) {
@@ -423,24 +435,27 @@ export async function procesarAlertasDesconexionOperador(): Promise<void> {
     if (!cuenta.operador_privado_alertas) continue;
     const tel = (cuenta.telefono_operador_privado ?? "").trim();
     if (!tel) continue;
+    // Necesitamos socket vivo para mandar la alerta — si la cuenta está
+    // caída no podemos avisar por su propio WhatsApp (el dueño se
+    // entera por panel + email). Solo alertamos si el socket está vivo
+    // pero el heartbeat se atrasó (caso raro de proceso colgado).
+    if (cuenta.estado !== "conectado") continue;
 
-    // No se puede mandar alertas por WhatsApp si la cuenta está caída:
-    // el socket que mandaría la alerta ES el que está caído. Igual no
-    // hace sentido alertarse a uno mismo en su propio número de la
-    // cuenta caída — el dueño se entera por el panel + email.
-    // Solo alertamos si la cuenta conectó recientemente y el tel del
-    // operador es DISTINTO (caso multi-cuenta: cuenta A caída pero
-    // cuenta B activa puede mandar la alerta — fuera de scope acá).
-    // Para esta primera versión: solo alertamos si la cuenta SÍ está
-    // conectada pero su heartbeat se atrasó (caso edge raro).
-    const ultimoHb = cuenta.ultimo_heartbeat ?? 0;
-    const heartbeatStale = ultimoHb > 0 && ultimoHb < hace5min;
-    const desconectada = cuenta.estado !== "conectado";
-    if (!heartbeatStale && !desconectada) continue;
-    if (cuenta.estado !== "conectado") continue; // necesitamos socket para enviar
+    // FIX UNIDADES: ultimo_heartbeat se guarda como UNIX SECONDS
+    // (Math.floor(Date.now()/1000)) — multiplicar por 1000 para
+    // comparar contra Date.now() que está en MS. Sin esta conversión
+    // el cálculo daba minutos absurdos (29M minutos = epoch).
+    const ultimoHbSeg = cuenta.ultimo_heartbeat ?? 0;
+    const ultimoHbMs = ultimoHbSeg > 0 ? ultimoHbSeg * 1000 : 0;
+    const heartbeatStale =
+      ultimoHbMs > 0 && ultimoHbMs < haceUmbralMs;
+    if (!heartbeatStale) continue;
 
     try {
-      const desdeIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      // Dedupe: si ya hubo alerta en las últimas COOLDOWN_HORAS h, skip.
+      const desdeIso = new Date(
+        Date.now() - COOLDOWN_HORAS * 60 * 60 * 1000,
+      ).toISOString();
       const { data: existente } = await db()
         .from("mensajes")
         .select("id")
@@ -451,9 +466,25 @@ export async function procesarAlertasDesconexionOperador(): Promise<void> {
         .limit(1);
       if (existente && existente.length > 0) continue;
 
-      const minutos = ultimoHb > 0
-        ? Math.round((Date.now() - ultimoHb) / 60000)
-        : 5;
+      // Calcular minutos transcurridos. Si por algún motivo da absurdo
+      // (>1 año = ~525.600 min) usamos un fallback razonable — no
+      // queremos alertas con "hace 29 millones de min".
+      let minutos = ultimoHbMs > 0
+        ? Math.round((Date.now() - ultimoHbMs) / 60000)
+        : UMBRAL_DESCONEXION_MIN;
+      if (minutos < 0 || minutos > 525_600) {
+        minutos = UMBRAL_DESCONEXION_MIN;
+      }
+
+      // GARANTIZAR que existe la conv virtual del operador ANTES de
+      // mandar — así podemos grabar el marcador después y evitar spam.
+      const { obtenerOCrearConversacion } = await import("@/lib/baseDatos");
+      const convOp = await obtenerOCrearConversacion(
+        cuenta.id,
+        tel,
+        "Operador (alertas privadas)",
+      );
+
       const ok = await enviarAlertaOperador(
         cuenta,
         `🚨 Tu WhatsApp ${cuenta.etiqueta} está desconectado hace ${minutos} min.\n` +
@@ -461,25 +492,21 @@ export async function procesarAlertasDesconexionOperador(): Promise<void> {
       );
       if (!ok) continue;
 
-      // Grabar marcador en la conversación virtual del operador.
+      // Grabar marcador SIEMPRE — con la conv ya garantizada arriba.
+      // Sin esto, la próxima iteración manda otra alerta = SPAM.
       try {
-        const { data: conv } = await db()
-          .from("conversaciones")
-          .select("id")
-          .eq("cuenta_id", cuenta.id)
-          .eq("telefono", tel)
-          .maybeSingle();
-        if (conv) {
-          await insertarMensaje(
-            cuenta.id,
-            (conv as { id: string }).id,
-            "sistema",
-            marcador,
-            { tipo: "sistema" },
-          );
-        }
-      } catch {
-        /* ignorar */
+        await insertarMensaje(
+          cuenta.id,
+          convOp.id,
+          "sistema",
+          marcador,
+          { tipo: "sistema" },
+        );
+      } catch (errMarc) {
+        console.error(
+          `[bot] no se pudo grabar marcador anti-spam alerta cuenta ${cuenta.id}:`,
+          errMarc,
+        );
       }
     } catch (err) {
       console.error(
