@@ -11,5 +11,11 @@ export async function register(): Promise<void> {
     console.log("[instrumentation] bot arrancado OK");
   } catch (err) {
     console.error("[instrumentation] error arrancando el bot:", err);
+    try {
+      const { capturarError } = await import("@/lib/sentry");
+      capturarError(err, { contexto: "instrumentation.arrancarBot" });
+    } catch {
+      /* sentry opcional */
+    }
   }
 }

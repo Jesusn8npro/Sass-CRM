@@ -215,11 +215,16 @@ export async function transcribirAudio(
   }
   try {
     const archivo = await OpenAI.toFile(buffer, nombreSugerido);
-    const transcripcion = await cliente.audio.transcriptions.create({
-      file: archivo,
-      model: "whisper-1",
-      language: "es",
-    });
+    const { conReintentos } = await import("../reintentos");
+    const transcripcion = await conReintentos(
+      () =>
+        cliente.audio.transcriptions.create({
+          file: archivo,
+          model: "whisper-1",
+          language: "es",
+        }),
+      { contexto: "whisper", maxIntentos: 2, baseMs: 800 },
+    );
     if (cuentaId) {
       // Estimación: OGG/Opus ≈ 2000 bytes/seg → segundos = bytes/2000.
       const segundos = Math.max(1, Math.round(buffer.length / 2000));

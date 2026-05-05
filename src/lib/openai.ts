@@ -173,6 +173,8 @@ export interface RespuestaIA {
 import { ESQUEMA_RESPUESTA } from "./openai-schema";
 import { INSTRUCCIONES_ESTRUCTURADAS } from "./openai-instrucciones";
 import { registrarUso } from "./db/meteringUso";
+import { conReintentos } from "./reintentos";
+import { verificarRateLimit } from "./auth/rateLimit";
 
 /**
  * Costos OpenAI USD por 1M tokens (referencia 2026-05).
@@ -242,26 +244,37 @@ export async function generarRespuesta(
     `[openai] 🤖 modelo=${modelo} mensajes=${mensajesParaLLM.length} con_imagen=${conImagen}`,
   );
 
-  const respuesta = await cliente.chat.completions.create({
-    model: modelo,
-    messages: [
-      { role: "system", content: promptCompleto },
-      ...mensajesParaLLM,
-    ],
-    temperature: temperatura,
-    // Mínimo recomendado 500: con 12 tools en strict mode, el JSON
-    // mínimo (todos activar=false) ya pesa ~500 tokens. Si el usuario
-    // configura menos, igual aplicamos el piso para evitar truncado.
-    max_tokens: maxTokens,
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "respuesta_agente",
-        strict: true,
-        schema: ESQUEMA_RESPUESTA,
-      },
-    },
-  });
+  // Rate limit por cuenta: 60 calls/min protege contra:
+  //   - cliente saturado con muchas conversaciones simultáneas
+  //   - cascada de 429 cuando OpenAI nos throttlea
+  if (cuentaId) {
+    const rl = verificarRateLimit(`openai:${cuentaId}`, 60, 60);
+    if (rl) {
+      throw new Error("Rate limit local: 60 calls/min por cuenta excedido");
+    }
+  }
+
+  const respuesta = await conReintentos(
+    () =>
+      cliente.chat.completions.create({
+        model: modelo,
+        messages: [
+          { role: "system", content: promptCompleto },
+          ...mensajesParaLLM,
+        ],
+        temperature: temperatura,
+        max_tokens: maxTokens,
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "respuesta_agente",
+            strict: true,
+            schema: ESQUEMA_RESPUESTA,
+          },
+        },
+      }),
+    { contexto: "openai.chat", maxIntentos: 3, baseMs: 800 },
+  );
 
   if (cuentaId && respuesta.usage) {
     const tIn = respuesta.usage.prompt_tokens ?? 0;

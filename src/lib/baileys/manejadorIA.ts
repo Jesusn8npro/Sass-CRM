@@ -101,6 +101,12 @@ export async function generarYEnviarRespuesta(
     const detalle =
       err instanceof Error ? err.message : JSON.stringify(err);
     console.error(`${prefijo} ✗ error llamando OpenAI: ${detalle}`);
+    const { capturarError } = await import("../sentry");
+    capturarError(err, {
+      contexto: "openai.generarRespuesta",
+      idCuenta: cuenta.id,
+      modelo: cuenta.modelo ?? "default",
+    });
     if (detalle.includes("401") || detalle.includes("invalid_api_key")) {
       console.error(
         `${prefijo}   → OPENAI_API_KEY inválida o revocada. Verificá .env.local.`,
