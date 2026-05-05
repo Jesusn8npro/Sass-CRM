@@ -277,6 +277,130 @@ export function emailPagoFallido(
 }
 
 // ============================================================
+// 6. Reporte semanal — KPIs + leads que necesitan atención
+// ============================================================
+
+export interface KpisReporteSemanal {
+  /** Mensajes recibidos del usuario en la semana. */
+  mensajesRecibidos: number;
+  /** Conversaciones creadas en la semana (nuevos leads). */
+  leadsNuevos: number;
+  /** Citas agendadas (creadas) en la semana. */
+  citasAgendadas: number;
+  /** Costo IA estimado en USD (todos los proveedores) en la semana. */
+  costoIaUsd: number;
+}
+
+export interface LeadAtencionReporte {
+  nombre: string;
+  /** Estado del lead en español legible (ej: "Negociación"). */
+  estadoLead: string;
+}
+
+export function emailReporteSemanal(args: {
+  nombre: string | null;
+  etiquetaCuenta: string;
+  /** Período legible — ej: "28 abr – 4 may". */
+  periodo: string;
+  kpis: KpisReporteSemanal;
+  topAtencion: LeadAtencionReporte[];
+  urlDashboard: string;
+}): { subject: string; html: string } {
+  const { nombre, etiquetaCuenta, periodo, kpis, topAtencion, urlDashboard } =
+    args;
+
+  const fmtNum = (n: number) => n.toLocaleString("es-AR");
+  const fmtUsd = (n: number) => `US$ ${n.toFixed(2)}`;
+
+  const kpiCelda = (etiqueta: string, valor: string) => `
+    <td width="50%" valign="top" style="padding: 14px 16px; background-color: ${COLOR_BG}; border: 1px solid ${COLOR_BORDE}; border-radius: 12px;">
+      <p style="font-family: ${FONT_MONO}; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: ${COLOR_TEXTO_TENUE}; margin: 0 0 6px;">
+        ${esc(etiqueta)}
+      </p>
+      <p style="font-family: ${FONT_MONO}; font-size: 22px; color: ${COLOR_TEXTO}; margin: 0;">
+        ${esc(valor)}
+      </p>
+    </td>
+  `;
+
+  const gridKpis = `
+    <table role="presentation" cellpadding="0" cellspacing="8" border="0" width="100%" style="margin: 0 -8px 24px;">
+      <tr>
+        ${kpiCelda("Mensajes recibidos", fmtNum(kpis.mensajesRecibidos))}
+        ${kpiCelda("Leads nuevos", fmtNum(kpis.leadsNuevos))}
+      </tr>
+      <tr>
+        ${kpiCelda("Citas agendadas", fmtNum(kpis.citasAgendadas))}
+        ${kpiCelda("Costo IA estimado", fmtUsd(kpis.costoIaUsd))}
+      </tr>
+    </table>
+  `;
+
+  const listaAtencion =
+    topAtencion.length > 0
+      ? `
+        <p style="font-family: ${FONT_MONO}; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: ${COLOR_TEXTO_TENUE}; margin: 24px 0 12px;">
+          Necesitan tu atención
+        </p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: ${COLOR_BG}; border: 1px solid ${COLOR_BORDE}; border-radius: 12px; margin: 0 0 24px;">
+          ${topAtencion
+            .map(
+              (l, i) => `
+            <tr>
+              <td style="padding: 12px 16px; ${i > 0 ? `border-top: 1px solid ${COLOR_BORDE};` : ""}">
+                <p style="font-family: ${FONT_SANS}; font-size: 14px; color: ${COLOR_TEXTO}; margin: 0 0 2px;">
+                  ${esc(l.nombre)}
+                </p>
+                <p style="font-family: ${FONT_MONO}; font-size: 11px; color: ${COLOR_ACENTO}; margin: 0;">
+                  ${esc(l.estadoLead)}
+                </p>
+              </td>
+            </tr>
+          `,
+            )
+            .join("")}
+        </table>
+      `
+      : "";
+
+  const cuerpo = `
+    <h1 style="font-family: ${FONT_SERIF}; font-style: italic; font-weight: 400; font-size: 30px; line-height: 1.2; color: ${COLOR_TEXTO}; margin: 0 0 8px;">
+      Tu semana en Sass-CRM.
+    </h1>
+    <p style="font-family: ${FONT_MONO}; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: ${COLOR_TEXTO_TENUE}; margin: 0 0 20px;">
+      ${esc(etiquetaCuenta)} · ${esc(periodo)}
+    </p>
+    <p style="font-family: ${FONT_SANS}; font-size: 15px; line-height: 1.7; color: ${COLOR_TEXTO}; margin: 0 0 20px;">
+      ${saludo(nombre)}
+    </p>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: ${COLOR_BG}; border: 1px solid ${COLOR_BORDE}; border-radius: 12px; margin: 0 0 20px;">
+      <tr>
+        <td style="padding: 22px 20px;">
+          <p style="font-family: ${FONT_MONO}; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: ${COLOR_TEXTO_TENUE}; margin: 0 0 6px;">
+            Leads nuevos esta semana
+          </p>
+          <p style="font-family: ${FONT_SERIF}; font-style: italic; font-weight: 400; font-size: 56px; line-height: 1; color: ${COLOR_ACENTO}; margin: 0;">
+            ${fmtNum(kpis.leadsNuevos)}
+          </p>
+        </td>
+      </tr>
+    </table>
+    ${gridKpis}
+    ${listaAtencion}
+    ${botonCTA(urlDashboard, "Ver dashboard completo")}
+    <p style="font-family: ${FONT_SANS}; font-size: 13px; line-height: 1.7; color: ${COLOR_TEXTO_TENUE}; margin: 16px 0 0;">
+      Este resumen llega cada lunes con la actividad de la semana anterior.
+    </p>
+  `;
+
+  const subject = `📊 Tu semana en Sass-CRM — ${fmtNum(kpis.leadsNuevos)} leads · ${fmtNum(kpis.citasAgendadas)} citas`;
+  return {
+    subject,
+    html: layout({ titulo: "Reporte semanal", cuerpo }),
+  };
+}
+
+// ============================================================
 // 5. WhatsApp caído
 // ============================================================
 

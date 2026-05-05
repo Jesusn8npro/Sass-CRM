@@ -14,6 +14,9 @@ const API_PUBLICA_ALLOWLIST = [
   "/api/vapi/webhook",
   "/api/apify/webhook",
   "/api/billing/paypal/webhook",
+  "/api/cron/reportes-semanales",
+  // API pública v1 — autenticada vía API key en el handler, no por sesión.
+  "/api/v1",
 ];
 
 export async function middleware(request: NextRequest) {

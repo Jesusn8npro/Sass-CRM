@@ -20,6 +20,9 @@ interface EstadoCicloVida {
   intervaloAutoSeguimientos: NodeJS.Timeout | null;
   intervaloRecordatoriosCitas: NodeJS.Timeout | null;
   intervaloLlamadasProgramadas: NodeJS.Timeout | null;
+  intervaloReportesSemanales: NodeJS.Timeout | null;
+  /** Última semana ISO (YYYY-WW) en la que se disparó el reporte. */
+  ultimaSemanaReporte: string | null;
   apagado: boolean;
   guardiasInstalados: boolean;
 }
@@ -42,11 +45,84 @@ if (!g[claveGlobal]) {
     intervaloAutoSeguimientos: null,
     intervaloRecordatoriosCitas: null,
     intervaloLlamadasProgramadas: null,
+    intervaloReportesSemanales: null,
+    ultimaSemanaReporte: null,
     apagado: false,
     guardiasInstalados: false,
   };
 }
 const estado: EstadoCicloVida = g[claveGlobal]!;
+
+/**
+ * Devuelve la clave ISO YYYY-WW del momento dado (semana del lunes
+ * ancla por el jueves, ISO 8601). La usamos para asegurar que el
+ * disparo del reporte semanal corre UNA sola vez por semana aunque
+ * el proceso se reinicie o el chequeo horario corra varias veces.
+ */
+function claveSemanaIsoActual(d: Date): string {
+  const ref = new Date(
+    Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()),
+  );
+  const dia = ref.getUTCDay() || 7;
+  ref.setUTCDate(ref.getUTCDate() + 4 - dia);
+  const inicioAnio = new Date(Date.UTC(ref.getUTCFullYear(), 0, 1));
+  const numero = Math.ceil(
+    ((ref.getTime() - inicioAnio.getTime()) / 86400000 + 1) / 7,
+  );
+  return `${ref.getUTCFullYear()}-W${String(numero).padStart(2, "0")}`;
+}
+
+/**
+ * Si es lunes ≥ 9am LOCAL del servidor y aún no disparamos el reporte
+ * de esta semana, llama al endpoint interno con el secret.
+ *
+ * En LATAM lo típico es tener TZ del proceso = America/Argentina/Buenos_Aires
+ * o similar. Idempotencia real está en Resend (X-Entity-Ref-ID por
+ * cuenta+semana), este flag sólo evita HTTPs redundantes.
+ */
+async function quizasDispararReporteSemanal(): Promise<void> {
+  if (process.env.REPORTES_SEMANALES_HABILITADO !== "true") return;
+  const secret = process.env.CRON_SECRET?.trim();
+  if (!secret) return;
+
+  const ahora = new Date();
+  const esLunes = ahora.getDay() === 1; // 1 = lunes
+  const esHoraOk = ahora.getHours() >= 9 && ahora.getHours() < 12;
+  if (!esLunes || !esHoraOk) return;
+
+  const semana = claveSemanaIsoActual(ahora);
+  if (estado.ultimaSemanaReporte === semana) return;
+
+  const baseUrl = (
+    process.env.APP_URL?.trim() ||
+    process.env.PUBLIC_URL?.trim() ||
+    "http://localhost:3000"
+  ).replace(/\/$/, "");
+  const url = `${baseUrl}/api/cron/reportes-semanales`;
+
+  // Marcamos ANTES de disparar — si la llamada falla, la corrida
+  // siguiente no la repite (los emails individuales son idempotentes
+  // en Resend igual). Si querés reintentar tras fallo, comenta esta
+  // línea y mové la asignación al ramo `ok`.
+  estado.ultimaSemanaReporte = semana;
+
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "x-cron-secret": secret },
+    });
+    if (!r.ok) {
+      console.warn(
+        `[bot] reporte semanal HTTP ${r.status} — no fatal, reintentará la próxima semana`,
+      );
+    } else {
+      const body = await r.json().catch(() => null);
+      console.log("[bot] reporte semanal disparado:", body);
+    }
+  } catch (err) {
+    console.warn("[bot] error disparando reporte semanal:", err);
+  }
+}
 
 async function emitirHeartbeats(): Promise<void> {
   // Salud del bot ≠ salud del socket. Mientras el proceso esté vivo,
@@ -122,6 +198,8 @@ function instalarGuardias(): void {
       clearInterval(estado.intervaloRecordatoriosCitas);
     if (estado.intervaloLlamadasProgramadas)
       clearInterval(estado.intervaloLlamadasProgramadas);
+    if (estado.intervaloReportesSemanales)
+      clearInterval(estado.intervaloReportesSemanales);
     try {
       await obtenerGestor().apagarTodo();
     } catch {
@@ -236,6 +314,15 @@ export async function arrancarBotEnProceso(): Promise<void> {
         console.error("[bot] error procesando llamadas programadas:", err);
       });
     }, 30_000);
+
+    // Reportes semanales: cada hora chequea si es lunes ≥ 9am y dispara
+    // el endpoint interno una sola vez por semana ISO. Sólo se activa
+    // si REPORTES_SEMANALES_HABILITADO=true en el env.
+    estado.intervaloReportesSemanales = setInterval(() => {
+      void quizasDispararReporteSemanal().catch((err) => {
+        console.error("[bot] error en scheduler reporte semanal:", err);
+      });
+    }, 3_600_000); // 1 hora
 
     estado.arrancado = true;
   } finally {
