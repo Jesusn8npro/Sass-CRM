@@ -31,6 +31,54 @@ export async function requerirSesion(): Promise<
 }
 
 /**
+ * Lee el email admin del entorno. Si no está definido, el panel admin
+ * queda completamente apagado (los endpoints devuelven 404 y la UI
+ * redirecciona). Soporta lista separada por comas.
+ */
+function emailsAdminConfigurados(): string[] {
+  const raw = process.env.ADMIN_EMAIL ?? "";
+  return raw
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function adminPanelHabilitado(): boolean {
+  return emailsAdminConfigurados().length > 0;
+}
+
+export function esEmailAdmin(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return emailsAdminConfigurados().includes(email.toLowerCase());
+}
+
+/**
+ * Guard para endpoints /api/admin/*. Devuelve el usuario si es admin,
+ * o NextResponse 401/403/404 segun corresponda. Patrón:
+ *   const auth = await requerirAdmin();
+ *   if (auth instanceof NextResponse) return auth;
+ *
+ * Si ADMIN_EMAIL no está configurado → 404 (panel apagado).
+ * Si no hay sesión → 401.
+ * Si el email no matchea → 403.
+ */
+export async function requerirAdmin(): Promise<
+  { id: string; email: string } | NextResponse
+> {
+  if (!adminPanelHabilitado()) {
+    return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  }
+  const usuario = await obtenerUsuarioActual();
+  if (!usuario) {
+    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  }
+  if (!esEmailAdmin(usuario.email)) {
+    return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
+  }
+  return usuario;
+}
+
+/**
  * Sesión + cuenta + ownership en una sola llamada. Reemplaza el bloque
  * repetido en ~65 handlers de /api/cuentas/[idCuenta]/**.
  *

@@ -153,3 +153,41 @@ export async function actualizarHeartbeatCuenta(id: string): Promise<void> {
     .eq("id", id);
   if (error) lanzar(error, "actualizarHeartbeatCuenta");
 }
+
+/**
+ * (ADMIN) Cuenta cuántas cuentas tienen heartbeat reciente — proxy de
+ * "cuentas activas" en el panel global. `umbralSegundos` define la
+ * ventana hacia atrás contra el reloj UNIX guardado en `ultimo_heartbeat`.
+ */
+export async function contarCuentasActivasGlobal(
+  umbralSegundos: number,
+): Promise<number> {
+  const limite = Math.floor(Date.now() / 1000) - umbralSegundos;
+  const { count, error } = await db()
+    .from("cuentas")
+    .select("id", { count: "exact", head: true })
+    .eq("esta_archivada", false)
+    .gte("ultimo_heartbeat", limite);
+  if (error) lanzar(error, "contarCuentasActivasGlobal");
+  return count ?? 0;
+}
+
+/**
+ * (ADMIN) Lista las cuentas (no archivadas) de un usuario para el
+ * detalle de admin. Distinto de `listarCuentas(usuarioId)` solo en que
+ * incluye archivadas si así se indica.
+ */
+export async function listarCuentasDeUsuarioAdmin(
+  usuarioId: string,
+  incluirArchivadas = false,
+): Promise<Cuenta[]> {
+  let q = db()
+    .from("cuentas")
+    .select("*")
+    .eq("usuario_id", usuarioId)
+    .order("creada_en", { ascending: true });
+  if (!incluirArchivadas) q = q.eq("esta_archivada", false);
+  const { data, error } = await q;
+  if (error) lanzar(error, "listarCuentasDeUsuarioAdmin");
+  return (data ?? []) as Cuenta[];
+}
