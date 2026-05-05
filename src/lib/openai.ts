@@ -172,12 +172,32 @@ export interface RespuestaIA {
 
 import { ESQUEMA_RESPUESTA } from "./openai-schema";
 import { INSTRUCCIONES_ESTRUCTURADAS } from "./openai-instrucciones";
+import { registrarUso } from "./db/meteringUso";
+
+/**
+ * Costos OpenAI USD por 1M tokens (referencia 2026-05).
+ * Si agregás un modelo, sumalo acá. Modelos no listados quedan en 0
+ * (se igsalud loguea pero el costo_usd queda en 0 — sin romper).
+ */
+const COSTO_OPENAI_USD: Record<string, { in: number; out: number }> = {
+  "gpt-4o-2024-08-06": { in: 2.5, out: 10 },
+  "gpt-4o": { in: 2.5, out: 10 },
+  "gpt-4o-mini": { in: 0.15, out: 0.6 },
+  "gpt-4.1": { in: 2.0, out: 8.0 },
+  "gpt-4.1-mini": { in: 0.4, out: 1.6 },
+};
+
+function calcularCostoOpenai(modelo: string, tIn: number, tOut: number): number {
+  const c = COSTO_OPENAI_USD[modelo] ?? { in: 0, out: 0 };
+  return (tIn * c.in + tOut * c.out) / 1_000_000;
+}
 
 export async function generarRespuesta(
   historial: Mensaje[],
   promptSistema?: string | null,
   modeloOverride?: string | null,
   parametros?: { temperatura?: number; max_tokens?: number },
+  cuentaId?: string,
 ): Promise<RespuestaIA> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error(
@@ -242,6 +262,20 @@ export async function generarRespuesta(
       },
     },
   });
+
+  if (cuentaId && respuesta.usage) {
+    const tIn = respuesta.usage.prompt_tokens ?? 0;
+    const tOut = respuesta.usage.completion_tokens ?? 0;
+    registrarUso({
+      cuenta_id: cuentaId,
+      proveedor: "openai",
+      modelo,
+      tokens_in: tIn,
+      tokens_out: tOut,
+      costo_usd: calcularCostoOpenai(modelo, tIn, tOut),
+      metadata: { con_imagen: conImagen },
+    });
+  }
 
   const texto = respuesta.choices[0]?.message?.content?.trim();
   if (!texto) {

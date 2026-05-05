@@ -48,6 +48,7 @@ export async function procesarMediaEntrante(
     const texto = await transcribirAudio(
       descargado.buffer,
       descargado.nombreArchivo,
+      cuentaId,
     );
     const dur = Date.now() - inicio;
     if (texto) {

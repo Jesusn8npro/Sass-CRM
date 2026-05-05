@@ -95,6 +95,7 @@ export async function generarYEnviarRespuesta(
         temperatura: cuenta.temperatura,
         max_tokens: cuenta.max_tokens,
       },
+      cuenta.id,
     );
   } catch (err) {
     const detalle =

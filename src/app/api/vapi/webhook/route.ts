@@ -4,6 +4,7 @@ import {
   insertarMensaje,
   obtenerCuenta,
   obtenerLlamadaPorCallId,
+  registrarUso,
   type EstadoLlamada,
 } from "@/lib/baseDatos";
 import { verificarSecretWebhook } from "@/lib/vapi";
@@ -151,6 +152,22 @@ export async function POST(req: NextRequest) {
         typeof message.call?.cost === "number" ? message.call.cost : undefined,
       terminada_en: terminadaEn ?? undefined,
     });
+
+    // Registrar uso para facturación. Vapi reporta el costo real en
+    // `message.call.cost` (USD); la duración la usamos como métrica.
+    if (duracion && duracion > 0) {
+      registrarUso({
+        cuenta_id: llamada.cuenta_id,
+        proveedor: "vapi",
+        segundos: duracion,
+        costo_usd:
+          typeof message.call?.cost === "number" ? message.call.cost : 0,
+        metadata: {
+          vapi_call_id: callId,
+          ended_reason: message.call?.endedReason ?? null,
+        },
+      });
+    }
 
     // Insertamos un mensaje en la conversación con resumen de la llamada
     if (llamada.conversacion_id) {

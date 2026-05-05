@@ -16,6 +16,7 @@ import {
   descargarArchivo,
   subirArchivo,
 } from "../supabase/almacenamiento";
+import { registrarUso } from "../db/meteringUso";
 import { generarImagen } from "./nanoBanana";
 
 interface Resultado {
@@ -68,6 +69,15 @@ export async function generarImagenProducto(input: {
       pngBytes,
       mimetype,
     );
+
+    registrarUso({
+      cuenta_id: input.cuentaId,
+      proveedor: "gemini",
+      modelo: "nano-banana",
+      costo_usd: 0.039,
+      costo_creditos: 1,
+      metadata: { tiene_base: !!input.rutaImagenBase },
+    });
 
     return { rutaRelativa: ruta, bucket: "biblioteca", bytes: pngBytes.length };
   } catch (err) {

@@ -29,10 +29,14 @@ export interface ResultadoTTS {
 /**
  * Genera audio MP3 a partir de texto usando una voz de ElevenLabs.
  * Tira error si falla (rate limit, voz inválida, etc).
+ *
+ * Si se pasa `cuentaId`, registra el uso en `metering_uso`. Costo
+ * referencia: USD 0.30 por 1.000 caracteres (plan Creator promedio).
  */
 export async function generarAudioTTS(
   texto: string,
   vozId: string,
+  cuentaId?: string,
 ): Promise<ResultadoTTS> {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
@@ -85,6 +89,20 @@ export async function generarAudioTTS(
 
   const arrayBuffer = await respuesta.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
+
+  if (cuentaId) {
+    const caracteres = texto.length;
+    const { registrarUso } = await import("./db/meteringUso");
+    registrarUso({
+      cuenta_id: cuentaId,
+      proveedor: "elevenlabs",
+      modelo: MODELO_TTS,
+      caracteres,
+      costo_usd: (caracteres / 1000) * 0.3,
+      metadata: { voz_id: vozId },
+    });
+  }
+
   return { buffer, extension: "mp3", mime: "audio/mpeg" };
 }
 

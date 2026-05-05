@@ -77,3 +77,37 @@ export async function listarUsoMes(
   }
   return Array.from(acc.entries()).map(([proveedor, v]) => ({ proveedor, ...v }));
 }
+
+/**
+ * (ADMIN) Suma global de costo IA en una ventana, agrupada por proveedor.
+ * Si la tabla aún no existe en este proyecto (migración no aplicada),
+ * devuelve [] silenciosamente para no romper el dashboard.
+ */
+export async function listarUsoMesGlobal(
+  desde: string,
+): Promise<{ proveedor: string; costo_usd: number; eventos: number }[]> {
+  const { data, error } = await db()
+    .from("metering_uso")
+    .select("proveedor, costo_usd")
+    .gte("creado_en", desde);
+  if (error) {
+    if (error.code === "42P01" || error.code === "PGRST205") return [];
+    lanzar(error, "listarUsoMesGlobal");
+  }
+  const acc = new Map<string, { costo_usd: number; eventos: number }>();
+  for (const fila of (data ?? []) as { proveedor: string; costo_usd: number }[]) {
+    const cur = acc.get(fila.proveedor) ?? { costo_usd: 0, eventos: 0 };
+    cur.costo_usd += Number(fila.costo_usd ?? 0);
+    cur.eventos += 1;
+    acc.set(fila.proveedor, cur);
+  }
+  return Array.from(acc.entries()).map(([proveedor, v]) => ({ proveedor, ...v }));
+}
+
+/**
+ * (ADMIN) Suma de costo IA total en una ventana de tiempo.
+ */
+export async function sumaCostoIaGlobal(desde: string): Promise<number> {
+  const lista = await listarUsoMesGlobal(desde);
+  return lista.reduce((acc, l) => acc + l.costo_usd, 0);
+}

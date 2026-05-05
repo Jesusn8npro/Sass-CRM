@@ -198,11 +198,16 @@ export async function descargarYGuardarMedia(
 }
 
 /**
- * Transcribe un audio con Whisper a partir de un buffer en memoria.
+ * Transcribe un audio con Whisper. Si se pasa `cuentaId` registra el
+ * uso en `metering_uso` para facturación.
+ *
+ * Whisper cobra USD 0.006 por minuto. Estimamos duración del audio por
+ * tamaño del buffer (audio comprimido ≈ 16 kbps OGG/Opus).
  */
 export async function transcribirAudio(
   buffer: Buffer,
   nombreSugerido = "audio.ogg",
+  cuentaId?: string,
 ): Promise<string | null> {
   if (!process.env.OPENAI_API_KEY) {
     console.warn("[media] no hay OPENAI_API_KEY, no se puede transcribir");
@@ -215,6 +220,18 @@ export async function transcribirAudio(
       model: "whisper-1",
       language: "es",
     });
+    if (cuentaId) {
+      // Estimación: OGG/Opus ≈ 2000 bytes/seg → segundos = bytes/2000.
+      const segundos = Math.max(1, Math.round(buffer.length / 2000));
+      const { registrarUso } = await import("../db/meteringUso");
+      registrarUso({
+        cuenta_id: cuentaId,
+        proveedor: "whisper",
+        modelo: "whisper-1",
+        segundos,
+        costo_usd: (segundos / 60) * 0.006,
+      });
+    }
     return transcripcion.text?.trim() || null;
   } catch (err) {
     console.error("[media] error transcribiendo:", err);

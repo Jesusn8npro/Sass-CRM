@@ -220,7 +220,7 @@ export async function enviarParteAudio(
     // (Connection Closed, ECONNRESET, timeout). Con backoff de 800ms.
     let tts;
     try {
-      tts = await generarAudioTTS(texto, cuenta.voz_elevenlabs!);
+      tts = await generarAudioTTS(texto, cuenta.voz_elevenlabs!, cuenta.id);
     } catch (err) {
       const detalle = err instanceof Error ? err.message : String(err);
       const transient =
@@ -235,7 +235,7 @@ export async function enviarParteAudio(
         `${prefijo} ⚠ ElevenLabs falló (${detalle.slice(0, 80)}) — retry en 800ms`,
       );
       await dormir(800);
-      tts = await generarAudioTTS(texto, cuenta.voz_elevenlabs!);
+      tts = await generarAudioTTS(texto, cuenta.voz_elevenlabs!, cuenta.id);
     }
     const ttsDur = Date.now() - ttsInicio;
     console.log(
