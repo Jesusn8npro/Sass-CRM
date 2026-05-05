@@ -25,13 +25,17 @@
 import { type WASocket } from "@whiskeysockets/baileys";
 import OpenAI from "openai";
 import {
+  actualizarCita,
   actualizarCuenta,
+  actualizarLead,
   cambiarModo,
   crearProducto,
   encolarBandejaSalida,
   insertarMensaje,
+  listarCitasActivasDeConversacion,
   listarConversaciones,
   listarProductosActivos,
+  obtenerCita,
   obtenerCuenta,
   obtenerHistorialReciente,
   obtenerOCrearConversacion,
@@ -277,6 +281,154 @@ const TOOLS: ToolDef[] = [
           },
         },
         required: ["telefono", "mensaje"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "cambiar_modo_conversacion",
+      description:
+        "Cambia el modo de UNA conversación específica entre IA y HUMANO. En modo HUMANO la IA principal NO responde más a ese cliente — el dueño contesta manualmente. Usar cuando el dueño diga 'pasá la conversación con Pedro a humano', 'que la IA deje de contestar a 5731234567', 'voy a atender a Juan personalmente', 'reactivá la IA con el cliente del Toyota'.",
+      parameters: {
+        type: "object",
+        properties: {
+          telefono: {
+            type: "string",
+            description: "Número del cliente cuya conversación quiero cambiar de modo. Acepta formato libre.",
+          },
+          modo: {
+            type: "string",
+            enum: ["IA", "HUMANO"],
+            description: "Nuevo modo. IA = el bot responde automático. HUMANO = el dueño responde manual.",
+          },
+        },
+        required: ["telefono", "modo"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "actualizar_datos_cliente",
+      description:
+        "Actualiza/corrige los datos capturados de un cliente específico (nombre real, email, teléfono alt, intereses, negocio, ventajas que valora, miedos/objeciones). Usar cuando el dueño diga 'corregí el nombre de 5731234567 a Pedro García', 'actualizá el email del cliente del Toyota a x@y.com', 'agregá que Juan trabaja en construcción'. NO pisa datos previos no provistos — solo actualiza los campos que mandes.",
+      parameters: {
+        type: "object",
+        properties: {
+          telefono: {
+            type: "string",
+            description: "Número del cliente cuyos datos voy a actualizar.",
+          },
+          nombre: {
+            type: "string",
+            description: "Nombre real del cliente (corrige el capturado o el de WhatsApp).",
+          },
+          email: { type: "string", description: "Email del cliente." },
+          telefono_alt: { type: "string", description: "Teléfono alternativo." },
+          interes: {
+            type: "string",
+            description: "Qué busca / necesita el cliente. Texto libre.",
+          },
+          negocio: {
+            type: "string",
+            description: "Tipo de negocio o industria del cliente.",
+          },
+          ventajas: {
+            type: "string",
+            description: "Qué valora el cliente (rapidez, precio, calidad, etc.).",
+          },
+          miedos: {
+            type: "string",
+            description: "Objeciones o dudas que tiene el cliente.",
+          },
+          lead_score: {
+            type: "number",
+            description: "Score 0-100. Solo si el dueño lo indica explícitamente.",
+          },
+        },
+        required: ["telefono"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "listar_citas_cliente",
+      description:
+        "Lista las citas activas de UN cliente específico (no todas las del negocio). Usar cuando el dueño pregunte 'qué citas tiene Pedro', 'a qué hora viene el cliente del Toyota', etc. Para citas globales del negocio, usar listar_citas.",
+      parameters: {
+        type: "object",
+        properties: {
+          telefono: { type: "string", description: "Número del cliente." },
+        },
+        required: ["telefono"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "reprogramar_cita",
+      description:
+        "Cambia la fecha/hora de una cita existente. Necesitás el cita_id (UUID) — si no lo tenés, primero llamá listar_citas_cliente para obtenerlo. Usar cuando el dueño diga 'reprogramá la cita de Pedro al viernes a las 4pm', 'cambiá la cita del Toyota a mañana 10am'.",
+      parameters: {
+        type: "object",
+        properties: {
+          cita_id: {
+            type: "string",
+            description: "UUID de la cita (obtenido de listar_citas_cliente o listar_citas).",
+          },
+          nueva_fecha_iso: {
+            type: "string",
+            description: "Nueva fecha y hora en formato ISO 8601 con timezone (ej: '2026-05-08T16:00:00-05:00').",
+          },
+          nueva_duracion_min: {
+            type: "number",
+            description: "Nueva duración en minutos (opcional). Si no se pasa, queda igual.",
+          },
+        },
+        required: ["cita_id", "nueva_fecha_iso"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "cancelar_cita",
+      description:
+        "Cancela una cita existente (estado pasa a 'cancelada'). Necesitás el cita_id. Si no lo tenés, primero listar_citas_cliente. Usar cuando el dueño diga 'cancelá la cita de Pedro', 'la cita del viernes ya no va'.",
+      parameters: {
+        type: "object",
+        properties: {
+          cita_id: { type: "string", description: "UUID de la cita." },
+          razon: {
+            type: "string",
+            description: "Motivo de la cancelación (queda en notas).",
+          },
+        },
+        required: ["cita_id"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "obtener_conversacion_cliente",
+      description:
+        "Devuelve los últimos 30 mensajes de un cliente específico + sus datos capturados + estado del lead. Usar cuando el dueño pida 'mostrame la conversación con Pedro', 'qué le hablamos al del Toyota', 'analizá la charla con 5731234567', o ANTES de proponer mejoras al agente basadas en una conversación específica.",
+      parameters: {
+        type: "object",
+        properties: {
+          telefono: { type: "string", description: "Número del cliente." },
+        },
+        required: ["telefono"],
         additionalProperties: false,
       },
     },
@@ -729,6 +881,305 @@ async function toolActualizarPerfilAgente(
 }
 
 /**
+ * Resuelve un teléfono al `id` de la conversación de ese cliente en
+ * la cuenta. Devuelve null si no existe conversación.
+ */
+async function resolverConversacionPorTel(
+  cuentaId: string,
+  telefonoLibre: string,
+): Promise<{ id: string; telefono: string; nombre: string | null } | null> {
+  const tel = telefonoLibre.replace(/[^0-9]/g, "");
+  if (tel.length < 8) return null;
+  const { data } = await db()
+    .from("conversaciones")
+    .select("id, telefono, nombre")
+    .eq("cuenta_id", cuentaId)
+    .or(`telefono.eq.${tel},telefono.like.%${tel}`)
+    .limit(1)
+    .maybeSingle();
+  return (data as { id: string; telefono: string; nombre: string | null } | null) ?? null;
+}
+
+async function toolCambiarModoConversacion(
+  cuentaId: string,
+  args: Record<string, unknown>,
+): Promise<{ ok: boolean; mensaje: string }> {
+  const tel = typeof args.telefono === "string" ? args.telefono : "";
+  const modoStr = typeof args.modo === "string" ? args.modo.toUpperCase() : "";
+  if (modoStr !== "IA" && modoStr !== "HUMANO") {
+    return { ok: false, mensaje: "Modo inválido. Debe ser 'IA' o 'HUMANO'." };
+  }
+  const conv = await resolverConversacionPorTel(cuentaId, tel);
+  if (!conv) {
+    return {
+      ok: false,
+      mensaje: `No encuentro conversación con un cliente en el número ${tel}. Verificá que el cliente ya haya escrito al menos una vez.`,
+    };
+  }
+  await cambiarModo(conv.id, modoStr as "IA" | "HUMANO");
+  const quien = conv.nombre ?? `+${conv.telefono}`;
+  return {
+    ok: true,
+    mensaje:
+      modoStr === "HUMANO"
+        ? `Conversación con ${quien} pasada a modo HUMANO. La IA no responde más automáticamente — atendelo desde el panel.`
+        : `Conversación con ${quien} reactivada a modo IA. El agente vuelve a responder automáticamente.`,
+  };
+}
+
+async function toolActualizarDatosCliente(
+  cuentaId: string,
+  args: Record<string, unknown>,
+): Promise<{ ok: boolean; mensaje: string; aplicados: string[] }> {
+  const tel = typeof args.telefono === "string" ? args.telefono : "";
+  const conv = await resolverConversacionPorTel(cuentaId, tel);
+  if (!conv) {
+    return {
+      ok: false,
+      mensaje: `No encuentro conversación con un cliente en el número ${tel}.`,
+      aplicados: [],
+    };
+  }
+
+  const aplicados: string[] = [];
+  const datosMerge: {
+    nombre?: string;
+    email?: string;
+    telefono_alt?: string;
+    interes?: string;
+    negocio?: string;
+    ventajas?: string;
+    miedos?: string;
+  } = {};
+  const cambios: Parameters<typeof actualizarLead>[1] = {};
+
+  if (typeof args.nombre === "string" && args.nombre.trim()) {
+    cambios.nombre = args.nombre.trim().slice(0, 80);
+    datosMerge.nombre = cambios.nombre;
+    aplicados.push(`nombre="${cambios.nombre}"`);
+  }
+  if (typeof args.email === "string" && args.email.trim()) {
+    datosMerge.email = args.email.trim().slice(0, 120);
+    aplicados.push(`email="${datosMerge.email}"`);
+  }
+  if (typeof args.telefono_alt === "string" && args.telefono_alt.trim()) {
+    datosMerge.telefono_alt = args.telefono_alt.trim().slice(0, 30);
+    aplicados.push(`tel_alt="${datosMerge.telefono_alt}"`);
+  }
+  if (typeof args.interes === "string" && args.interes.trim()) {
+    datosMerge.interes = args.interes.trim().slice(0, 400);
+    aplicados.push("interes");
+  }
+  if (typeof args.negocio === "string" && args.negocio.trim()) {
+    datosMerge.negocio = args.negocio.trim().slice(0, 200);
+    aplicados.push("negocio");
+  }
+  if (typeof args.ventajas === "string" && args.ventajas.trim()) {
+    datosMerge.ventajas = args.ventajas.trim().slice(0, 300);
+    aplicados.push("ventajas");
+  }
+  if (typeof args.miedos === "string" && args.miedos.trim()) {
+    datosMerge.miedos = args.miedos.trim().slice(0, 300);
+    aplicados.push("miedos");
+  }
+  if (
+    typeof args.lead_score === "number" &&
+    Number.isFinite(args.lead_score)
+  ) {
+    cambios.lead_score = Math.max(0, Math.min(100, Math.round(args.lead_score)));
+    aplicados.push(`score=${cambios.lead_score}`);
+  }
+
+  if (Object.keys(datosMerge).length > 0) {
+    cambios.datos_capturados_merge = datosMerge;
+  }
+
+  if (aplicados.length === 0) {
+    return {
+      ok: false,
+      mensaje: "No vinieron campos válidos para actualizar.",
+      aplicados: [],
+    };
+  }
+
+  await actualizarLead(conv.id, cambios);
+  return {
+    ok: true,
+    mensaje: `Datos del cliente ${conv.nombre ?? "+" + conv.telefono} actualizados.`,
+    aplicados,
+  };
+}
+
+async function toolListarCitasCliente(
+  cuentaId: string,
+  args: Record<string, unknown>,
+): Promise<{
+  ok: boolean;
+  mensaje?: string;
+  citas?: Array<{
+    cita_id: string;
+    cliente: string;
+    fecha: string;
+    duracion_min: number;
+    tipo: string | null;
+    estado: string;
+    notas: string | null;
+  }>;
+}> {
+  const tel = typeof args.telefono === "string" ? args.telefono : "";
+  const conv = await resolverConversacionPorTel(cuentaId, tel);
+  if (!conv) {
+    return {
+      ok: false,
+      mensaje: `No encuentro conversación con un cliente en el número ${tel}.`,
+    };
+  }
+  const citas = await listarCitasActivasDeConversacion(conv.id);
+  return {
+    ok: true,
+    citas: citas.map((c) => ({
+      cita_id: c.id,
+      cliente: c.cliente_nombre,
+      fecha: c.fecha_hora,
+      duracion_min: c.duracion_min,
+      tipo: c.tipo,
+      estado: c.estado,
+      notas: c.notas,
+    })),
+  };
+}
+
+async function toolReprogramarCita(
+  cuentaId: string,
+  args: Record<string, unknown>,
+): Promise<{ ok: boolean; mensaje: string }> {
+  const idCita = typeof args.cita_id === "string" ? args.cita_id.trim() : "";
+  const fechaIso =
+    typeof args.nueva_fecha_iso === "string" ? args.nueva_fecha_iso.trim() : "";
+  if (!idCita || !fechaIso) {
+    return { ok: false, mensaje: "Faltan cita_id o nueva_fecha_iso." };
+  }
+  const ms = new Date(fechaIso).getTime();
+  if (!Number.isFinite(ms)) {
+    return {
+      ok: false,
+      mensaje: `Fecha inválida: "${fechaIso}". Usá ISO 8601 con timezone.`,
+    };
+  }
+  const cita = await obtenerCita(idCita);
+  if (!cita || cita.cuenta_id !== cuentaId) {
+    return { ok: false, mensaje: `Cita ${idCita} no encontrada en esta cuenta.` };
+  }
+
+  const cambios: Parameters<typeof actualizarCita>[1] = {
+    fecha_hora: new Date(ms).toISOString(),
+    estado: "agendada",
+    recordatorio_enviado: false,
+  };
+  if (
+    typeof args.nueva_duracion_min === "number" &&
+    Number.isFinite(args.nueva_duracion_min)
+  ) {
+    cambios.duracion_min = Math.max(
+      5,
+      Math.min(720, Math.round(args.nueva_duracion_min)),
+    );
+  }
+
+  await actualizarCita(idCita, cambios);
+  const fechaLegible = new Date(ms).toLocaleString("es-AR", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return {
+    ok: true,
+    mensaje: `Cita reprogramada para ${fechaLegible}. ${cita.cliente_nombre} recibirá un recordatorio antes.`,
+  };
+}
+
+async function toolCancelarCita(
+  cuentaId: string,
+  args: Record<string, unknown>,
+): Promise<{ ok: boolean; mensaje: string }> {
+  const idCita = typeof args.cita_id === "string" ? args.cita_id.trim() : "";
+  if (!idCita) return { ok: false, mensaje: "Falta cita_id." };
+  const cita = await obtenerCita(idCita);
+  if (!cita || cita.cuenta_id !== cuentaId) {
+    return { ok: false, mensaje: `Cita ${idCita} no encontrada.` };
+  }
+  const razon =
+    typeof args.razon === "string" && args.razon.trim()
+      ? args.razon.trim().slice(0, 280)
+      : "cancelada por el operador";
+  await actualizarCita(idCita, {
+    estado: "cancelada",
+    notas: cita.notas
+      ? `${cita.notas}\n[CANCELADA] ${razon}`
+      : `[CANCELADA] ${razon}`,
+  });
+  return {
+    ok: true,
+    mensaje: `Cita con ${cita.cliente_nombre} cancelada. Razón: ${razon}.`,
+  };
+}
+
+async function toolObtenerConversacionCliente(
+  cuentaId: string,
+  args: Record<string, unknown>,
+): Promise<{
+  ok: boolean;
+  mensaje?: string;
+  cliente?: {
+    nombre: string | null;
+    telefono: string;
+    estado_lead: string;
+    lead_score: number;
+    datos_capturados: unknown;
+    modo: string;
+  };
+  ultimos_mensajes?: Array<{ rol: string; contenido: string; creado_en: string }>;
+}> {
+  const tel = typeof args.telefono === "string" ? args.telefono : "";
+  const conv = await resolverConversacionPorTel(cuentaId, tel);
+  if (!conv) {
+    return { ok: false, mensaje: `No encuentro conversación con ${tel}.` };
+  }
+  const { data: convFull } = await db()
+    .from("conversaciones")
+    .select("nombre, telefono, estado_lead, lead_score, datos_capturados, modo")
+    .eq("id", conv.id)
+    .maybeSingle();
+  const { data: msgs } = await db()
+    .from("mensajes")
+    .select("rol, contenido, creado_en")
+    .eq("conversacion_id", conv.id)
+    .order("creado_en", { ascending: false })
+    .limit(30);
+  type FilaMsg = { rol: string; contenido: string; creado_en: string };
+  return {
+    ok: true,
+    cliente: convFull as {
+      nombre: string | null;
+      telefono: string;
+      estado_lead: string;
+      lead_score: number;
+      datos_capturados: unknown;
+      modo: string;
+    },
+    ultimos_mensajes: ((msgs ?? []) as FilaMsg[])
+      .reverse()
+      .map((m) => ({
+        rol: m.rol,
+        contenido: m.contenido?.slice(0, 500) ?? "",
+        creado_en: m.creado_en,
+      })),
+  };
+}
+
+/**
  * Envía un mensaje en nombre del operador a un cliente real.
  * - Sanea el teléfono (sólo dígitos).
  * - Bloquea si coincide con el operador (no se manda mensajes a sí mismo).
@@ -888,6 +1339,18 @@ async function ejecutarTool(
       if (!cta) return { error: "cuenta no encontrada" };
       return toolEnviarMensajeACliente(cta, args);
     }
+    case "cambiar_modo_conversacion":
+      return toolCambiarModoConversacion(cuentaId, args);
+    case "actualizar_datos_cliente":
+      return toolActualizarDatosCliente(cuentaId, args);
+    case "listar_citas_cliente":
+      return toolListarCitasCliente(cuentaId, args);
+    case "reprogramar_cita":
+      return toolReprogramarCita(cuentaId, args);
+    case "cancelar_cita":
+      return toolCancelarCita(cuentaId, args);
+    case "obtener_conversacion_cliente":
+      return toolObtenerConversacionCliente(cuentaId, args);
     default:
       return { error: `tool desconocida: ${nombre}` };
   }
@@ -921,19 +1384,58 @@ Para cambios irreversibles GRANDES (reemplazar prompt completo, pausar agente), 
 ═══════════════════════════════════════════
 TOOLS DISPONIBLES — cuándo llamar cuál
 ═══════════════════════════════════════════
+ESTADO Y ANÁLISIS:
 • consultar_kpis — pidan estado, resumen, "cómo va", "qué tal hoy"
 • listar_leads — "los mejores", "leads activos", "a quién seguir"
-• listar_citas — "agenda", "próximas citas"
+• listar_citas — agenda GLOBAL del negocio
 • listar_productos — "mi catálogo", "qué tengo cargado"
 • analizar_catalogo — "qué le falta", "errores", "mejorar catálogo"
-• analizar_conversaciones — "cómo van las charlas", "patrones"
-• obtener_prompt_actual — "cómo está configurado", o ANTES de proponer cambios
+• analizar_conversaciones — "cómo van las charlas" (vista global)
+• obtener_conversacion_cliente — VER una charla específica + datos + estado del lead
+
+CONFIGURACIÓN DEL AGENTE PRINCIPAL:
+• obtener_prompt_actual — "cómo está configurado" o ANTES de proponer mejoras
 • actualizar_prompt_agente — reemplazar prompt completo (confirmar antes)
 • agregar_instruccion_extra — instrucciones puntuales sin pisar el prompt
-• actualizar_perfil_agente — cambiar nombre / rol / tono / saludos del agente
+• actualizar_perfil_agente — cambiar nombre / rol / tono / saludos
+
+ACCIONES SOBRE CLIENTES ESPECÍFICOS:
 • enviar_mensaje_a_cliente — "mandá un msg a X", "decile a Y que..."
+• cambiar_modo_conversacion — pasar UN cliente a HUMANO o IA
+  ("pasá la charla con Pedro a humano", "voy a atender al del Toyota")
+• actualizar_datos_cliente — corregir nombre/email/interés/negocio/objeciones
+  ("el nombre real de 5731234567 es Pedro García", "Juan trabaja en construcción")
+• listar_citas_cliente — citas de UN cliente puntual
+• reprogramar_cita — "cambiá la cita de Pedro al viernes 4pm"
+• cancelar_cita — "cancelá la cita del Toyota"
+
+CATÁLOGO:
 • crear_producto — "agregá X al catálogo"
-• pausar_agente / reactivar_agente — "pausá / apagá" / "prendé / reactivá"
+
+CONTROL GLOBAL:
+• pausar_agente / reactivar_agente — pausar/reactivar la IA en TODAS las conversaciones
+
+═══════════════════════════════════════════
+ANÁLISIS DE PROMPT Y CONVERSACIONES — caso especial
+═══════════════════════════════════════════
+Cuando el dueño te pida "qué puedo mejorar en el prompt", "analizá las instrucciones del agente", "mirá esta conversación y decime qué mejorar", "el agente está respondiendo mal en X":
+
+1. Primero LLAMÁ obtener_prompt_actual para ver el prompt completo + perfil + instrucciones extra.
+2. Si menciona una conversación específica, también LLAMÁ obtener_conversacion_cliente con ese teléfono.
+3. Analizá críticamente:
+   - ¿El prompt es claro o es ambiguo?
+   - ¿Hay contradicciones entre instrucciones?
+   - ¿Faltan reglas para casos comunes que ves en la conversación?
+   - ¿El tono está alineado con lo que querés transmitir?
+   - ¿Hay reglas que el agente está violando? (mirá los mensajes reales)
+4. Devolvé recomendaciones CONCRETAS, no genéricas:
+   ✓ "Veo que en el prompt no hay instrucción para manejar precios. Cuando el
+     cliente preguntó por descuento, el agente improvisó. Te propongo agregar
+     a instrucciones_extra: 'No ofrecer descuentos sin que el cliente lo pida
+     primero. Si pregunta por precio, dar el precio de lista.'"
+   ✗ "Tu prompt podría ser más específico" (vacío, no actionable).
+5. Después de proponer, preguntá si lo aplico con agregar_instruccion_extra
+   o actualizar_prompt_agente.
 
 ═══════════════════════════════════════════
 TONO Y ESTILO
