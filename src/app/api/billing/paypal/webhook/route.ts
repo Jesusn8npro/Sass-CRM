@@ -5,6 +5,7 @@ import {
   marcarBillingUsuario,
   obtenerUsuarioPorSubscriptionId,
 } from "@/lib/db/usuarios";
+import { enviarPagoFallido } from "@/lib/emails/disparadores";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -98,6 +99,12 @@ export async function POST(req: NextRequest) {
 
   if (tipo === "BILLING.SUBSCRIPTION.PAYMENT.FAILED" || tipo === "PAYMENT.SALE.DENIED") {
     await marcarBillingUsuario(usuario.id, "impago");
+    // Email transaccional fire-and-forget — no bloquea la respuesta a PayPal.
+    const motivoTexto =
+      tipo === "PAYMENT.SALE.DENIED"
+        ? "El pago fue denegado por la pasarela."
+        : "El cobro automático de la suscripción no pudo procesarse.";
+    void enviarPagoFallido(usuario.id, motivoTexto);
     return NextResponse.json({ ok: true });
   }
 

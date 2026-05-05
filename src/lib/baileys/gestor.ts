@@ -24,6 +24,7 @@ import {
   useSupabaseAuthState,
 } from "./auth-supabase";
 import { notificarCuentaDesconectada } from "../notificaciones";
+import { enviarWhatsAppCaido } from "../emails/disparadores";
 
 interface ErrorConCodigo {
   output?: { statusCode?: number };
@@ -291,6 +292,8 @@ class GestorCuentas {
           ).catch((err) => {
             console.error(`${prefijo} error notificando desconexión:`, err);
           });
+          // Email transaccional dedicado de WhatsApp caído (fire-and-forget).
+          void enviarWhatsAppCaido(cuenta.id);
           return;
         }
 
@@ -351,6 +354,8 @@ class GestorCuentas {
         estado: "desconectado",
         cadena_qr: null,
       });
+      // Email transaccional al dueño: la cuenta queda fuera 15min, vale avisar.
+      void enviarWhatsAppCaido(cuentaId);
       // Registramos la pausa en el map dedicado y limpiamos el socket.
       // Sincronizar ya no va a re-iniciar hasta que pase pausarHasta.
       this.pausasPorConflicto.set(

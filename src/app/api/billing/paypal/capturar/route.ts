@@ -7,6 +7,7 @@ import {
   marcarPagoFallido,
   obtenerPagoPorOrderId,
 } from "@/lib/db/pagos";
+import { enviarRecargaCreditos } from "@/lib/emails/disparadores";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -67,6 +68,9 @@ export async function POST(req: NextRequest) {
     paypalCaptureId: captureId,
     metadata: { ...pago.metadata, status_paypal: captura.status },
   });
+
+  // Email transaccional fire-and-forget — no bloquea la respuesta.
+  void enviarRecargaCreditos(auth.id, pago.id);
 
   return NextResponse.json({
     ok: true,

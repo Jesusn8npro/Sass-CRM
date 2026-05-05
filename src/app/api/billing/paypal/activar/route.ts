@@ -7,6 +7,7 @@ import {
   obtenerPagoPorSubscriptionId,
 } from "@/lib/db/pagos";
 import { activarPlanUsuario } from "@/lib/db/usuarios";
+import { enviarPagoAprobado } from "@/lib/emails/disparadores";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -72,6 +73,9 @@ export async function POST(req: NextRequest) {
   await marcarPagoAprobado(pago.id, {
     metadata: { ...pago.metadata, status_paypal: sub.status, vence_en: venceEn },
   });
+
+  // Email transaccional fire-and-forget — no bloquea la respuesta.
+  void enviarPagoAprobado(auth.id, pago.id);
 
   return NextResponse.json({ ok: true, plan: planResuelto, vence_en: venceEn });
 }

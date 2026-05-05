@@ -76,6 +76,16 @@ export async function marcarPagoFallido(id: string, motivo: string): Promise<voi
   if (error) lanzar(error, "marcarPagoFallido");
 }
 
+export async function obtenerPagoPorId(id: string): Promise<FilaPago | null> {
+  const { data, error } = await db()
+    .from("pagos")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) lanzar(error, "obtenerPagoPorId");
+  return (data as FilaPago) ?? null;
+}
+
 export async function obtenerPagoPorOrderId(
   orderId: string,
 ): Promise<FilaPago | null> {
@@ -137,6 +147,61 @@ export async function listarPaquetesActivos(): Promise<PaqueteCreditos[]> {
     lanzar(error, "listarPaquetesActivos");
   }
   return (data ?? []) as PaqueteCreditos[];
+}
+
+// ============================================================
+// ADMIN — listados globales y agregados para panel /app/admin
+// ============================================================
+
+export interface FiltroListadoPagos {
+  estado?: EstadoPago;
+  desde?: string;
+  hasta?: string;
+  offset?: number;
+  limite?: number;
+}
+
+export async function listarPagosPaginado(
+  filtros: FiltroListadoPagos = {},
+): Promise<{ pagos: FilaPago[]; total: number }> {
+  const limite = Math.min(Math.max(filtros.limite ?? 20, 1), 100);
+  const offset = Math.max(filtros.offset ?? 0, 0);
+
+  let q = db()
+    .from("pagos")
+    .select("*", { count: "exact" })
+    .order("creado_en", { ascending: false });
+
+  if (filtros.estado) q = q.eq("estado", filtros.estado);
+  if (filtros.desde) q = q.gte("creado_en", filtros.desde);
+  if (filtros.hasta) q = q.lte("creado_en", filtros.hasta);
+
+  const { data, error, count } = await q.range(offset, offset + limite - 1);
+  if (error) lanzar(error, "listarPagosPaginado");
+  return { pagos: (data ?? []) as FilaPago[], total: count ?? 0 };
+}
+
+/**
+ * Suma del monto total cobrado (estado=aprobado) en una ventana de
+ * tiempo. Devuelve 0 si no hay pagos.
+ */
+export async function sumarPagosAprobados(
+  desde: string,
+  hasta?: string,
+): Promise<number> {
+  let q = db()
+    .from("pagos")
+    .select("monto_usd")
+    .eq("estado", "aprobado")
+    .gte("creado_en", desde);
+  if (hasta) q = q.lte("creado_en", hasta);
+  const { data, error } = await q;
+  if (error) lanzar(error, "sumarPagosAprobados");
+  let total = 0;
+  for (const fila of (data ?? []) as { monto_usd: number }[]) {
+    total += Number(fila.monto_usd ?? 0);
+  }
+  return total;
 }
 
 export async function obtenerPaquete(id: string): Promise<PaqueteCreditos | null> {

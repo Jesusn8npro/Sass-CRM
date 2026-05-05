@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { crearClienteServidor } from "@/lib/supabase/cliente-servidor";
+import { enviarBienvenida } from "@/lib/emails/disparadores";
 
 /**
  * Server Action: registro de nuevo usuario.
@@ -46,10 +47,15 @@ export async function registrarse(formData: FormData): Promise<
 
   // Si Supabase devuelve session, ya está logueado.
   if (data.session) {
+    // Email de bienvenida fire-and-forget — nunca bloquea el signup.
+    if (data.user?.id) {
+      void enviarBienvenida(data.user.id);
+    }
     revalidatePath("/", "layout");
     redirect("/app");
   }
 
-  // Necesita confirmar email primero.
+  // Necesita confirmar email primero. Cuando confirme y entre por
+  // primera vez, /api/auth/post-signup dispara el email de bienvenida.
   return { ok: true, necesitaConfirmacion: true };
 }
