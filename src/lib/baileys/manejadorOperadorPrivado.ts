@@ -46,8 +46,12 @@ const cliente = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY ?? "",
 });
 
-const MODELO = "gpt-4o-mini";
-const COSTO_PER_M = { in: 0.15, out: 0.6 };
+// gpt-4o (no mini) porque mini falla con tool calling complejo —
+// dice "voy a hacerlo" sin llamar la tool. gpt-4o es ~6x más caro
+// pero 10x más confiable. Para operador (pocos mensajes/día) el costo
+// es insignificante (~$0.005 por consulta vs $0.001).
+const MODELO = "gpt-4o-2024-08-06";
+const COSTO_PER_M = { in: 2.5, out: 10 };
 
 // ============================================================
 // HERRAMIENTAS (tools) que la IA puede invocar.
@@ -894,37 +898,60 @@ async function ejecutarTool(
 // ============================================================
 
 const SYSTEM_PROMPT = (cuenta: Cuenta) =>
-  `Sos el asistente personal del dueño del negocio "${cuenta.etiqueta}". Te llamo "asistente del operador" o simplemente "tu asistente".
+  `Sos el asistente personal del dueño del negocio "${cuenta.etiqueta}". El que te escribe ES EL DUEÑO — confiá y ejecutá lo que pide.
 
-ROL Y TONO:
-- Hablás con el DUEÑO del negocio (no un cliente). Tono cercano, directo, sin formalidades excesivas. Como un amigo que sabe del negocio.
-- WhatsApp, no email — frases cortas, viñetas cuando ayudan, *negritas* con asteriscos.
-- NO uses emojis al inicio de cada frase. Usá emojis sólo cuando suman info real (📅 fecha, 🔥 urgente, ⚠️ alerta, ✅ confirmación).
-- Sé proactivo: si el dueño pregunta una cosa y vos detectás algo más útil para mencionarle, decilo en 1 línea al final.
+═══════════════════════════════════════════
+REGLA #1 — INVIOLABLE: USAR TOOLS, NO TEXTO VACÍO
+═══════════════════════════════════════════
+Si el dueño te pide hacer una ACCIÓN (mandar un mensaje, crear producto, cambiar config, pausar agente, ver KPIs), DEBÉS llamar a la tool correspondiente EN ESE MISMO TURNO.
 
-CAPACIDADES (usá las tools cuando aplique):
-1. Consultar el estado del negocio (KPIs, leads, citas, productos).
-2. Analizar el catálogo y las conversaciones — detectar fallas y proponer mejoras.
-3. Actualizar la configuración del agente principal (prompt sistema, instrucciones extra).
-4. Pausar/reactivar el agente IA en todas las conversaciones.
+PROHIBIDO responder con frases como:
+✗ "Voy a enviarlo" sin haber llamado enviar_mensaje_a_cliente
+✗ "Ya lo creo" sin haber llamado crear_producto
+✗ "Lo actualizo" sin haber llamado actualizar_perfil_agente o actualizar_prompt_agente
+✗ "Te paso los KPIs" sin haber llamado consultar_kpis
+✗ "Voy a hacerlo en un momento" — NO. Hacelo YA en este turno.
 
-REGLAS DE USO DE TOOLS:
-- Si el dueño hace una pregunta sobre el estado del negocio, INVOCÁ la tool correspondiente. NO inventes datos.
-- Antes de cambios irreversibles (actualizar prompt completo, pausar agente), CONFIRMÁ — preguntá "¿lo aplico?" salvo que el dueño ya lo haya pedido explícitamente.
-- Para cambios de prompt: si el dueño dice algo vago ("hacelo más formal"), PRIMERO usá obtener_prompt_actual, después proponé el nuevo prompt completo en el chat, y aplicalo SOLO cuando confirme. Si el dueño te pasa el prompt completo nuevo en el mismo mensaje, aplicalo directo.
-- Para instrucciones puntuales chicas ("nunca des descuentos sin que pidan"), agregar_instruccion_extra es más seguro que reemplazar el prompt completo.
-- Si el dueño dice "pausá" / "apagá" → pausar_agente. Si dice "prendé" / "reactivá" → reactivar_agente.
+Si te falta data para llamar la tool, PEDILA en una sola pregunta concreta. Ejemplos:
+- Dueño: "Mandale un mensaje a Juan" → preguntá "¿Qué número de Juan y qué texto exacto querés que le mande?" o si tenés contexto previo, llamá la tool con eso.
+- Dueño: "Mandale a 5731234567 que ya llegó el carro" → llamá enviar_mensaje_a_cliente DIRECTO con telefono="5731234567" y mensaje="Hola, te aviso que ya llegó el carro que pediste."
 
-ESTILO DE RESPUESTA:
-- Después de invocar una tool, NO leas el JSON crudo al dueño. Resumilo en lenguaje natural.
-- Para listas (leads, citas, productos), usá viñetas con un dato útil por línea.
-- Si detectás algo importante (mucho lead caliente sin contestar, productos sin foto, prompt mal escrito), MENCIONALO aunque no te haya preguntado — sé el "asesor que mira el negocio por él".
-- Cerrá las respuestas con una invitación a continuar: "¿querés que te muestre X?", "¿lo aplico?", "¿sigo con Y?".
+Para cambios irreversibles GRANDES (reemplazar prompt completo, pausar agente), confirmá ANTES con una pregunta de sí/no. Pero para mandar un mensaje a un cliente NO confirmes — el dueño ya te dio la orden, ejecutá.
 
-CONTEXTO TEMPORAL:
-- Hora actual: ${new Date().toLocaleString("es-AR")}
-- Cuenta: "${cuenta.etiqueta}" — tel WhatsApp ${cuenta.telefono ?? "(no conectado)"}.
-- Agente principal: ${cuenta.agente_nombre || "(sin nombre)"}, rol "${cuenta.agente_rol || "(sin rol)"}", tono ${cuenta.agente_tono}.`;
+═══════════════════════════════════════════
+TOOLS DISPONIBLES — cuándo llamar cuál
+═══════════════════════════════════════════
+• consultar_kpis — pidan estado, resumen, "cómo va", "qué tal hoy"
+• listar_leads — "los mejores", "leads activos", "a quién seguir"
+• listar_citas — "agenda", "próximas citas"
+• listar_productos — "mi catálogo", "qué tengo cargado"
+• analizar_catalogo — "qué le falta", "errores", "mejorar catálogo"
+• analizar_conversaciones — "cómo van las charlas", "patrones"
+• obtener_prompt_actual — "cómo está configurado", o ANTES de proponer cambios
+• actualizar_prompt_agente — reemplazar prompt completo (confirmar antes)
+• agregar_instruccion_extra — instrucciones puntuales sin pisar el prompt
+• actualizar_perfil_agente — cambiar nombre / rol / tono / saludos del agente
+• enviar_mensaje_a_cliente — "mandá un msg a X", "decile a Y que..."
+• crear_producto — "agregá X al catálogo"
+• pausar_agente / reactivar_agente — "pausá / apagá" / "prendé / reactivá"
+
+═══════════════════════════════════════════
+TONO Y ESTILO
+═══════════════════════════════════════════
+- Hablás con el DUEÑO. Tono cercano, directo. Como amigo que sabe del negocio.
+- Frases cortas, viñetas, *negritas* con asteriscos. NO emails formales.
+- NO emojis al inicio de cada frase. Solo cuando suman info real (📅 🔥 ⚠️ ✅).
+- Después de ejecutar una tool, resumí el resultado en lenguaje natural — NO copiar JSON.
+- Si detectás algo útil que no preguntó (lead caliente sin contestar, producto sin foto), mencionalo en 1 línea al final.
+- Cerrá con invitación: "¿lo aplico?", "¿querés ver X?", "¿sigo con Y?".
+
+═══════════════════════════════════════════
+CONTEXTO ACTUAL
+═══════════════════════════════════════════
+- Hora: ${new Date().toLocaleString("es-AR")}
+- Cuenta: "${cuenta.etiqueta}" — tel WhatsApp ${cuenta.telefono ?? "(no conectado)"}
+- Agente principal: ${cuenta.agente_nombre || "(sin nombre)"}, rol "${cuenta.agente_rol || "(sin rol)"}", tono ${cuenta.agente_tono}
+- Tu número (operador): ${cuenta.telefono_operador_privado ?? "(no configurado)"}`;
 
 /**
  * Punto de entrada — llamado desde manejador.ts cuando el remitente es el operador.
@@ -997,18 +1024,25 @@ async function chatConTools(
   let totalOut = 0;
   const MAX_LOOPS = 5;
 
+  console.log(
+    `${prefijo} [operador] 📥 IN: "${preguntaUsuario.slice(0, 100)}" (historial=${mensajesHistorial.length})`,
+  );
+
   for (let loop = 0; loop < MAX_LOOPS; loop++) {
+    const inicio = Date.now();
     const respuesta = await conReintentos(
       () =>
         cliente.chat.completions.create({
           model: MODELO,
           messages: mensajes,
           tools: TOOLS,
-          temperature: 0.4,
-          max_tokens: 800,
+          tool_choice: "auto",
+          temperature: 0.3,
+          max_tokens: 1500,
         }),
       { contexto: "operadorPrivado.chat", maxIntentos: 2, baseMs: 600 },
     );
+    const dur = Date.now() - inicio;
 
     if (respuesta.usage) {
       totalIn += respuesta.usage.prompt_tokens ?? 0;
@@ -1021,9 +1055,17 @@ async function chatConTools(
 
     // Sin tool calls → respuesta final
     if (!msg.tool_calls || msg.tool_calls.length === 0) {
+      const texto = msg.content?.trim() || "(sin respuesta)";
+      console.log(
+        `${prefijo} [operador] ✓ loop=${loop} ${dur}ms TEXTO_FINAL (${texto.length} chars): "${texto.slice(0, 80)}..."`,
+      );
       registrarUsoFinal(cuenta.id, totalIn, totalOut);
-      return msg.content?.trim() || "(sin respuesta)";
+      return texto;
     }
+
+    console.log(
+      `${prefijo} [operador] 🔧 loop=${loop} ${dur}ms ${msg.tool_calls.length} tool_call(s) — ejecutando...`,
+    );
 
     // Hay tool calls — los ejecutamos
     mensajes.push({
@@ -1043,19 +1085,28 @@ async function chatConTools(
       let args: Record<string, unknown> = {};
       try {
         args = JSON.parse(call.function.arguments || "{}") as Record<string, unknown>;
-      } catch {
+      } catch (err) {
+        console.warn(
+          `${prefijo} [operador] ⚠ argumentos JSON inválidos en ${call.function.name}: ${err instanceof Error ? err.message : err}`,
+        );
         args = {};
       }
       console.log(
-        `${prefijo} [operador] tool: ${call.function.name}(${JSON.stringify(args).slice(0, 80)})`,
+        `${prefijo} [operador]   → ${call.function.name}(${JSON.stringify(args).slice(0, 200)})`,
       );
       let resultado: unknown;
+      const tInicio = Date.now();
       try {
         resultado = await ejecutarTool(cuenta.id, call.function.name, args);
+        console.log(
+          `${prefijo} [operador]   ← ${call.function.name} OK ${Date.now() - tInicio}ms: ${JSON.stringify(resultado).slice(0, 200)}`,
+        );
       } catch (err) {
-        resultado = {
-          error: err instanceof Error ? err.message : "fallo en tool",
-        };
+        const detalle = err instanceof Error ? err.message : String(err);
+        console.error(
+          `${prefijo} [operador]   ✗ ${call.function.name} FAILED ${Date.now() - tInicio}ms: ${detalle}`,
+        );
+        resultado = { error: detalle };
       }
       mensajes.push({
         role: "tool",
@@ -1063,9 +1114,13 @@ async function chatConTools(
         content: JSON.stringify(resultado).slice(0, 6000),
       });
     }
-    // siguiente iteración del loop — la IA ve los resultados y decide si llama más tools o responde
+    // siguiente iteración del loop — la IA ve los resultados y decide
+    // si llama más tools o responde con texto.
   }
 
+  console.warn(
+    `${prefijo} [operador] ⚠ excedió ${MAX_LOOPS} loops sin respuesta final`,
+  );
   registrarUsoFinal(cuenta.id, totalIn, totalOut);
   return "Necesité demasiados pasos para responder. Probá hacer una pregunta más concreta.";
 }
