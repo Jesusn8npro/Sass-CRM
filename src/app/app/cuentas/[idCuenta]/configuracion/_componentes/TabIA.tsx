@@ -421,21 +421,130 @@ export function SeccionPrompt({ cuenta, onActualizada }: PropsSeccionBase) {
 
   return (
     <Tarjeta
-      titulo="Prompt del agente"
-      descripcion="Instrucciones base: personalidad, tono, reglas, qué hacer y qué no. Es lo primero que ve el modelo en cada conversación."
+      titulo="Prompt del agente (comportamiento)"
+      descripcion="REGLAS de cómo se comporta el agente: personalidad, tono, qué hacer y qué no. Distinto de 'Información del negocio' (Tab General) — ahí van los DATOS (horarios, precios, productos), acá van las REGLAS DE CONDUCTA."
     >
       <form onSubmit={guardar} className="flex flex-col gap-3">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          ✅ <strong>Va acá:</strong> &quot;Sé amable y profesional&quot;, &quot;Nunca des descuentos
+          sin que el cliente lo pida&quot;, &quot;Siempre cierra ofreciendo agendar visita&quot;,
+          &quot;Si preguntan por temas legales, derivá a humano&quot;.
+          <br />
+          ❌ <strong>NO va acá:</strong> horarios, productos, precios, garantías —
+          eso son DATOS, van en &quot;Información del negocio&quot; (Tab General).
+        </p>
         <textarea
           value={valor}
           onChange={(e) => setValor(e.target.value)}
           rows={14}
-          placeholder="Eres un asistente virtual amable. Responde en español neutro..."
+          placeholder="Sos un asesor de ventas profesional pero cercano. Tu objetivo es entender qué necesita el cliente y guiarlo hacia una visita o llamada. Reglas: nunca prometás algo que no podés cumplir, siempre capturá nombre y teléfono antes de cerrar..."
           className={textareaClases()}
         />
         <p className="text-xs text-zinc-500">
           Cambios aplican al próximo mensaje entrante. No hace falta reiniciar
           el bot.
         </p>
+        <div className="flex items-center justify-between gap-3">
+          <MensajeEstado exito={exito} error={error} />
+          {botonGuardar({ guardando })}
+        </div>
+      </form>
+    </Tarjeta>
+  );
+}
+
+/**
+ * Toggles "de fábrica" para personalidad del agente:
+ * - responder_humanizado: respuestas naturales vs robóticas (default true)
+ * - usar_emojis: permitir emojis en respuestas (default false)
+ * Las reglas correspondientes se inyectan en el system prompt
+ * automáticamente desde construirPrompt.ts.
+ */
+export function SeccionPersonalidadAgente({
+  cuenta,
+  onActualizada,
+}: PropsSeccionBase) {
+  const [humanizado, setHumanizado] = useState(
+    cuenta.responder_humanizado !== false,
+  );
+  const [emojis, setEmojis] = useState(cuenta.usar_emojis === true);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [exito, setExito] = useState(false);
+
+  useEffect(() => {
+    setHumanizado(cuenta.responder_humanizado !== false);
+    setEmojis(cuenta.usar_emojis === true);
+    setError(null);
+    setExito(false);
+  }, [cuenta.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function guardar(e: React.FormEvent) {
+    e.preventDefault();
+    if (guardando) return;
+    setGuardando(true);
+    setError(null);
+    setExito(false);
+    const r = await patchCuenta(cuenta.id, {
+      responder_humanizado: humanizado,
+      usar_emojis: emojis,
+    });
+    if ("error" in r) setError(r.error);
+    else {
+      onActualizada(r);
+      setExito(true);
+      setTimeout(() => setExito(false), 2500);
+    }
+    setGuardando(false);
+  }
+
+  return (
+    <Tarjeta
+      titulo="Personalidad del agente"
+      descripcion="Toggles rápidos para el estilo de respuesta. Se aplican automáticamente sin tener que escribir nada en el prompt."
+    >
+      <form onSubmit={guardar} className="flex flex-col gap-4">
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            checked={humanizado}
+            onChange={(e) => setHumanizado(e.target.checked)}
+            className="mt-1 h-4 w-4 rounded border-zinc-300 accent-emerald-600 dark:border-zinc-700"
+          />
+          <span className="flex-1">
+            <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              Responder lo más humano posible{" "}
+              <span className="font-normal text-zinc-500">(recomendado)</span>
+            </span>
+            <span className="mt-1 block text-xs leading-relaxed text-zinc-500">
+              Frases naturales y conversacionales — evita formalidades robóticas
+              tipo &quot;Claro, puedo ayudarte con eso&quot; o listas largas con
+              viñetas. Mensajes cortos como hablás vos en WhatsApp.
+            </span>
+          </span>
+        </label>
+
+        <div className="border-t border-zinc-200 pt-4 dark:border-zinc-800">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={emojis}
+              onChange={(e) => setEmojis(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-zinc-300 accent-emerald-600 dark:border-zinc-700"
+            />
+            <span className="flex-1">
+              <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                Permitir uso de emojis
+              </span>
+              <span className="mt-1 block text-xs leading-relaxed text-zinc-500">
+                Si está OFF (default), el agente NUNCA usa emojis — tono
+                profesional. Si está ON, los usa con moderación cuando suman
+                (📅 fecha, ✅ confirmación, etc.).
+              </span>
+            </span>
+          </label>
+        </div>
+
         <div className="flex items-center justify-between gap-3">
           <MensajeEstado exito={exito} error={error} />
           {botonGuardar({ guardando })}
@@ -535,6 +644,7 @@ export function TabIA({
   return (
     <>
       <SeccionConfiguracionIA cuenta={cuenta} onActualizada={setCuenta} />
+      <SeccionPersonalidadAgente cuenta={cuenta} onActualizada={setCuenta} />
       <SeccionComportamiento cuenta={cuenta} onActualizada={setCuenta} />
       <SeccionRitmoYMemoria cuenta={cuenta} onActualizada={setCuenta} />
       <SeccionVoz cuenta={cuenta} onActualizada={setCuenta} />

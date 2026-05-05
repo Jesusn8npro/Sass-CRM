@@ -191,6 +191,12 @@ export interface Cuenta {
   /** Opt-in para emails transaccionales por Resend (bienvenida,
    *  reportes, cuenta caída). Billing va aparte. */
   notificaciones_email_activas: boolean;
+  /** Si true (default), el agente prioriza respuestas naturales y
+   *  conversacionales — evita frases robóticas, listas largas, formalidades. */
+  responder_humanizado: boolean;
+  /** Si true, el agente puede usar emojis con moderación. Si false (default),
+   *  NUNCA usa emojis — tono más profesional. */
+  usar_emojis: boolean;
   creada_en: string;
   actualizada_en: string;
 }

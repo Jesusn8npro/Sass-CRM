@@ -100,6 +100,8 @@ export async function actualizarCuenta(
     operador_privado_resumen_diario: boolean;
     operador_privado_alertas: boolean;
     notificaciones_email_activas: boolean;
+    responder_humanizado: boolean;
+    usar_emojis: boolean;
   }>,
 ): Promise<Cuenta | null> {
   const cambios: Record<string, unknown> = {};

@@ -224,6 +224,48 @@ ${partesAudio}- Las imágenes (tipo="media") SÍ están permitidas — ver bloqu
     partes.push(bloqueMedia);
   }
 
+  // ============================================================
+  // Toggles de fábrica — humanizado y emojis. Se inyectan en bloques
+  // de prioridad alta para que la IA los respete sobre cualquier
+  // contradicción del prompt_sistema custom.
+  // ============================================================
+  // Default true — la mayoría de los negocios quieren tono humano.
+  if (cuenta.responder_humanizado !== false) {
+    partes.push(`
+
+ESTILO HUMANO — REGLA PRIORITARIA:
+- Hablá como un humano, no como un bot. Frases naturales, conversacionales.
+- EVITÁ frases robóticas tipo "Claro, puedo ayudarte con eso", "Estoy aquí para asistirte",
+  "Por supuesto, con gusto te brindo la información". Sustituilas por algo más natural:
+  "Sí, dale", "Listo, mirá", "Mirá, te cuento", "Buena pregunta".
+- EVITÁ listas largas con viñetas — usá prosa o máximo 2-3 puntos cuando es necesario.
+- EVITÁ formalidades excesivas: "estimado cliente", "cordialmente", "le saluda atentamente".
+  Usá tuteo natural (vos / tú según el idioma de la cuenta).
+- Mensajes cortos. WhatsApp, no email. 1-3 frases por parte.
+- Ocasionalmente usá muletillas naturales si encajan ("dale", "buenísimo", "joya", "ok").
+- Variá la forma de empezar las respuestas — no arranques siempre igual.`);
+  }
+
+  // Default false — varios negocios prefieren tono profesional sin emojis.
+  if (cuenta.usar_emojis === true) {
+    partes.push(`
+
+USO DE EMOJIS — PERMITIDO CON MODERACIÓN:
+- Podés usar emojis cuando suman a la comunicación (👍 confirmación, 📅 fecha,
+  🔥 urgente, ✅ listo, 🚗 producto auto, 🏠 propiedad, etc.).
+- Máximo 1 emoji por mensaje. NO uses cadenas tipo "🎉🎉🎉" ni varios pegados.
+- NO empieces todas las frases con emoji — se ve robótico.
+- Si el cliente NO usa emojis, también modéralos vos.`);
+  } else {
+    partes.push(`
+
+USO DE EMOJIS — DESHABILITADO:
+- NO uses emojis en ninguna respuesta. Ningún 🙂, 👍, ✅, ❤️, etc.
+- Tono profesional sin decoraciones gráficas.
+- La excepción son los íconos del catálogo de productos / biblioteca que el sistema
+  inyecta automáticamente — esos no los pongas vos.`);
+  }
+
   // Mensaje "no entiende" — fallback configurable por el dueño
   const mensajeNoEntiende = cuenta.mensaje_no_entiende?.trim();
   if (mensajeNoEntiende) {

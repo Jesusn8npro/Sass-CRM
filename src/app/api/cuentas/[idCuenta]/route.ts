@@ -134,6 +134,8 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     operador_privado_resumen_diario?: unknown;
     operador_privado_alertas?: unknown;
     notificaciones_email_activas?: unknown;
+    responder_humanizado?: unknown;
+    usar_emojis?: unknown;
   }>(req);
   if (payload instanceof NextResponse) return payload;
 
@@ -305,6 +307,14 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     typeof payload.notificaciones_email_activas === "boolean"
       ? payload.notificaciones_email_activas
       : undefined;
+  const responder_humanizado =
+    typeof payload.responder_humanizado === "boolean"
+      ? payload.responder_humanizado
+      : undefined;
+  const usar_emojis =
+    typeof payload.usar_emojis === "boolean"
+      ? payload.usar_emojis
+      : undefined;
 
   const actualizada = await actualizarCuenta(idCuenta, {
     etiqueta,
@@ -342,6 +352,8 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     operador_privado_resumen_diario,
     operador_privado_alertas,
     notificaciones_email_activas,
+    responder_humanizado,
+    usar_emojis,
   });
   if (!actualizada) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
