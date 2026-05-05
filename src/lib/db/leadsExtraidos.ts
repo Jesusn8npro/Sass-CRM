@@ -77,3 +77,21 @@ export async function marcarLeadImportado(
     .eq("id", id);
   if (error) lanzar(error, "marcarLeadImportado");
 }
+
+/**
+ * Lista todos los leads extraidos de una cuenta para export CSV.
+ * Tope `limite` para no fundir el server con cuentas gigantes.
+ */
+export async function listarLeadsParaExport(
+  cuentaId: string,
+  limite: number,
+): Promise<LeadExtraido[]> {
+  const { data, error } = await db()
+    .from("leads_extraidos")
+    .select("*")
+    .eq("cuenta_id", cuentaId)
+    .order("creado_en", { ascending: false })
+    .limit(limite);
+  if (error) lanzar(error, "listarLeadsParaExport");
+  return (data ?? []) as LeadExtraido[];
+}

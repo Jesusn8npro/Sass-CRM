@@ -251,6 +251,49 @@ export async function marcarConversacionNecesitaHumano(
   }
 }
 
+/**
+ * Lista conversaciones para export CSV — sin previews ni etiquetas.
+ * Adjunta total_mensajes contado en una sola query agregada en memoria.
+ * Tope `limite` aplicado al universo de conversaciones devueltas.
+ */
+export interface ConversacionParaExport extends Conversacion {
+  total_mensajes: number;
+}
+
+export async function listarConversacionesParaExport(
+  cuentaId: string,
+  limite: number,
+): Promise<ConversacionParaExport[]> {
+  const { data: convs, error } = await db()
+    .from("conversaciones")
+    .select("*")
+    .eq("cuenta_id", cuentaId)
+    .order("ultimo_mensaje_en", { ascending: false, nullsFirst: false })
+    .limit(limite);
+  if (error) lanzar(error, "listarConversacionesParaExport");
+  if (!convs || convs.length === 0) return [];
+
+  const convIds = convs.map((c) => (c as Conversacion).id);
+  const conteo = new Map<string, number>();
+  // Una sola query agrupando en memoria. Tope 200k mensajes para no
+  // explotar — para conteos exactos en cuentas mas grandes habria que
+  // mover esto a una RPC con count() agrupado.
+  const { data: msgs } = await db()
+    .from("mensajes")
+    .select("conversacion_id")
+    .in("conversacion_id", convIds)
+    .limit(200000);
+  if (msgs) {
+    for (const m of msgs as { conversacion_id: string }[]) {
+      conteo.set(m.conversacion_id, (conteo.get(m.conversacion_id) ?? 0) + 1);
+    }
+  }
+  return (convs as Conversacion[]).map((c) => ({
+    ...c,
+    total_mensajes: conteo.get(c.id) ?? 0,
+  }));
+}
+
 export async function borrarConversacion(id: string): Promise<void> {
   // Cascada via FK ON DELETE CASCADE (mensajes, bandeja, etiquetas)
   const { error } = await db().from("conversaciones").delete().eq("id", id);

@@ -17,6 +17,7 @@ export function HeroClientes({
   filtro,
   setFiltro,
   exportarCSV,
+  idCuenta,
   stats,
   estadoFiltro,
   setEstadoFiltro,
@@ -27,6 +28,7 @@ export function HeroClientes({
   filtro: string;
   setFiltro: (v: string) => void;
   exportarCSV: () => void;
+  idCuenta: string;
   stats: Stats;
   estadoFiltro: FiltroEstado;
   setEstadoFiltro: (v: FiltroEstado) => void;
@@ -83,6 +85,14 @@ export function HeroClientes({
               >
                 ↓ Exportar
               </button>
+              <a
+                href={`/api/cuentas/${idCuenta}/exports/conversaciones`}
+                download
+                title="Exportar todas las conversaciones desde el servidor"
+                className="rounded-full border border-zinc-200 bg-white px-3.5 py-1.5 text-xs font-medium shadow-sm transition-colors hover:border-emerald-500/30 dark:border-zinc-800 dark:bg-zinc-900"
+              >
+                📥 CSV completo
+              </a>
             </div>
           </div>
 

@@ -207,6 +207,7 @@ export default function PaginaClientes() {
         filtro={filtro}
         setFiltro={setFiltro}
         exportarCSV={exportarCSV}
+        idCuenta={idCuenta}
         stats={stats}
         estadoFiltro={estadoFiltro}
         setEstadoFiltro={setEstadoFiltro}

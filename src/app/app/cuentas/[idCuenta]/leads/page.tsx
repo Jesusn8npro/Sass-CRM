@@ -112,17 +112,26 @@ export default function PaginaLeads() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
-      <header className="mb-6">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-400">
-          Captación · Leads
-        </p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight">
-          Buscar contactos potenciales
-        </h1>
-        <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-          Buscá en Google Maps por término + ciudad. Los resultados quedan en
-          una bandeja — vos decidís cuáles importar al CRM.
-        </p>
+      <header className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-400">
+            Captación · Leads
+          </p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">
+            Buscar contactos potenciales
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm text-zinc-500">
+            Buscá en Google Maps por término + ciudad. Los resultados quedan en
+            una bandeja — vos decidís cuáles importar al CRM.
+          </p>
+        </div>
+        <a
+          href={`/api/cuentas/${idCuenta}/exports/leads-extraidos`}
+          download
+          className="shrink-0 rounded-full border border-zinc-200 bg-white px-3.5 py-1.5 text-xs font-medium shadow-sm transition-colors hover:border-emerald-500/30 dark:border-zinc-800 dark:bg-zinc-900"
+        >
+          📥 Exportar CSV
+        </a>
       </header>
 
       <section className="mb-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 md:p-6">

@@ -115,3 +115,21 @@ export async function contarContactosEmail(cuentaId: string): Promise<number> {
   if (error) lanzar(error, "contarContactosEmail");
   return count ?? 0;
 }
+
+/**
+ * Solo emails crudos para export CSV (sin join). El export consolidado
+ * suma estos + telefonos en la ruta del endpoint.
+ */
+export async function listarContactosEmailParaExport(
+  cuentaId: string,
+  limite: number,
+): Promise<ContactoEmail[]> {
+  const { data, error } = await db()
+    .from("contactos_email")
+    .select("*")
+    .eq("cuenta_id", cuentaId)
+    .order("capturado_en", { ascending: false })
+    .limit(limite);
+  if (error) lanzar(error, "listarContactosEmailParaExport");
+  return (data ?? []) as ContactoEmail[];
+}
