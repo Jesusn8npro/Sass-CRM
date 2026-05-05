@@ -76,14 +76,14 @@ export function PieDePagina() {
         {[
           { titulo: "Producto", links: [{ t: "Funciones", h: "#funciones" }, { t: "Precios", h: "#precios" }, { t: "FAQ", h: "#faq" }] },
           { titulo: "Cuenta", links: [{ t: "Crear cuenta", h: "/signup" }, { t: "Iniciar sesión", h: "/login" }] },
-          { titulo: "Legal", links: [{ t: "Términos", h: "#" }, { t: "Privacidad", h: "#" }] },
+          { titulo: "Legal", links: [{ t: "Términos", h: "/terminos" }, { t: "Privacidad", h: "/privacidad" }] },
         ].map((col) => (
           <div key={col.titulo}>
             <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">{col.titulo}</p>
             <ul className="space-y-2.5 text-sm text-white/60">
               {col.links.map((l) => (
                 <li key={l.t}>
-                  <a href={l.h} className="transition-colors hover:text-white">{l.t}</a>
+                  <Link href={l.h} className="transition-colors hover:text-white">{l.t}</Link>
                 </li>
               ))}
             </ul>
