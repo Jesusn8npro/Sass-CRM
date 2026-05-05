@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { obtenerUsuarioActual } from "@/lib/auth/sesion";
-import { listarCuentas } from "@/lib/baseDatos";
+import { listarCuentas, obtenerEstadoOnboarding } from "@/lib/baseDatos";
 import { CrearPrimeraCuenta } from "@/components/CrearPrimeraCuenta";
 
 /**
  * Entrada al panel.
+ *  - Onboarding pendiente y sin cuentas conectadas → /onboarding.
  *  - Sin cuentas → muestra "Crear primera cuenta".
  *  - 1 sola cuenta → redirige directo a /app/cuentas/{id}/conversaciones.
  *  - N > 1 cuentas → muestra selector.
@@ -18,6 +19,15 @@ export default async function PaginaPanel() {
   if (!auth) redirect("/login?siguiente=/app");
 
   const cuentas = await listarCuentas(auth.id);
+
+  // Si el usuario aún no terminó el onboarding y no tiene ninguna cuenta
+  // conectada, lo mandamos al wizard. El wizard se encarga de decidir
+  // a qué paso ir según su estado.
+  const estadoOnboarding = await obtenerEstadoOnboarding(auth.id);
+  const algunaConectada = cuentas.some((c) => c.estado === "conectado");
+  if (!estadoOnboarding.completo && !algunaConectada) {
+    redirect("/onboarding");
+  }
 
   // 1 cuenta → entrada directa
   if (cuentas.length === 1) {
