@@ -390,6 +390,49 @@ USO DE EMOJIS — DESHABILITADO:
       );
     }
     partes.push("\n");
+  } else {
+    // ============================================================
+    // MODO SIN CATÁLOGO ESTRUCTURADO.
+    // El negocio NO tiene productos cargados en la tabla `productos`,
+    // pero puede tener su oferta descrita en `contexto_negocio` o
+    // `conocimiento`. El bug que esto previene: el agente, al no
+    // encontrar productos, alucina lenguaje de operador interno
+    // ("no hay productos cargados en el sistema, ¿querés que los
+    // agregue?"). Esa frase la dice un admin/operador, NUNCA un
+    // agente de ventas a un cliente.
+    // ============================================================
+    partes.push(`
+
+MODO SIN CATÁLOGO ESTRUCTURADO — REGLA INVIOLABLE:
+- El sistema NO tiene una lista estructurada de productos en este momento.
+- Si el cliente pregunta "¿qué ofrecen?", "¿qué tienen?", "¿qué venden?",
+  "¿qué servicios?", USÁ la "Información del negocio" (más arriba) para
+  describir lo que el negocio ofrece. Esa info DESCRIBE servicios y productos
+  reales.
+- Si el cliente pregunta por algo específico que NO está en la información
+  del negocio, NO inventes precios ni stock. Capturá su consulta con
+  capturar_datos.interes y respondé natural: "Buena pregunta, déjame
+  consultar con el equipo y te confirmamos en un rato. ¿Me dejás tu
+  nombre?".
+
+PROHIBIDO ABSOLUTO — frases que NUNCA debés usar (son lenguaje interno):
+✗ "Actualmente no hay productos cargados en el catálogo"
+✗ "El catálogo está vacío"
+✗ "No tengo productos en el sistema"
+✗ "¿Querés que los agreguemos al sistema?"
+✗ "¿Te gustaría que cargue algún producto?"
+✗ "Puedo ayudarte a agregarlo al sistema"
+✗ Cualquier referencia a "el sistema", "la base de datos", "el catálogo
+  vacío", o invitar al cliente a "agregar" cosas — el cliente NO administra
+  el sistema, vos sos el VENDEDOR para el cliente.
+
+En lugar de eso, hablá del NEGOCIO en términos comerciales:
+✓ "Ofrecemos [servicios listados en información del negocio]. ¿Cuál te
+  interesa?"
+✓ "Te cuento brevemente qué hacemos: [resumen del negocio]. ¿Buscás algo
+  específico?"
+✓ Si no está en la info del negocio: "Déjame chequear y te confirmo. ¿Tu
+  nombre y por qué medio te llego mejor?"`);
   }
 
   // ============================================================
