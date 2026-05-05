@@ -80,10 +80,10 @@ export default function PaginaAdminIngresos() {
   return (
     <div className="mx-auto max-w-5xl">
       <header className="mb-8">
-        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-300">
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-300">
           // ingresos
         </p>
-        <h1 className="font-display mt-2 text-4xl italic leading-tight text-white md:text-5xl">
+        <h1 className="font-display mt-2 text-4xl italic leading-tight text-zinc-900 dark:text-white md:text-5xl">
           Historial de pagos
         </h1>
       </header>
@@ -95,10 +95,10 @@ export default function PaginaAdminIngresos() {
             setPagina(1);
             setEstado(e.target.value);
           }}
-          className="rounded-full border border-white/[0.06] bg-white/[0.02] px-4 py-2 font-mono text-xs uppercase tracking-wider text-white"
+          className="rounded-full border border-zinc-200 bg-white px-4 py-2 font-mono text-xs uppercase tracking-wider text-zinc-900 dark:border-white/[0.06] dark:bg-white/[0.02] dark:text-white"
         >
           {ESTADOS.map((es) => (
-            <option key={es || "todos"} value={es} className="bg-zinc-900">
+            <option key={es || "todos"} value={es} className="bg-white text-zinc-900 dark:bg-zinc-900 dark:text-white">
               {es ? es : "todos los estados"}
             </option>
           ))}
@@ -110,7 +110,7 @@ export default function PaginaAdminIngresos() {
             setPagina(1);
             setMes(e.target.value);
           }}
-          className="rounded-full border border-white/[0.06] bg-white/[0.02] px-4 py-2 font-mono text-xs text-white"
+          className="rounded-full border border-zinc-200 bg-white px-4 py-2 font-mono text-xs text-zinc-900 dark:border-white/[0.06] dark:bg-white/[0.02] dark:text-white"
         />
         {(estado || mes) && (
           <button
@@ -120,20 +120,20 @@ export default function PaginaAdminIngresos() {
               setMes("");
               setPagina(1);
             }}
-            className="font-mono text-[11px] uppercase tracking-wider text-white/50 hover:text-white"
+            className="font-mono text-[11px] uppercase tracking-wider text-zinc-500 hover:text-zinc-900 dark:text-white/50 dark:hover:text-white"
           >
             limpiar
           </button>
         )}
 
-        <span className="ml-auto font-mono text-[11px] uppercase tracking-wider text-white/40">
+        <span className="ml-auto font-mono text-[11px] uppercase tracking-wider text-zinc-500 dark:text-white/40">
           aprobados en página: ${totalAprobados.toFixed(2)}
         </span>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-white/[0.06] dark:bg-white/[0.02]">
         <table className="w-full text-sm">
-          <thead className="border-b border-white/[0.06] text-left font-mono text-[10px] uppercase tracking-wider text-white/40">
+          <thead className="border-b border-zinc-200 text-left font-mono text-[10px] uppercase tracking-wider text-zinc-500 dark:border-white/[0.06] dark:text-white/40">
             <tr>
               <th className="px-4 py-3">Fecha</th>
               <th className="px-4 py-3">Usuario</th>
@@ -146,40 +146,40 @@ export default function PaginaAdminIngresos() {
           <tbody>
             {cargando ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-white/40">
+                <td colSpan={6} className="px-4 py-8 text-center text-zinc-500 dark:text-white/40">
                   Cargando…
                 </td>
               </tr>
             ) : !datos || datos.pagos.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-white/40">
+                <td colSpan={6} className="px-4 py-8 text-center text-zinc-500 dark:text-white/40">
                   Sin pagos
                 </td>
               </tr>
             ) : (
               datos.pagos.map((p) => (
-                <tr key={p.id} className="border-t border-white/[0.04]">
-                  <td className="px-4 py-3 font-mono text-[11px] text-white/60">
+                <tr key={p.id} className="border-t border-zinc-100 dark:border-white/[0.04]">
+                  <td className="px-4 py-3 font-mono text-[11px] text-zinc-600 dark:text-white/60">
                     {new Date(p.creado_en).toLocaleString("es-AR")}
                   </td>
-                  <td className="px-4 py-3 font-mono text-[11px] text-white/70">
+                  <td className="px-4 py-3 font-mono text-[11px] text-zinc-600 dark:text-white/70">
                     <a
                       href={`/app/admin/usuarios/${p.usuario_id}`}
-                      className="hover:text-emerald-300 hover:underline"
+                      className="hover:text-emerald-600 hover:underline dark:hover:text-emerald-300"
                     >
                       {p.usuario_id.slice(0, 8)}…
                     </a>
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-white/80">
+                  <td className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-zinc-700 dark:text-white/80">
                     {p.tipo}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs uppercase tracking-wider">
                     <span className={pillPago(p.estado)}>{p.estado}</span>
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-white">
+                  <td className="px-4 py-3 text-right font-mono text-xs text-zinc-900 dark:text-white">
                     ${Number(p.monto_usd).toFixed(2)}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-white/70">
+                  <td className="px-4 py-3 text-right font-mono text-xs text-zinc-600 dark:text-white/70">
                     {p.creditos_otorgados || "—"}
                   </td>
                 </tr>
@@ -190,7 +190,7 @@ export default function PaginaAdminIngresos() {
       </div>
 
       {datos && datos.paginas > 1 && (
-        <div className="mt-6 flex items-center justify-between font-mono text-[11px] text-white/50">
+        <div className="mt-6 flex items-center justify-between font-mono text-[11px] text-zinc-500 dark:text-white/50">
           <span>
             página {datos.pagina} de {datos.paginas} · {datos.total} pagos
           </span>
@@ -199,7 +199,7 @@ export default function PaginaAdminIngresos() {
               type="button"
               disabled={datos.pagina <= 1}
               onClick={() => setPagina((p) => Math.max(1, p - 1))}
-              className="rounded-full border border-white/[0.10] px-3 py-1 text-white/80 hover:border-white/30 disabled:opacity-40"
+              className="rounded-full border border-zinc-200 px-3 py-1 text-zinc-700 hover:border-zinc-400 disabled:opacity-40 dark:border-white/[0.10] dark:text-white/80 dark:hover:border-white/30"
             >
               ← anterior
             </button>
@@ -207,7 +207,7 @@ export default function PaginaAdminIngresos() {
               type="button"
               disabled={datos.pagina >= datos.paginas}
               onClick={() => setPagina((p) => p + 1)}
-              className="rounded-full border border-white/[0.10] px-3 py-1 text-white/80 hover:border-white/30 disabled:opacity-40"
+              className="rounded-full border border-zinc-200 px-3 py-1 text-zinc-700 hover:border-zinc-400 disabled:opacity-40 dark:border-white/[0.10] dark:text-white/80 dark:hover:border-white/30"
             >
               siguiente →
             </button>
@@ -222,10 +222,10 @@ function pillPago(estado: string): string {
   const base =
     "inline-flex rounded-full border px-2 py-0.5 text-[10px] tracking-wider";
   if (estado === "aprobado")
-    return `${base} border-emerald-400/30 bg-emerald-400/[0.08] text-emerald-200`;
+    return `${base} border-emerald-500/40 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/[0.08] dark:text-emerald-200`;
   if (estado === "fallido" || estado === "cancelado")
-    return `${base} border-red-400/30 bg-red-400/[0.08] text-red-200`;
+    return `${base} border-red-500/40 bg-red-50 text-red-700 dark:border-red-400/30 dark:bg-red-400/[0.08] dark:text-red-200`;
   if (estado === "pendiente")
-    return `${base} border-amber-400/30 bg-amber-400/[0.08] text-amber-200`;
-  return `${base} border-white/[0.10] bg-white/[0.04] text-white/70`;
+    return `${base} border-amber-500/40 bg-amber-50 text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/[0.08] dark:text-amber-200`;
+  return `${base} border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-white/[0.10] dark:bg-white/[0.04] dark:text-white/70`;
 }

@@ -330,6 +330,15 @@ export async function descargarBiblioteca(
 }
 
 /**
+ * Lee la imagen interna de un producto (bucket `productos`).
+ */
+export async function descargarProductoImagen(
+  rutaRelativa: string,
+): Promise<{ buffer: Buffer; mime: string } | null> {
+  return descargarArchivo("productos", rutaRelativa);
+}
+
+/**
  * Borra un medio de biblioteca.
  */
 export async function borrarMedioBibliotecaArchivo(

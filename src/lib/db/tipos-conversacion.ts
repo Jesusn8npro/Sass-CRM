@@ -27,6 +27,13 @@ export interface Conversacion {
   /** Cantidad de pasos de auto-seguimiento ya disparados en esta
    *  conversacion. Se resetea a 0 cuando el cliente responde. */
   auto_seg_paso_enviado: number;
+  /** Resumen acumulativo (generado por IA) de los mensajes anteriores
+   *  a la ventana actual. Se actualiza cuando la conversación crece.
+   *  Vacío si nunca se llegó al umbral o si memoria_largo_plazo=false. */
+  resumen_contexto: string;
+  /** Fecha del último mensaje que ya fue incorporado al resumen_contexto.
+   *  Sirve para tomar sólo los mensajes nuevos cuando se actualiza el resumen. */
+  resumido_hasta_en: string | null;
 }
 
 export interface ConversacionConPreview extends Conversacion {

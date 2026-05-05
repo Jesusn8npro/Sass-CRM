@@ -17,6 +17,8 @@ const API_PUBLICA_ALLOWLIST = [
   "/api/cron/reportes-semanales",
   // API pública v1 — autenticada vía API key en el handler, no por sesión.
   "/api/v1",
+  // Demo público (chat sandbox). Rate-limit por IP en el handler.
+  "/api/demo/chat",
 ];
 
 export async function middleware(request: NextRequest) {

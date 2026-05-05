@@ -14,6 +14,12 @@ function formatearHora(iso: string): string {
 }
 
 function urlMedia(idCuenta: string, mediaPath: string): string {
+  // Prefijo "url:" indica que el archivo es una URL externa (HTTP/S),
+  // típicamente la imagen de un producto importado por CSV. La burbuja
+  // del panel la usa directo sin proxy.
+  if (mediaPath.startsWith("url:")) {
+    return mediaPath.slice("url:".length);
+  }
   // Prefijo "biblio:" indica que el archivo está en data/biblioteca/, no en data/media/.
   // Lo enviamos a través del endpoint /api/biblioteca/[idCuenta]/[archivo].
   if (mediaPath.startsWith("biblio:")) {

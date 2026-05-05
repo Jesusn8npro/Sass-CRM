@@ -118,22 +118,54 @@ REGLAS DE IDENTIDAD — INVIOLABLES:
     );
   }
 
-  // Estilo de respuesta del agente — controla cómo mezcla texto/audio/media.
-  // Se inyecta como bloque de prioridad alta para que la IA lo respete por
-  // sobre las instrucciones genéricas del schema.
+  // Estilo de respuesta del agente — controla cómo mezcla TEXTO vs AUDIO.
+  // OJO: el modo NO restringe el envío de MEDIA (fotos de productos, catálogo
+  // visual). Las imágenes están permitidas en TODOS los modos. Lo que cambia
+  // por modo es la mezcla texto/audio. Esto es clave para que la IA entienda
+  // que tener una foto del producto SIEMPRE puede mostrarse al cliente.
   const tieneVoz =
     !!cuenta.voz_elevenlabs && cuenta.voz_elevenlabs.trim().length > 0;
   const tieneApiKeyEleven = !!process.env.ELEVENLABS_API_KEY;
   const puedeUsarVoz = tieneVoz && tieneApiKeyEleven;
-  const tieneBiblioteca = biblioteca.length > 0;
+  const tieneProductosConFoto = productos.some(
+    (p) =>
+      p.esta_activo &&
+      ((p.imagen_url_externa != null && p.imagen_url_externa.trim() !== "") ||
+        (p.imagen_path != null && p.imagen_path.trim() !== "")),
+  );
+  const tieneMediaDisponible = biblioteca.length > 0 || tieneProductosConFoto;
+
+  // Bloque MEDIA — universal, independiente del modo. Si la cuenta tiene
+  // biblioteca o productos con foto, la IA puede (y debe) usar tipo="media".
+  let bloqueMedia = "";
+  if (tieneMediaDisponible) {
+    bloqueMedia = `
+
+MEDIA (FOTOS / CATÁLOGO) — REGLA INVIOLABLE QUE APLICA EN TODOS LOS MODOS:
+- Cuando el cliente pregunte por algo visual (foto de producto, catálogo, comprobante)
+  Y tengas un media_id disponible (sea de la biblioteca o de un producto con foto),
+  USALO. Agregá una parte tipo="media" con el media_id exacto.
+- El modo de respuesta (mixto / espejo_voz / solo_audio) controla TEXTO vs AUDIO,
+  pero NUNCA restringe el envío de imágenes. Las imágenes están permitidas siempre.
+- NUNCA digas "no tengo imágenes" si el catálogo o la biblioteca muestra un media_id
+  para ese producto. Mostrá la foto.
+- DESPUÉS de enviar una parte tipo="media", SIEMPRE agregá una parte de texto
+  (o audio si el modo es solo_audio/espejo_voz con cliente que mandó audio) con un
+  comentario humano: "¿qué te parece?", "está impecable, mirá los detalles",
+  "te dejo la foto, contame si te interesa". NUNCA dejes una imagen sin
+  acompañamiento — eso se siente robótico.
+- Orden recomendado de partes: [texto introductorio breve] → [media] → [texto/audio
+  de seguimiento con pregunta o llamada a la acción].`;
+  }
 
   let bloqueModo = "";
   switch (cuenta.modo_respuesta ?? "mixto") {
     case "solo_texto":
       bloqueModo = `
 ESTILO DE RESPUESTA — SOLO TEXTO:
-- Toda respuesta debe ser tipo="texto". NUNCA uses tipo="audio" ni tipo="media".
-- Aunque el cliente mande audio, vos respondés solo con texto.
+- Las respuestas en TEXTO son tipo="texto". NUNCA uses tipo="audio".
+- Las imágenes (tipo="media") SÍ están permitidas — ver bloque MEDIA arriba.
+- Aunque el cliente mande audio, vos respondés solo con texto + media (si aplica).
 - Mantené las partes cortas y naturales (1-3 líneas cada una).`;
       break;
     case "solo_audio":
@@ -143,13 +175,14 @@ ESTILO DE RESPUESTA — SOLO AUDIO:
 - Respondé SIEMPRE con al menos una parte tipo="audio". El "contenido" del audio se sintetiza con voz.
 - Los datos exactos (precios, links, mails, números) van en parte tipo="texto" aparte
   para que el cliente los pueda copiar.
-- Para mostrar algo visual (productos, comprobantes), usá tipo="media" + media_id.`;
+- Las imágenes (tipo="media") SÍ están permitidas — ver bloque MEDIA arriba.
+  Para productos con foto, mandá la imagen + audio explicando.`;
       } else {
-        // Fallback si la cuenta pidió "solo_audio" pero falta config
         bloqueModo = `
 ESTILO DE RESPUESTA — TEXTO (audio no disponible):
 - La cuenta pidió "solo_audio" pero falta voz_elevenlabs o ELEVENLABS_API_KEY.
-- Respondé en texto hasta que se configure la voz.`;
+- Respondé en texto hasta que se configure la voz.
+- Las imágenes (tipo="media") SÍ están permitidas — ver bloque MEDIA arriba.`;
       }
       break;
     case "espejo_voz":
@@ -159,12 +192,16 @@ ESTILO DE RESPUESTA — ESPEJO DE VOZ:
 - Si el cliente te mandó AUDIO (lo verás como "[mensaje de audio del cliente]"),
   respondé con al menos UNA parte tipo="audio".
 - Si el cliente escribió TEXTO, respondé solo con tipo="texto".
-- Datos exactos siempre en tipo="texto" para copiar.`;
+- Datos exactos siempre en tipo="texto" para copiar.
+- Las imágenes (tipo="media") SÍ están permitidas SIEMPRE, en ambos casos —
+  ver bloque MEDIA arriba. Si hay producto con foto, MOSTRALA aunque el cliente
+  haya escrito.`;
       } else {
         bloqueModo = `
 ESTILO DE RESPUESTA — TEXTO (audio no disponible):
 - La cuenta pidió "espejo_voz" pero falta voz_elevenlabs o ELEVENLABS_API_KEY.
-- Respondé en texto hasta que se configure la voz.`;
+- Respondé en texto hasta que se configure la voz.
+- Las imágenes (tipo="media") SÍ están permitidas — ver bloque MEDIA arriba.`;
       }
       break;
     default: {
@@ -172,18 +209,20 @@ ESTILO DE RESPUESTA — TEXTO (audio no disponible):
       const partesAudio = puedeUsarVoz
         ? "- Si el cliente te manda audio, respondé con al menos una parte tipo=\"audio\".\n  Para responder largo o cálido a veces usá audio aunque el cliente haya escrito.\n"
         : "- (Audio NO disponible — falta voz_elevenlabs o ELEVENLABS_API_KEY.)\n";
-      const partesMedia = tieneBiblioteca
-        ? "- Cuando convenga mostrar algo visual (producto, catálogo, comprobante)\n  agregá una parte tipo=\"media\" con un media_id de la biblioteca.\n"
-        : "";
       bloqueModo = `
 ESTILO DE RESPUESTA — MIXTO (variado y natural):
 - La mayoría de las respuestas son tipo="texto" porque WhatsApp es principalmente texto.
-${partesAudio}${partesMedia}- Datos exactos (precios, links, mails, números) SIEMPRE en tipo="texto" para copiar.
-- Mezclá libremente: texto+texto, texto+audio, audio+texto+media, etc.
+${partesAudio}- Las imágenes (tipo="media") SÍ están permitidas — ver bloque MEDIA arriba.
+  Para productos con foto, MOSTRALAS cuando el cliente pregunte.
+- Datos exactos (precios, links, mails, números) SIEMPRE en tipo="texto" para copiar.
+- Mezclá libremente: texto+texto, texto+audio, texto+media+texto, audio+texto+media, etc.
 - Máximo 1-2 audios y 1-2 medios por respuesta — no satures.`;
     }
   }
   partes.push("\n\n" + bloqueModo.trim());
+  if (bloqueMedia) {
+    partes.push(bloqueMedia);
+  }
 
   // Mensaje "no entiende" — fallback configurable por el dueño
   const mensajeNoEntiende = cuenta.mensaje_no_entiende?.trim();
@@ -272,6 +311,7 @@ ${partesAudio}${partesMedia}- Datos exactos (precios, links, mails, números) SI
       if (!porCategoria.has(cat)) porCategoria.set(cat, []);
       porCategoria.get(cat)!.push(p);
     }
+    let algunoConFoto = false;
     for (const [cat, items] of porCategoria) {
       partes.push(`\n## ${cat}\n`);
       for (const p of items) {
@@ -285,13 +325,49 @@ ${partesAudio}${partesMedia}- Datos exactos (precios, links, mails, números) SI
           linea.push(p.stock > 0 ? `stock: ${p.stock}` : "SIN STOCK");
         }
         if (p.sku) linea.push(`SKU: ${p.sku}`);
+        const tieneFoto =
+          (p.imagen_url_externa != null && p.imagen_url_externa.trim() !== "") ||
+          (p.imagen_path != null && p.imagen_path.trim() !== "");
+        if (tieneFoto) {
+          linea.push(`media_id: producto:${p.id}`);
+          algunoConFoto = true;
+        }
         partes.push(linea.join(" — "));
         if (p.descripcion?.trim()) {
           partes.push(`  · ${p.descripcion.trim().slice(0, 200)}`);
         }
       }
     }
+    if (algunoConFoto) {
+      partes.push(
+        "\n\nIMPORTANTE — FOTOS DE PRODUCTOS:\n" +
+          "Si un producto tiene `media_id: producto:xxx`, podés enviar su foto al cliente\n" +
+          "incluyendo una parte tipo=\"media\" con `media_id: \"producto:xxx\"` exacto.\n" +
+          "Cuando el cliente pregunte por un producto que tiene foto, MOSTRALA — no\n" +
+          "prometas la imagen sin enviarla (regla 3.bis del formato).",
+      );
+    }
     partes.push("\n");
+  }
+
+  // ============================================================
+  // Memoria a largo plazo de la conversación.
+  // Si la conversación creció más allá de la ventana de mensajes
+  // literales, src/lib/memoria.ts mantiene un resumen acumulativo
+  // (generado con gpt-4o-mini) en conversaciones.resumen_contexto.
+  // Lo inyectamos acá para que la IA tenga contexto completo sin
+  // pagar tokens por miles de mensajes viejos.
+  // ============================================================
+  const resumen = conversacion?.resumen_contexto?.trim();
+  if (resumen) {
+    partes.push(
+      "\n\n# Memoria de la conversación previa\n\n" +
+        "Lo siguiente es un resumen de los mensajes ANTERIORES a los que ves " +
+        "en el historial reciente. Usalo como contexto: NO repreguntes datos " +
+        "ya capturados acá, retomá el hilo donde se dejó.\n\n" +
+        resumen +
+        "\n",
+    );
   }
 
   // ============================================================

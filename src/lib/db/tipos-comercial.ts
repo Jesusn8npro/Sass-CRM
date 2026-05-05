@@ -21,6 +21,10 @@ export interface Producto {
   sku: string | null;
   categoria: string | null;
   imagen_path: string | null;
+  /** URL pública (https) a la imagen del producto. Tiene precedencia
+   *  sobre imagen_path. Útil para CSV import desde Shopify/WooCommerce
+   *  /Supabase del cliente sin re-subir el archivo. */
+  imagen_url_externa: string | null;
   video_path: string | null;
   esta_activo: boolean;
   orden: number;

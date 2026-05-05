@@ -385,6 +385,10 @@ export async function enviarReporteSemanal(
     if (!cuenta || cuenta.esta_archivada) {
       return "omitido";
     }
+    if (!cuenta.notificaciones_email_activas) {
+      log.debug({ cuentaId }, "[emails] reporteSemanal: opt-out por cuenta");
+      return "omitido";
+    }
     const usuario = await obtenerUsuarioApp(cuenta.usuario_id);
     if (!usuario?.email) {
       log.debug({ cuentaId }, "[emails] reporteSemanal: usuario sin email");
@@ -446,6 +450,10 @@ export async function enviarWhatsAppCaido(idCuenta: string): Promise<void> {
     const cuenta = await obtenerCuenta(idCuenta);
     if (!cuenta?.usuario_id) {
       log.debug({ idCuenta }, "[emails] waCaido: cuenta no encontrada");
+      return;
+    }
+    if (!cuenta.notificaciones_email_activas) {
+      log.debug({ idCuenta }, "[emails] waCaido: opt-out por cuenta");
       return;
     }
     const usuario = await obtenerUsuarioApp(cuenta.usuario_id);

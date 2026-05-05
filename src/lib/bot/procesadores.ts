@@ -11,6 +11,7 @@ import {
   encolarBandejaSalida,
   insertarMensaje,
   listarCitasParaRecordar,
+  listarCuentas,
   listarLlamadasProgramadasDue,
   listarSeguimientosPendientesDue,
   marcarLlamadaProgramadaEjecutada,
@@ -22,6 +23,12 @@ import {
   obtenerCuenta,
 } from "@/lib/baseDatos";
 import { iniciarLlamadaConContexto } from "@/lib/llamadas";
+import { db } from "@/lib/db/cliente";
+import {
+  enviarAlertaOperador,
+  generarResumenDiario,
+} from "@/lib/operadorPrivado";
+import { urlApp } from "@/lib/emails/cliente";
 
 // Reglas anti-ban WhatsApp:
 //  - Solo a clientes que escribieron antes (al menos 1 msg user en la conv)
@@ -65,6 +72,26 @@ export async function procesarSeguimientosPendientes(): Promise<void> {
       }
       if (!cuentaActiva.get(s.cuenta_id)) {
         await marcarSeguimientoFallido(s.id, "cuenta inactiva o desconectada");
+        continue;
+      }
+
+      // 1.bis Si el destinatario es el OPERADOR PRIVADO, cancelamos
+      // — el dueño no debe recibir auto-seguimientos genéricos. Cubre
+      // seguimientos legacy creados antes del filtro upstream.
+      const cuentaParaCheck = await obtenerCuenta(s.cuenta_id);
+      const convParaCheck = await obtenerConversacionPorId(s.conversacion_id);
+      const telOperadorN = (
+        cuentaParaCheck?.telefono_operador_privado ?? ""
+      ).replace(/[^0-9]/g, "");
+      const telConvN = (convParaCheck?.telefono ?? "").replace(/[^0-9]/g, "");
+      if (
+        telOperadorN.length >= 8 &&
+        telConvN.length >= 8 &&
+        (telConvN === telOperadorN ||
+          telConvN.endsWith(telOperadorN) ||
+          telOperadorN.endsWith(telConvN))
+      ) {
+        await cancelarSeguimiento(s.id, "destinatario es operador privado");
         continue;
       }
 
@@ -264,6 +291,201 @@ export async function procesarLlamadasProgramadas(): Promise<void> {
       } catch {
         /* ignorar */
       }
+    }
+  }
+}
+
+// ============================================================
+// Operador privado — resumen diario 9am + alertas de desconexión
+// ============================================================
+
+/**
+ * Manda al operador privado un resumen del negocio cada mañana entre
+ * 9 y 10am hora local del servidor. Idempotente por día: graba un
+ * mensaje sistema marcador `[resumen_operador_diario:YYYY-MM-DD]` en
+ * la conversación virtual del operador y antes de enviar consulta si
+ * ya existe.
+ */
+export async function procesarResumenDiarioOperador(): Promise<void> {
+  const ahora = new Date();
+  const hora = ahora.getHours();
+  if (hora < 9 || hora >= 10) return;
+
+  const hoy = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`;
+  const marcador = `[resumen_operador_diario:${hoy}]`;
+
+  let cuentas;
+  try {
+    cuentas = await listarCuentas();
+  } catch (err) {
+    console.error("[bot] error listando cuentas para resumen operador:", err);
+    return;
+  }
+
+  for (const cuenta of cuentas) {
+    if (cuenta.esta_archivada) continue;
+    if (!cuenta.operador_privado_resumen_diario) continue;
+    const tel = (cuenta.telefono_operador_privado ?? "").trim();
+    if (!tel) continue;
+
+    try {
+      // Idempotencia: si ya existe el marcador para hoy en esta cuenta, skip.
+      const desdeIso = new Date(
+        ahora.getFullYear(),
+        ahora.getMonth(),
+        ahora.getDate(),
+      ).toISOString();
+      const { data: existente } = await db()
+        .from("mensajes")
+        .select("id")
+        .eq("cuenta_id", cuenta.id)
+        .eq("rol", "sistema")
+        .eq("contenido", marcador)
+        .gte("creado_en", desdeIso)
+        .limit(1);
+      if (existente && existente.length > 0) continue;
+
+      const resumen = await generarResumenDiario(cuenta);
+      // Para el resumen diario forzamos el envío aunque
+      // operador_privado_alertas esté off — el toggle propio es
+      // operador_privado_resumen_diario. Usamos directamente el
+      // helper de envío con bypass del toggle.
+      const { enviarMensajeOperadorBypass } = await import(
+        "@/lib/operadorPrivado"
+      );
+      const r = await enviarMensajeOperadorBypass(cuenta, resumen);
+      if (!r.ok) {
+        console.warn(
+          `[bot] resumen operador omitido para cuenta ${cuenta.id}: ${r.motivo ?? "?"}`,
+        );
+        continue;
+      }
+
+      // Grabar marcador para idempotencia diaria.
+      try {
+        // Buscar la conversación del operador para grabar el marcador
+        // dentro de ella (queda como log natural del hilo).
+        const { data: conv } = await db()
+          .from("conversaciones")
+          .select("id")
+          .eq("cuenta_id", cuenta.id)
+          .eq("telefono", tel)
+          .maybeSingle();
+        if (conv) {
+          await insertarMensaje(
+            cuenta.id,
+            (conv as { id: string }).id,
+            "sistema",
+            marcador,
+            { tipo: "sistema" },
+          );
+        }
+      } catch {
+        /* ignorar — no romper si falla el marcador */
+      }
+      console.log(
+        `[bot] 📊 resumen diario operador enviado a +${tel} (cuenta ${cuenta.id})`,
+      );
+    } catch (err) {
+      console.error(
+        `[bot] error generando resumen operador para cuenta ${cuenta.id}:`,
+        err,
+      );
+    }
+  }
+}
+
+/**
+ * Detecta cuentas con `operador_privado_alertas=true` cuyo último
+ * heartbeat sea > 5 minutos atrás (o estado != conectado), y manda
+ * UNA alerta por episodio de caída usando un marcador en mensajes.
+ *
+ * Marcador: rol=sistema, contenido `[alerta_operador_caida:YYYY-MM-DD HH]`
+ * — granularidad de hora para no spamear si la caída se prolonga, pero
+ * volver a avisar si pasan 24h sin reconectar.
+ */
+export async function procesarAlertasDesconexionOperador(): Promise<void> {
+  let cuentas;
+  try {
+    cuentas = await listarCuentas();
+  } catch (err) {
+    console.error("[bot] error listando cuentas (alertas desconexión):", err);
+    return;
+  }
+
+  const ahora = new Date();
+  const hace5min = Date.now() - 5 * 60 * 1000;
+  const ventana = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")} ${String(ahora.getHours()).padStart(2, "0")}`;
+  const marcador = `[alerta_operador_caida:${ventana}]`;
+
+  for (const cuenta of cuentas) {
+    if (cuenta.esta_archivada) continue;
+    if (!cuenta.operador_privado_alertas) continue;
+    const tel = (cuenta.telefono_operador_privado ?? "").trim();
+    if (!tel) continue;
+
+    // No se puede mandar alertas por WhatsApp si la cuenta está caída:
+    // el socket que mandaría la alerta ES el que está caído. Igual no
+    // hace sentido alertarse a uno mismo en su propio número de la
+    // cuenta caída — el dueño se entera por el panel + email.
+    // Solo alertamos si la cuenta conectó recientemente y el tel del
+    // operador es DISTINTO (caso multi-cuenta: cuenta A caída pero
+    // cuenta B activa puede mandar la alerta — fuera de scope acá).
+    // Para esta primera versión: solo alertamos si la cuenta SÍ está
+    // conectada pero su heartbeat se atrasó (caso edge raro).
+    const ultimoHb = cuenta.ultimo_heartbeat ?? 0;
+    const heartbeatStale = ultimoHb > 0 && ultimoHb < hace5min;
+    const desconectada = cuenta.estado !== "conectado";
+    if (!heartbeatStale && !desconectada) continue;
+    if (cuenta.estado !== "conectado") continue; // necesitamos socket para enviar
+
+    try {
+      const desdeIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const { data: existente } = await db()
+        .from("mensajes")
+        .select("id")
+        .eq("cuenta_id", cuenta.id)
+        .eq("rol", "sistema")
+        .eq("contenido", marcador)
+        .gte("creado_en", desdeIso)
+        .limit(1);
+      if (existente && existente.length > 0) continue;
+
+      const minutos = ultimoHb > 0
+        ? Math.round((Date.now() - ultimoHb) / 60000)
+        : 5;
+      const ok = await enviarAlertaOperador(
+        cuenta,
+        `🚨 Tu WhatsApp ${cuenta.etiqueta} está desconectado hace ${minutos} min.\n` +
+          `Reconectá en ${urlApp()}/app/cuentas/${cuenta.id}/whatsapp`,
+      );
+      if (!ok) continue;
+
+      // Grabar marcador en la conversación virtual del operador.
+      try {
+        const { data: conv } = await db()
+          .from("conversaciones")
+          .select("id")
+          .eq("cuenta_id", cuenta.id)
+          .eq("telefono", tel)
+          .maybeSingle();
+        if (conv) {
+          await insertarMensaje(
+            cuenta.id,
+            (conv as { id: string }).id,
+            "sistema",
+            marcador,
+            { tipo: "sistema" },
+          );
+        }
+      } catch {
+        /* ignorar */
+      }
+    } catch (err) {
+      console.error(
+        `[bot] error en alerta desconexión operador cuenta ${cuenta.id}:`,
+        err,
+      );
     }
   }
 }

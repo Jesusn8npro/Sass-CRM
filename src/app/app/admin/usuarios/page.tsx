@@ -107,10 +107,10 @@ export default function PaginaAdminUsuarios() {
   return (
     <div className="mx-auto max-w-6xl">
       <header className="mb-8">
-        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-300">
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-300">
           // usuarios
         </p>
-        <h1 className="font-display mt-2 text-4xl italic leading-tight text-white md:text-5xl">
+        <h1 className="font-display mt-2 text-4xl italic leading-tight text-zinc-900 dark:text-white md:text-5xl">
           Listado de tenants
         </h1>
       </header>
@@ -124,7 +124,7 @@ export default function PaginaAdminUsuarios() {
           value={busquedaInput}
           onChange={(e) => setBusquedaInput(e.target.value)}
           placeholder="Buscar por email…"
-          className="flex-1 rounded-full border border-white/[0.06] bg-white/[0.02] px-4 py-2 text-sm text-white placeholder:text-white/30 focus:border-emerald-400/50 focus:outline-none"
+          className="flex-1 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-emerald-500/50 focus:outline-none dark:border-white/[0.06] dark:bg-white/[0.02] dark:text-white dark:placeholder:text-white/30 dark:focus:border-emerald-400/50"
         />
         <select
           value={plan}
@@ -132,10 +132,10 @@ export default function PaginaAdminUsuarios() {
             setPagina(1);
             setPlan(e.target.value);
           }}
-          className="rounded-full border border-white/[0.06] bg-white/[0.02] px-4 py-2 font-mono text-xs uppercase tracking-wider text-white"
+          className="rounded-full border border-zinc-200 bg-white px-4 py-2 font-mono text-xs uppercase tracking-wider text-zinc-900 dark:border-white/[0.06] dark:bg-white/[0.02] dark:text-white"
         >
           {TODOS_PLANES.map((p) => (
-            <option key={p || "todos"} value={p} className="bg-zinc-900">
+            <option key={p || "todos"} value={p} className="bg-white text-zinc-900 dark:bg-zinc-900 dark:text-white">
               {p ? p : "todos los planes"}
             </option>
           ))}
@@ -146,25 +146,25 @@ export default function PaginaAdminUsuarios() {
             setPagina(1);
             setEstado(e.target.value);
           }}
-          className="rounded-full border border-white/[0.06] bg-white/[0.02] px-4 py-2 font-mono text-xs uppercase tracking-wider text-white"
+          className="rounded-full border border-zinc-200 bg-white px-4 py-2 font-mono text-xs uppercase tracking-wider text-zinc-900 dark:border-white/[0.06] dark:bg-white/[0.02] dark:text-white"
         >
           {TODOS_ESTADOS.map((es) => (
-            <option key={es || "todos"} value={es} className="bg-zinc-900">
+            <option key={es || "todos"} value={es} className="bg-white text-zinc-900 dark:bg-zinc-900 dark:text-white">
               {es ? es : "todos los estados"}
             </option>
           ))}
         </select>
         <button
           type="submit"
-          className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-emerald-300"
+          className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600 dark:bg-white dark:text-black dark:hover:bg-emerald-300"
         >
           Buscar
         </button>
       </form>
 
-      <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-white/[0.06] dark:bg-white/[0.02]">
         <table className="w-full text-sm">
-          <thead className="border-b border-white/[0.06] text-left font-mono text-[10px] uppercase tracking-wider text-white/40">
+          <thead className="border-b border-zinc-200 text-left font-mono text-[10px] uppercase tracking-wider text-zinc-500 dark:border-white/[0.06] dark:text-white/40">
             <tr>
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Plan</th>
@@ -178,13 +178,13 @@ export default function PaginaAdminUsuarios() {
           <tbody>
             {cargando ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-white/40">
+                <td colSpan={7} className="px-4 py-8 text-center text-zinc-500 dark:text-white/40">
                   Cargando…
                 </td>
               </tr>
             ) : !datos || datos.usuarios.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-white/40">
+                <td colSpan={7} className="px-4 py-8 text-center text-zinc-500 dark:text-white/40">
                   Sin resultados
                 </td>
               </tr>
@@ -194,17 +194,17 @@ export default function PaginaAdminUsuarios() {
                 return (
                   <tr
                     key={u.id}
-                    className="border-t border-white/[0.04] transition-colors hover:bg-white/[0.03]"
+                    className="border-t border-zinc-100 transition-colors hover:bg-zinc-50 dark:border-white/[0.04] dark:hover:bg-white/[0.03]"
                   >
                     <td className="px-4 py-3">
                       <Link
                         href={`/app/admin/usuarios/${u.id}`}
-                        className="text-white hover:text-emerald-300 hover:underline"
+                        className="text-zinc-900 hover:text-emerald-600 hover:underline dark:text-white dark:hover:text-emerald-300"
                       >
                         {u.email}
                       </Link>
                       {u.nombre && (
-                        <p className="text-[11px] text-white/40">{u.nombre}</p>
+                        <p className="text-[11px] text-zinc-500 dark:text-white/40">{u.nombre}</p>
                       )}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs uppercase tracking-wider">
@@ -215,13 +215,13 @@ export default function PaginaAdminUsuarios() {
                         {u.estado_billing ?? "—"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs text-white/80">
+                    <td className="px-4 py-3 text-right font-mono text-xs text-zinc-700 dark:text-white/80">
                       {u.total_cuentas}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs text-white">
+                    <td className="px-4 py-3 text-right font-mono text-xs text-zinc-900 dark:text-white">
                       {mrr ? `$${mrr}` : "—"}
                     </td>
-                    <td className="px-4 py-3 font-mono text-[11px] text-white/50">
+                    <td className="px-4 py-3 font-mono text-[11px] text-zinc-500 dark:text-white/50">
                       {u.vence_en
                         ? new Date(u.vence_en).toLocaleDateString("es-AR")
                         : "—"}
@@ -232,7 +232,7 @@ export default function PaginaAdminUsuarios() {
                           <button
                             type="button"
                             onClick={() => void ejecutarAccion(u.id, "reactivar")}
-                            className="rounded-full border border-emerald-400/30 bg-emerald-400/[0.06] px-3 py-1 text-[11px] font-medium text-emerald-200 hover:bg-emerald-400/[0.12]"
+                            className="rounded-full border border-emerald-500/40 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/[0.06] dark:text-emerald-200 dark:hover:bg-emerald-400/[0.12]"
                           >
                             Reactivar
                           </button>
@@ -240,14 +240,14 @@ export default function PaginaAdminUsuarios() {
                           <button
                             type="button"
                             onClick={() => void ejecutarAccion(u.id, "suspender")}
-                            className="rounded-full border border-red-400/30 bg-red-400/[0.06] px-3 py-1 text-[11px] font-medium text-red-200 hover:bg-red-400/[0.12]"
+                            className="rounded-full border border-red-500/40 bg-red-50 px-3 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 dark:border-red-400/30 dark:bg-red-400/[0.06] dark:text-red-200 dark:hover:bg-red-400/[0.12]"
                           >
                             Suspender
                           </button>
                         )}
                         <Link
                           href={`/app/admin/usuarios/${u.id}`}
-                          className="rounded-full border border-white/[0.10] px-3 py-1 text-[11px] font-medium text-white/80 hover:border-white/30"
+                          className="rounded-full border border-zinc-200 px-3 py-1 text-[11px] font-medium text-zinc-700 hover:border-zinc-400 dark:border-white/[0.10] dark:text-white/80 dark:hover:border-white/30"
                         >
                           Ver
                         </Link>
@@ -262,7 +262,7 @@ export default function PaginaAdminUsuarios() {
       </div>
 
       {datos && datos.paginas > 1 && (
-        <div className="mt-6 flex items-center justify-between font-mono text-[11px] text-white/50">
+        <div className="mt-6 flex items-center justify-between font-mono text-[11px] text-zinc-500 dark:text-white/50">
           <span>
             página {datos.pagina} de {datos.paginas} · {datos.total} usuarios
           </span>
@@ -271,7 +271,7 @@ export default function PaginaAdminUsuarios() {
               type="button"
               disabled={datos.pagina <= 1}
               onClick={() => setPagina((p) => Math.max(1, p - 1))}
-              className="rounded-full border border-white/[0.10] px-3 py-1 text-white/80 hover:border-white/30 disabled:opacity-40"
+              className="rounded-full border border-zinc-200 px-3 py-1 text-zinc-700 hover:border-zinc-400 disabled:opacity-40 dark:border-white/[0.10] dark:text-white/80 dark:hover:border-white/30"
             >
               ← anterior
             </button>
@@ -279,7 +279,7 @@ export default function PaginaAdminUsuarios() {
               type="button"
               disabled={datos.pagina >= datos.paginas}
               onClick={() => setPagina((p) => p + 1)}
-              className="rounded-full border border-white/[0.10] px-3 py-1 text-white/80 hover:border-white/30 disabled:opacity-40"
+              className="rounded-full border border-zinc-200 px-3 py-1 text-zinc-700 hover:border-zinc-400 disabled:opacity-40 dark:border-white/[0.10] dark:text-white/80 dark:hover:border-white/30"
             >
               siguiente →
             </button>
@@ -300,22 +300,22 @@ function pillPlan(plan: string): string {
   const base =
     "inline-flex rounded-full border px-2 py-0.5 text-[10px] tracking-wider";
   if (plan === "pro")
-    return `${base} border-emerald-400/30 bg-emerald-400/[0.08] text-emerald-200`;
+    return `${base} border-emerald-500/40 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/[0.08] dark:text-emerald-200`;
   if (plan === "business")
-    return `${base} border-violet-400/30 bg-violet-400/[0.08] text-violet-200`;
-  return `${base} border-white/[0.10] bg-white/[0.04] text-white/70`;
+    return `${base} border-violet-500/40 bg-violet-50 text-violet-700 dark:border-violet-400/30 dark:bg-violet-400/[0.08] dark:text-violet-200`;
+  return `${base} border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-white/[0.10] dark:bg-white/[0.04] dark:text-white/70`;
 }
 
 function pillEstado(estado?: string): string {
   const base =
     "inline-flex rounded-full border px-2 py-0.5 text-[10px] tracking-wider";
   if (estado === "activo")
-    return `${base} border-emerald-400/30 bg-emerald-400/[0.08] text-emerald-200`;
+    return `${base} border-emerald-500/40 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/[0.08] dark:text-emerald-200`;
   if (estado === "suspendido")
-    return `${base} border-red-400/30 bg-red-400/[0.08] text-red-200`;
+    return `${base} border-red-500/40 bg-red-50 text-red-700 dark:border-red-400/30 dark:bg-red-400/[0.08] dark:text-red-200`;
   if (estado === "impago")
-    return `${base} border-amber-400/30 bg-amber-400/[0.08] text-amber-200`;
+    return `${base} border-amber-500/40 bg-amber-50 text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/[0.08] dark:text-amber-200`;
   if (estado === "prueba")
-    return `${base} border-blue-400/30 bg-blue-400/[0.08] text-blue-200`;
-  return `${base} border-white/[0.10] bg-white/[0.04] text-white/50`;
+    return `${base} border-blue-500/40 bg-blue-50 text-blue-700 dark:border-blue-400/30 dark:bg-blue-400/[0.08] dark:text-blue-200`;
+  return `${base} border-zinc-300 bg-zinc-100 text-zinc-500 dark:border-white/[0.10] dark:bg-white/[0.04] dark:text-white/50`;
 }

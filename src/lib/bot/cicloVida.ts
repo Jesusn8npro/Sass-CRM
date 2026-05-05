@@ -4,8 +4,10 @@ import {
 } from "@/lib/baseDatos";
 import { obtenerGestor } from "@/lib/baileys/gestor";
 import {
+  procesarAlertasDesconexionOperador,
   procesarLlamadasProgramadas,
   procesarRecordatoriosCitas,
+  procesarResumenDiarioOperador,
   procesarSeguimientosPendientes,
 } from "./procesadores";
 import { procesarAutoSeguimientos } from "./procesarAutoSeguimientos";
@@ -23,6 +25,8 @@ interface EstadoCicloVida {
   intervaloReportesSemanales: NodeJS.Timeout | null;
   /** Última semana ISO (YYYY-WW) en la que se disparó el reporte. */
   ultimaSemanaReporte: string | null;
+  intervaloResumenOperador: NodeJS.Timeout | null;
+  intervaloAlertasDesconexionOperador: NodeJS.Timeout | null;
   apagado: boolean;
   guardiasInstalados: boolean;
 }
@@ -47,6 +51,8 @@ if (!g[claveGlobal]) {
     intervaloLlamadasProgramadas: null,
     intervaloReportesSemanales: null,
     ultimaSemanaReporte: null,
+    intervaloResumenOperador: null,
+    intervaloAlertasDesconexionOperador: null,
     apagado: false,
     guardiasInstalados: false,
   };
@@ -200,6 +206,10 @@ function instalarGuardias(): void {
       clearInterval(estado.intervaloLlamadasProgramadas);
     if (estado.intervaloReportesSemanales)
       clearInterval(estado.intervaloReportesSemanales);
+    if (estado.intervaloResumenOperador)
+      clearInterval(estado.intervaloResumenOperador);
+    if (estado.intervaloAlertasDesconexionOperador)
+      clearInterval(estado.intervaloAlertasDesconexionOperador);
     try {
       await obtenerGestor().apagarTodo();
     } catch {
@@ -323,6 +333,22 @@ export async function arrancarBotEnProceso(): Promise<void> {
         console.error("[bot] error en scheduler reporte semanal:", err);
       });
     }, 3_600_000); // 1 hora
+
+    // Resumen diario al operador privado: cada 60 min chequea si es
+    // entre 9 y 10am y manda el resumen del día anterior. Idempotente
+    // por día (marcador en mensajes).
+    estado.intervaloResumenOperador = setInterval(() => {
+      void procesarResumenDiarioOperador().catch((err) => {
+        console.error("[bot] error resumen operador:", err);
+      });
+    }, 60_000 * 60);
+
+    // Alertas de desconexión >5min al operador privado: cada 2 min.
+    estado.intervaloAlertasDesconexionOperador = setInterval(() => {
+      void procesarAlertasDesconexionOperador().catch((err) => {
+        console.error("[bot] error alertas desconexión operador:", err);
+      });
+    }, 120_000);
 
     estado.arrancado = true;
   } finally {

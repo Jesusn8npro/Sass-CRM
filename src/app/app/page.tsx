@@ -1,13 +1,19 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { obtenerUsuarioActual } from "@/lib/auth/sesion";
+import {
+  esUsuarioAdmin,
+  obtenerUsuarioActual,
+} from "@/lib/auth/sesion";
 import { listarCuentas, obtenerEstadoOnboarding } from "@/lib/baseDatos";
 import { CrearPrimeraCuenta } from "@/components/CrearPrimeraCuenta";
 
 /**
  * Entrada al panel.
- *  - Onboarding pendiente y sin cuentas conectadas → /onboarding.
- *  - Sin cuentas → muestra "Crear primera cuenta".
+ *  - Sin sesión → /login.
+ *  - Admin sin cuentas propias → muestra selector con dos opciones:
+ *      "Ir al panel admin" o "Crear cuenta WhatsApp (modo cliente)".
+ *  - Cliente con onboarding pendiente y sin cuentas conectadas → /onboarding.
+ *  - 0 cuentas (cliente) → "Crear primera cuenta".
  *  - 1 sola cuenta → redirige directo a /app/cuentas/{id}/conversaciones.
  *  - N > 1 cuentas → muestra selector.
  *
@@ -18,18 +24,22 @@ export default async function PaginaPanel() {
   const auth = await obtenerUsuarioActual();
   if (!auth) redirect("/login?siguiente=/app");
 
+  const esAdmin = await esUsuarioAdmin(auth.id);
   const cuentas = await listarCuentas(auth.id);
 
-  // Si el usuario aún no terminó el onboarding y no tiene ninguna cuenta
-  // conectada, lo mandamos al wizard. El wizard se encarga de decidir
-  // a qué paso ir según su estado.
-  const estadoOnboarding = await obtenerEstadoOnboarding(auth.id);
-  const algunaConectada = cuentas.some((c) => c.estado === "conectado");
-  if (!estadoOnboarding.completo && !algunaConectada) {
-    redirect("/onboarding");
+  // El admin NO se redirige automáticamente — puede operar como cliente
+  // si tiene cuentas, o elegir entrar al panel admin desde el sidebar.
+  // Si el cliente normal aún no terminó el onboarding y no tiene ninguna
+  // cuenta conectada, lo mandamos al wizard.
+  if (!esAdmin) {
+    const estadoOnboarding = await obtenerEstadoOnboarding(auth.id);
+    const algunaConectada = cuentas.some((c) => c.estado === "conectado");
+    if (!estadoOnboarding.completo && !algunaConectada) {
+      redirect("/onboarding");
+    }
   }
 
-  // 1 cuenta → entrada directa
+  // 1 cuenta → entrada directa (vale para admin con 1 cuenta también).
   if (cuentas.length === 1) {
     redirect(`/app/cuentas/${cuentas[0]!.id}/conversaciones`);
   }
@@ -41,24 +51,40 @@ export default async function PaginaPanel() {
         <header className="mb-8 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-              Sass-CRM
+              Sass-CRM {esAdmin && <span className="ml-1 rounded bg-emerald-500/10 px-1.5 py-px text-emerald-700 dark:text-emerald-300">ADMIN</span>}
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight">
               {cuentas.length === 0
-                ? "Empezá creando tu primera cuenta"
+                ? esAdmin
+                  ? "Hola admin — ¿qué querés hacer?"
+                  : "Empezá creando tu primera cuenta"
                 : "Elegí qué cuenta querés gestionar"}
             </h1>
           </div>
-          <Link
-            href="/app/mi-cuenta"
-            className="rounded-full border border-zinc-200 px-4 py-2 text-xs font-medium hover:bg-white dark:border-zinc-800 dark:hover:bg-zinc-900"
-          >
-            Mi cuenta
-          </Link>
+          <div className="flex items-center gap-2">
+            {esAdmin && (
+              <Link
+                href="/app/admin"
+                className="rounded-full border border-emerald-500/40 bg-emerald-500/5 px-4 py-2 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-500/10 dark:text-emerald-300"
+              >
+                Panel admin →
+              </Link>
+            )}
+            <Link
+              href="/app/mi-cuenta"
+              className="rounded-full border border-zinc-200 px-4 py-2 text-xs font-medium hover:bg-white dark:border-zinc-800 dark:hover:bg-zinc-900"
+            >
+              Mi cuenta
+            </Link>
+          </div>
         </header>
 
         {cuentas.length === 0 ? (
-          <SinCuentas />
+          esAdmin ? (
+            <SinCuentasAdmin />
+          ) : (
+            <SinCuentas />
+          )
         ) : (
           <ul className="grid gap-3 md:grid-cols-2">
             {cuentas.map((c) => (
@@ -99,4 +125,45 @@ export default async function PaginaPanel() {
 
 function SinCuentas() {
   return <CrearPrimeraCuenta />;
+}
+
+/**
+ * Variante para el admin del SaaS sin cuentas WhatsApp propias.
+ * Le muestra dos caminos: ir directo al panel admin (operar la
+ * plataforma) o crear una cuenta WhatsApp si quiere usar el producto
+ * como cliente también.
+ */
+function SinCuentasAdmin() {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <Link
+        href="/app/admin"
+        className="group flex flex-col rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/5 to-transparent p-6 transition-all hover:-translate-y-0.5 hover:border-emerald-500/60 hover:shadow-md dark:border-emerald-500/30"
+      >
+        <p className="font-mono text-[10px] uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+          Modo admin
+        </p>
+        <h3 className="mt-2 text-xl font-bold tracking-tight">Panel admin</h3>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          KPIs globales, usuarios, ingresos y operación de la plataforma.
+        </p>
+        <span className="mt-6 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 transition-transform group-hover:translate-x-1 dark:text-emerald-300">
+          Entrar →
+        </span>
+      </Link>
+      <div className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+          Modo cliente
+        </p>
+        <h3 className="mt-2 text-xl font-bold tracking-tight">
+          Crear cuenta WhatsApp
+        </h3>
+        <p className="mt-1 mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+          Probá el producto como un usuario más: conectá un número y
+          configurá tu agente IA.
+        </p>
+        <CrearPrimeraCuenta />
+      </div>
+    </div>
+  );
 }

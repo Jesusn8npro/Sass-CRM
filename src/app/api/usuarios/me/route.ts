@@ -1,5 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { requerirSesion } from "@/lib/auth/sesion";
+import {
+  esUsuarioAdmin,
+  requerirSesion,
+} from "@/lib/auth/sesion";
 import {
   actualizarNombreUsuario,
   contarCuentasDeUsuario,
@@ -34,6 +37,10 @@ export async function GET() {
   const plan = obtenerPlan(usuario.plan);
   const cuentasUsadas = await contarCuentasDeUsuario(auth.id);
 
+  // es_admin lo determina la columna `usuarios.rol = 'admin_plataforma'`.
+  // El sidebar del cliente lo usa para mostrar/ocultar la sección admin.
+  const es_admin = await esUsuarioAdmin(usuario.id);
+
   return NextResponse.json({
     usuario: {
       id: usuario.id,
@@ -42,6 +49,7 @@ export async function GET() {
       plan: usuario.plan,
       rol: usuario.rol,
       creado_en: usuario.creado_en,
+      es_admin,
     },
     plan: {
       id: plan.id,

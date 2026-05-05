@@ -133,10 +133,10 @@ export default function PaginaAdminDetalleUsuario() {
   }
 
   if (cargando) {
-    return <p className="text-sm text-white/50">Cargando…</p>;
+    return <p className="text-sm text-zinc-500 dark:text-white/50">Cargando…</p>;
   }
   if (!datos) {
-    return <p className="text-sm text-white/50">Usuario no encontrado.</p>;
+    return <p className="text-sm text-zinc-500 dark:text-white/50">Usuario no encontrado.</p>;
   }
 
   const u = datos.usuario;
@@ -148,19 +148,19 @@ export default function PaginaAdminDetalleUsuario() {
     <div className="mx-auto max-w-5xl">
       <Link
         href="/app/admin/usuarios"
-        className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40 hover:text-white/80"
+        className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 hover:text-zinc-900 dark:text-white/40 dark:hover:text-white/80"
       >
         ← volver
       </Link>
 
       <header className="mt-6">
-        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-300">
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-300">
           // detalle del usuario
         </p>
-        <h1 className="font-display mt-2 break-all text-3xl italic leading-tight text-white md:text-4xl">
+        <h1 className="font-display mt-2 break-all text-3xl italic leading-tight text-zinc-900 dark:text-white md:text-4xl">
           {u.email}
         </h1>
-        <p className="mt-2 font-mono text-[11px] uppercase tracking-wider text-white/40">
+        <p className="mt-2 font-mono text-[11px] uppercase tracking-wider text-zinc-500 dark:text-white/40">
           plan {u.plan} · {u.estado_billing ?? "sin estado"} · alta{" "}
           {new Date(u.creado_en).toLocaleDateString("es-AR")}
         </p>
@@ -171,7 +171,7 @@ export default function PaginaAdminDetalleUsuario() {
           <button
             type="button"
             onClick={() => void ejecutarAccion("reactivar")}
-            className="rounded-full border border-emerald-400/30 bg-emerald-400/[0.06] px-4 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-400/[0.12]"
+            className="rounded-full border border-emerald-500/40 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/[0.06] dark:text-emerald-200 dark:hover:bg-emerald-400/[0.12]"
           >
             Reactivar
           </button>
@@ -179,7 +179,7 @@ export default function PaginaAdminDetalleUsuario() {
           <button
             type="button"
             onClick={() => void ejecutarAccion("suspender")}
-            className="rounded-full border border-red-400/30 bg-red-400/[0.06] px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-400/[0.12]"
+            className="rounded-full border border-red-500/40 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 dark:border-red-400/30 dark:bg-red-400/[0.06] dark:text-red-200 dark:hover:bg-red-400/[0.12]"
           >
             Suspender
           </button>
@@ -187,8 +187,8 @@ export default function PaginaAdminDetalleUsuario() {
       </div>
 
       {/* DATOS DE BILLING */}
-      <section className="mt-10 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
+      <section className="mt-10 rounded-2xl border border-zinc-200 bg-white p-6 dark:border-white/[0.06] dark:bg-white/[0.02]">
+        <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-white/40">
           // billing
         </h2>
         <dl className="mt-4 grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
@@ -204,15 +204,15 @@ export default function PaginaAdminDetalleUsuario() {
 
       {/* CUENTAS */}
       <section className="mt-8">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
+        <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-white/40">
           // cuentas ({datos.cuentas.length})
         </h2>
         {datos.cuentas.length === 0 ? (
-          <p className="mt-3 text-sm text-white/40">El usuario no tiene cuentas.</p>
+          <p className="mt-3 text-sm text-zinc-500 dark:text-white/40">El usuario no tiene cuentas.</p>
         ) : (
-          <div className="mt-3 overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+          <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-white/[0.06] dark:bg-white/[0.02]">
             <table className="w-full text-sm">
-              <thead className="border-b border-white/[0.06] text-left font-mono text-[10px] uppercase tracking-wider text-white/40">
+              <thead className="border-b border-zinc-200 text-left font-mono text-[10px] uppercase tracking-wider text-zinc-500 dark:border-white/[0.06] dark:text-white/40">
                 <tr>
                   <th className="px-4 py-3">Etiqueta</th>
                   <th className="px-4 py-3">Teléfono</th>
@@ -225,15 +225,15 @@ export default function PaginaAdminDetalleUsuario() {
                 {datos.cuentas.map((c) => {
                   const s = datos.saldos.find((sa) => sa.cuenta_id === c.id);
                   return (
-                    <tr key={c.id} className="border-t border-white/[0.04]">
-                      <td className="px-4 py-3 text-white">{c.etiqueta}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-white/70">
+                    <tr key={c.id} className="border-t border-zinc-100 dark:border-white/[0.04]">
+                      <td className="px-4 py-3 text-zinc-900 dark:text-white">{c.etiqueta}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-white/70">
                         {c.telefono ? `+${c.telefono}` : "—"}
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-white/70">
+                      <td className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-zinc-600 dark:text-white/70">
                         {c.estado}
                       </td>
-                      <td className="px-4 py-3 text-right font-mono text-xs text-white">
+                      <td className="px-4 py-3 text-right font-mono text-xs text-zinc-900 dark:text-white">
                         {s?.saldo
                           ? `${s.saldo.saldo_actual}/${s.saldo.saldo_mensual}`
                           : "—"}
@@ -242,7 +242,7 @@ export default function PaginaAdminDetalleUsuario() {
                         <button
                           type="button"
                           onClick={() => setModalSaldo({ cuentaId: c.id })}
-                          className="rounded-full border border-emerald-400/30 bg-emerald-400/[0.06] px-3 py-1 text-[11px] font-medium text-emerald-200 hover:bg-emerald-400/[0.12]"
+                          className="rounded-full border border-emerald-500/40 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/[0.06] dark:text-emerald-200 dark:hover:bg-emerald-400/[0.12]"
                         >
                           Dar saldo
                         </button>
@@ -258,15 +258,15 @@ export default function PaginaAdminDetalleUsuario() {
 
       {/* PAGOS */}
       <section className="mt-8">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
+        <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-white/40">
           // pagos ({datos.pagos.length})
         </h2>
         {datos.pagos.length === 0 ? (
-          <p className="mt-3 text-sm text-white/40">Sin pagos registrados.</p>
+          <p className="mt-3 text-sm text-zinc-500 dark:text-white/40">Sin pagos registrados.</p>
         ) : (
-          <div className="mt-3 overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+          <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-white/[0.06] dark:bg-white/[0.02]">
             <table className="w-full text-sm">
-              <thead className="border-b border-white/[0.06] text-left font-mono text-[10px] uppercase tracking-wider text-white/40">
+              <thead className="border-b border-zinc-200 text-left font-mono text-[10px] uppercase tracking-wider text-zinc-500 dark:border-white/[0.06] dark:text-white/40">
                 <tr>
                   <th className="px-4 py-3">Fecha</th>
                   <th className="px-4 py-3">Tipo</th>
@@ -277,20 +277,20 @@ export default function PaginaAdminDetalleUsuario() {
               </thead>
               <tbody>
                 {datos.pagos.map((p) => (
-                  <tr key={p.id} className="border-t border-white/[0.04]">
-                    <td className="px-4 py-3 font-mono text-[11px] text-white/60">
+                  <tr key={p.id} className="border-t border-zinc-100 dark:border-white/[0.04]">
+                    <td className="px-4 py-3 font-mono text-[11px] text-zinc-600 dark:text-white/60">
                       {new Date(p.creado_en).toLocaleString("es-AR")}
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-white/80">
+                    <td className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-zinc-700 dark:text-white/80">
                       {p.tipo}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs uppercase tracking-wider">
                       <span className={pillPago(p.estado)}>{p.estado}</span>
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs text-white">
+                    <td className="px-4 py-3 text-right font-mono text-xs text-zinc-900 dark:text-white">
                       ${Number(p.monto_usd).toFixed(2)}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs text-white/70">
+                    <td className="px-4 py-3 text-right font-mono text-xs text-zinc-600 dark:text-white/70">
                       {p.creditos_otorgados || "—"}
                     </td>
                   </tr>
@@ -306,21 +306,21 @@ export default function PaginaAdminDetalleUsuario() {
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm dark:bg-black/60"
           onClick={(e) => {
             if (e.target === e.currentTarget) setModalSaldo(null);
           }}
         >
-          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-zinc-950 p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-white">
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-zinc-950">
+            <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">
               Dar saldo manual
             </h3>
-            <p className="mt-2 text-xs text-white/55">
+            <p className="mt-2 text-xs text-zinc-600 dark:text-white/55">
               Sumar créditos a la cuenta seleccionada. Se loggea como
               ajuste manual del operador.
             </p>
             <label className="mt-5 block">
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
+              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-white/40">
                 // créditos
               </span>
               <input
@@ -328,21 +328,21 @@ export default function PaginaAdminDetalleUsuario() {
                 min={1}
                 value={cantidadSaldo}
                 onChange={(e) => setCantidadSaldo(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-white/[0.10] bg-white/[0.04] px-3 py-2 font-mono text-sm text-white focus:border-emerald-400/50 focus:outline-none"
+                className="mt-2 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 font-mono text-sm text-zinc-900 focus:border-emerald-500/50 focus:outline-none dark:border-white/[0.10] dark:bg-white/[0.04] dark:text-white dark:focus:border-emerald-400/50"
               />
             </label>
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setModalSaldo(null)}
-                className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/85 hover:border-white/40 hover:bg-white/[0.04]"
+                className="rounded-full border border-zinc-200 px-4 py-2 text-sm text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50 dark:border-white/15 dark:text-white/85 dark:hover:border-white/40 dark:hover:bg-white/[0.04]"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={() => void darSaldo()}
-                className="rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-black shadow-md shadow-emerald-500/30 hover:bg-emerald-300"
+                className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-emerald-500/30 hover:bg-emerald-500 dark:bg-emerald-400 dark:text-black dark:hover:bg-emerald-300"
               >
                 Sumar
               </button>
@@ -356,11 +356,11 @@ export default function PaginaAdminDetalleUsuario() {
 
 function Fila({ k, v }: { k: string; v: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-white/[0.04] py-2 last:border-0">
-      <dt className="font-mono text-[10px] uppercase tracking-wider text-white/40">
+    <div className="flex items-center justify-between gap-4 border-b border-zinc-100 py-2 last:border-0 dark:border-white/[0.04]">
+      <dt className="font-mono text-[10px] uppercase tracking-wider text-zinc-500 dark:text-white/40">
         {k}
       </dt>
-      <dd className="break-all font-mono text-xs text-white/85">{v}</dd>
+      <dd className="break-all font-mono text-xs text-zinc-700 dark:text-white/85">{v}</dd>
     </div>
   );
 }
@@ -369,10 +369,10 @@ function pillPago(estado: string): string {
   const base =
     "inline-flex rounded-full border px-2 py-0.5 text-[10px] tracking-wider";
   if (estado === "aprobado")
-    return `${base} border-emerald-400/30 bg-emerald-400/[0.08] text-emerald-200`;
+    return `${base} border-emerald-500/40 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/[0.08] dark:text-emerald-200`;
   if (estado === "fallido" || estado === "cancelado")
-    return `${base} border-red-400/30 bg-red-400/[0.08] text-red-200`;
+    return `${base} border-red-500/40 bg-red-50 text-red-700 dark:border-red-400/30 dark:bg-red-400/[0.08] dark:text-red-200`;
   if (estado === "pendiente")
-    return `${base} border-amber-400/30 bg-amber-400/[0.08] text-amber-200`;
-  return `${base} border-white/[0.10] bg-white/[0.04] text-white/70`;
+    return `${base} border-amber-500/40 bg-amber-50 text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/[0.08] dark:text-amber-200`;
+  return `${base} border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-white/[0.10] dark:bg-white/[0.04] dark:text-white/70`;
 }

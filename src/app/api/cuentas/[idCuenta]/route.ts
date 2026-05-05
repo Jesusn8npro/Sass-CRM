@@ -127,6 +127,13 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     max_tokens?: unknown;
     instrucciones_extra?: unknown;
     modo_respuesta?: unknown;
+    delay_entre_partes_segundos?: unknown;
+    mensajes_contexto?: unknown;
+    memoria_largo_plazo?: unknown;
+    telefono_operador_privado?: unknown;
+    operador_privado_resumen_diario?: unknown;
+    operador_privado_alertas?: unknown;
+    notificaciones_email_activas?: unknown;
   }>(req);
   if (payload instanceof NextResponse) return payload;
 
@@ -266,6 +273,38 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     typeof (payload as { esta_activa?: unknown }).esta_activa === "boolean"
       ? (payload as { esta_activa: boolean }).esta_activa
       : undefined;
+  const delay_entre_partes_segundos =
+    typeof payload.delay_entre_partes_segundos === "number" &&
+    Number.isFinite(payload.delay_entre_partes_segundos)
+      ? Math.max(0, Math.min(30, payload.delay_entre_partes_segundos))
+      : undefined;
+  const mensajes_contexto =
+    typeof payload.mensajes_contexto === "number" &&
+    Number.isFinite(payload.mensajes_contexto)
+      ? Math.max(5, Math.min(200, Math.floor(payload.mensajes_contexto)))
+      : undefined;
+  const memoria_largo_plazo =
+    typeof payload.memoria_largo_plazo === "boolean"
+      ? payload.memoria_largo_plazo
+      : undefined;
+  const telefono_operador_privado =
+    typeof payload.telefono_operador_privado === "string"
+      ? payload.telefono_operador_privado
+      : payload.telefono_operador_privado === null
+      ? null
+      : undefined;
+  const operador_privado_resumen_diario =
+    typeof payload.operador_privado_resumen_diario === "boolean"
+      ? payload.operador_privado_resumen_diario
+      : undefined;
+  const operador_privado_alertas =
+    typeof payload.operador_privado_alertas === "boolean"
+      ? payload.operador_privado_alertas
+      : undefined;
+  const notificaciones_email_activas =
+    typeof payload.notificaciones_email_activas === "boolean"
+      ? payload.notificaciones_email_activas
+      : undefined;
 
   const actualizada = await actualizarCuenta(idCuenta, {
     etiqueta,
@@ -296,6 +335,13 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     instrucciones_extra,
     modo_respuesta,
     esta_activa,
+    delay_entre_partes_segundos,
+    mensajes_contexto,
+    memoria_largo_plazo,
+    telefono_operador_privado,
+    operador_privado_resumen_diario,
+    operador_privado_alertas,
+    notificaciones_email_activas,
   });
   if (!actualizada) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });

@@ -93,6 +93,13 @@ export async function actualizarCuenta(
     wa_ultimo_error: string | null;
     auto_seguimiento_activo: boolean;
     esta_activa: boolean;
+    delay_entre_partes_segundos: number;
+    mensajes_contexto: number;
+    memoria_largo_plazo: boolean;
+    telefono_operador_privado: string | null;
+    operador_privado_resumen_diario: boolean;
+    operador_privado_alertas: boolean;
+    notificaciones_email_activas: boolean;
   }>,
 ): Promise<Cuenta | null> {
   const cambios: Record<string, unknown> = {};
@@ -104,6 +111,24 @@ export async function actualizarCuenta(
       0,
       Math.min(120, Math.floor(cambios.buffer_segundos as number)),
     );
+  }
+  if (cambios.delay_entre_partes_segundos !== undefined) {
+    const v = Number(cambios.delay_entre_partes_segundos);
+    cambios.delay_entre_partes_segundos = Number.isFinite(v)
+      ? Math.max(0, Math.min(30, v))
+      : 3;
+  }
+  if (cambios.mensajes_contexto !== undefined) {
+    cambios.mensajes_contexto = Math.max(
+      5,
+      Math.min(200, Math.floor(cambios.mensajes_contexto as number)),
+    );
+  }
+  if (cambios.telefono_operador_privado !== undefined && cambios.telefono_operador_privado !== null) {
+    // Sanitizar a sólo dígitos (sin '+' ni espacios) — el bot lo concatena con
+    // '@s.whatsapp.net' para el JID de Baileys.
+    const tel = String(cambios.telefono_operador_privado).replace(/[^0-9]/g, "");
+    cambios.telefono_operador_privado = tel.length >= 8 ? tel : null;
   }
   if (cambios.etiqueta !== undefined) {
     cambios.etiqueta = (cambios.etiqueta as string).trim();

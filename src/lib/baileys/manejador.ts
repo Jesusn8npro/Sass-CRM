@@ -27,6 +27,7 @@ import {
   procesarMensajeHistorico,
 } from "./manejadorHistorial";
 import { generarYEnviarRespuesta } from "./manejadorIA";
+import { procesarMensajeOperadorPrivado } from "./manejadorOperadorPrivado";
 export { procesarBandejaSalidaDeCuenta } from "./manejadorEnvio";
 export { pedirMasHistorialConversacion } from "./manejadorHistorial";
 import { desempacarMensaje } from "./medios";
@@ -44,6 +45,17 @@ function extraerTexto(mensaje: proto.IMessage | null | undefined): string | null
 function telefonoDesdeJID(jid: string): string {
   const sinSufijo = jid.split("@")[0] ?? "";
   return sinSufijo.split(":")[0] ?? "";
+}
+
+/**
+ * Normaliza un teléfono dejando sólo dígitos. Usado para comparar el
+ * `telefono_operador_privado` (guardado por el saneador) contra el
+ * `telefonoMostrable` que extrae el manejador del JID. Cualquier "+",
+ * espacio, paréntesis o guión se descarta.
+ */
+function normalizarTelefono(tel: string | null | undefined): string {
+  if (!tel) return "";
+  return tel.replace(/[^0-9]/g, "");
 }
 
 interface ClaveMensajeExtendida {
@@ -525,6 +537,50 @@ export function registrarManejadores(
           cancelarTimer(conversacion.id);
           continue;
         }
+        // ===========================================================
+        // INTERCEPTOR — operador privado.
+        // Si el remitente es el dueño (cuenta.telefono_operador_privado),
+        // derivamos al asistente personal en vez del flujo de cliente.
+        // El operador habla con su propio bot: pide KPIs, leads, citas,
+        // y ejecuta acciones administrativas en lenguaje natural.
+        //
+        // Comparación NORMALIZADA — solo dígitos. Cubre formatos con/sin
+        // "+", espacios, código de país. Match = sufijos compatibles
+        // (uno termina con el otro) para ser tolerantes con diferencias
+        // de código de país que algunos WhatsApp omiten.
+        // ===========================================================
+        const telOperadorNorm = normalizarTelefono(
+          cuenta.telefono_operador_privado,
+        );
+        const telMensajeNorm = normalizarTelefono(telefonoMostrable);
+        const esOperador =
+          telOperadorNorm.length >= 8 &&
+          telMensajeNorm.length >= 8 &&
+          (telOperadorNorm === telMensajeNorm ||
+            telOperadorNorm.endsWith(telMensajeNorm) ||
+            telMensajeNorm.endsWith(telOperadorNorm));
+        if (esOperador && contenido.trim().length > 0) {
+          console.log(
+            `${prefijo} 👤 OPERADOR PRIVADO detectado (op=${telOperadorNorm} msg=${telMensajeNorm}) — derivando a asistente personal`,
+          );
+          cancelarTimer(conversacion.id);
+          try {
+            await procesarMensajeOperadorPrivado(
+              sock,
+              cuenta,
+              fresca,
+              contenido,
+              prefijo,
+            );
+          } catch (err) {
+            console.error(
+              `${prefijo} error procesando mensaje operador privado:`,
+              err,
+            );
+          }
+          continue;
+        }
+
         if (fresca.modo !== "IA") {
           console.log(
             `${prefijo} ⏸ conv en modo ${fresca.modo} (necesita_humano=${fresca.necesita_humano}) — no respondo. Cambialo a IA en el panel para que el bot retome.`,

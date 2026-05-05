@@ -49,6 +49,13 @@ export function Hero() {
             <span className="font-mono text-xs opacity-60 transition-transform group-hover:translate-x-0.5">→</span>
           </Link>
           <Link
+            href="/demo"
+            className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/[0.04] px-5 py-3 text-sm font-medium text-emerald-200 transition-colors hover:border-emerald-400/60 hover:bg-emerald-400/[0.08] hover:text-white"
+          >
+            Probar demo en vivo
+            <span className="font-mono text-xs opacity-70">→</span>
+          </Link>
+          <Link
             href="#como-funciona"
             className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-3 text-sm font-medium text-white/80 transition-colors hover:border-white/30 hover:text-white"
           >

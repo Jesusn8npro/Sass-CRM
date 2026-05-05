@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation";
-import { obtenerUsuarioActual } from "@/lib/auth/sesion";
+import {
+  esUsuarioAdmin,
+  obtenerUsuarioActual,
+} from "@/lib/auth/sesion";
 import {
   listarConversaciones,
   listarCuentas,
@@ -21,6 +24,12 @@ import {
 export default async function PaginaOnboarding() {
   const auth = await obtenerUsuarioActual();
   if (!auth) redirect("/login?siguiente=/onboarding");
+
+  // El admin no es forzado al wizard — si llega acá lo mandamos a /app
+  // donde elige modo admin o crear cuenta WhatsApp como cliente.
+  if (await esUsuarioAdmin(auth.id)) {
+    redirect("/app");
+  }
 
   const cuentas = await listarCuentas(auth.id);
   if (cuentas.length === 0) redirect("/onboarding/conectar");

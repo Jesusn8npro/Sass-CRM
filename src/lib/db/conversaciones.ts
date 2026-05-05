@@ -319,6 +319,26 @@ export async function borrarConversaciones(
   return count ?? 0;
 }
 
+/**
+ * Persiste la memoria a largo plazo de una conversación. El caller
+ * (src/lib/memoria.ts) ya generó el texto resumido con el LLM y nos
+ * pasa el timestamp del último mensaje incorporado.
+ */
+export async function actualizarResumenContexto(
+  conversacionId: string,
+  resumen: string,
+  resumidoHastaEn: string,
+): Promise<void> {
+  const { error } = await db()
+    .from("conversaciones")
+    .update({
+      resumen_contexto: resumen,
+      resumido_hasta_en: resumidoHastaEn,
+    })
+    .eq("id", conversacionId);
+  if (error) lanzar(error, "actualizarResumenContexto");
+}
+
 export async function cambiarEtapaConversacion(
   conversacionId: string,
   etapaId: string | null,

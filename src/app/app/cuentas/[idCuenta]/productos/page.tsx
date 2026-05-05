@@ -7,6 +7,7 @@ import type { Cuenta, Producto } from "@/lib/baseDatos";
 import { InterruptorTema } from "@/components/InterruptorTema";
 import { TarjetaProducto } from "./_componentes/TarjetaProducto";
 import { ModalProducto } from "./_componentes/ModalProducto";
+import { ModalImportCSV } from "./_componentes/ModalImportCSV";
 import { useConfirm } from "@/components/ConfirmDialog";
 
 interface RespuestaCuenta {
@@ -25,6 +26,7 @@ export default function PaginaProductos() {
   const [, setCreando] = useState(false);
   const [editando, setEditando] = useState<string | null>(null);
   const [modalAbierto, setModalAbierto] = useState(false);
+  const [modalCSVAbierto, setModalCSVAbierto] = useState(false);
   const { confirmar } = useConfirm();
 
   const cargar = useCallback(async () => {
@@ -109,6 +111,15 @@ export default function PaginaProductos() {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => setModalCSVAbierto(true)}
+              className="flex h-9 items-center gap-1.5 rounded-full border border-zinc-200 px-4 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+              title="Importar productos desde CSV"
+            >
+              <span aria-hidden>📥</span>
+              <span>Importar CSV</span>
+            </button>
+            <button
+              type="button"
               onClick={abrirNuevo}
               className="flex h-9 items-center gap-1.5 rounded-full bg-emerald-500 px-4 text-xs font-semibold text-white hover:bg-emerald-400"
             >
@@ -179,6 +190,14 @@ export default function PaginaProductos() {
             setCreando(false);
             cargar();
           }}
+        />
+      )}
+
+      {modalCSVAbierto && (
+        <ModalImportCSV
+          idCuenta={idCuenta}
+          onCerrar={() => setModalCSVAbierto(false)}
+          onImportado={() => cargar()}
         />
       )}
     </main>

@@ -15,14 +15,17 @@ import {
   listarProductosActivos,
   obtenerHistorialReciente,
   obtenerMedioPorIdentificador,
+  obtenerProducto,
   type Conversacion,
   type Cuenta,
 } from "../baseDatos";
 import { construirPromptSistema } from "../construirPrompt";
+import { actualizarMemoriaSiNecesario } from "../memoria";
 import { generarRespuesta, type RespuestaIA } from "../openai";
 import { buscarConocimientoRelevante } from "../rag/buscar";
 import {
   dormir,
+  enviarFotoProducto,
   enviarMedioBiblioteca,
   enviarParteAudio,
   enviarParteTexto,
@@ -40,8 +43,14 @@ export async function generarYEnviarRespuesta(
   jidParaEnviar: string,
   prefijo: string,
 ): Promise<void> {
-  const historial = await obtenerHistorialReciente(conversacion.id, 20);
-  console.log(`${prefijo} llamando LLM con ${historial.length} mensajes...`);
+  // Ventana de contexto literal — configurable por cuenta (default 20).
+  // Mensajes anteriores (si memoria_largo_plazo=true) se condensan en
+  // conversacion.resumen_contexto y se inyectan al system prompt.
+  const ventanaContexto = Math.max(5, Math.min(200, cuenta.mensajes_contexto || 20));
+  const historial = await obtenerHistorialReciente(conversacion.id, ventanaContexto);
+  console.log(
+    `${prefijo} llamando LLM con ${historial.length} mensajes (ventana=${ventanaContexto}${conversacion.resumen_contexto?.trim() ? ", +resumen" : ""})...`,
+  );
 
   try {
     await sock.presenceSubscribe(jidParaEnviar);
@@ -196,6 +205,14 @@ export async function generarYEnviarRespuesta(
     }
   }
 
+  // Delay entre partes — configurable por cuenta (default 3s).
+  // Se aplica ANTES de cada envío. Como el caller emite presence
+  // 'composing' antes del loop y al final de cada parte, durante
+  // este delay se ve "escribiendo..." al cliente.
+  const delayPartesMs = Math.round(
+    Math.max(0, Math.min(30, cuenta.delay_entre_partes_segundos ?? 3)) * 1000,
+  );
+
   for (let i = 0; i < respuesta.partes.length; i++) {
     const parte = respuesta.partes[i]!;
     const esUltima = i === respuesta.partes.length - 1;
@@ -205,6 +222,31 @@ export async function generarYEnviarRespuesta(
       const idRaw = parte.media_id?.trim() ?? "";
       if (!idRaw) {
         console.warn(`${prefijo} parte ${numParte} media con id vacío, ignorada`);
+      } else if (idRaw.startsWith("producto:")) {
+        // Foto de un producto del catálogo (no de la biblioteca)
+        const productoId = idRaw.slice("producto:".length).trim();
+        if (!productoId) {
+          console.warn(
+            `${prefijo} parte ${numParte} media producto: con id vacío, ignorada`,
+          );
+        } else {
+          const prod = await obtenerProducto(productoId);
+          if (!prod || prod.cuenta_id !== cuenta.id) {
+            console.warn(
+              `${prefijo} parte ${numParte} producto:${productoId} no existe o no pertenece a esta cuenta, ignorada`,
+            );
+          } else {
+            if (delayPartesMs > 0) await dormir(delayPartesMs);
+            await enviarFotoProducto(
+              sock,
+              jidParaEnviar,
+              cuenta.id,
+              conversacion.id,
+              prod,
+              prefijo,
+            );
+          }
+        }
       } else {
         const medio = await obtenerMedioPorIdentificador(cuenta.id, idRaw);
         if (!medio) {
@@ -212,7 +254,7 @@ export async function generarYEnviarRespuesta(
             `${prefijo} parte ${numParte} media id="${idRaw}" no existe en biblioteca, ignorada`,
           );
         } else {
-          await dormir(1000);
+          if (delayPartesMs > 0) await dormir(delayPartesMs);
           await enviarMedioBiblioteca(
             sock,
             jidParaEnviar,
@@ -234,6 +276,7 @@ export async function generarYEnviarRespuesta(
             parte.contenido.trim(),
             prefijo,
             numParte,
+            delayPartesMs,
           )
         : false;
       if (!exito) {
@@ -250,6 +293,7 @@ export async function generarYEnviarRespuesta(
           parte.contenido,
           prefijo,
           numParte,
+          delayPartesMs,
         );
       }
     } else if (parte.contenido.trim()) {
@@ -261,6 +305,7 @@ export async function generarYEnviarRespuesta(
         parte.contenido,
         prefijo,
         numParte,
+        delayPartesMs,
       );
     }
 
@@ -280,4 +325,11 @@ export async function generarYEnviarRespuesta(
 
   // Procesar captura de datos / score / estado del lead (con fallback heurístico)
   await procesarCapturaIA(respuesta, historial, cuenta, conversacion, prefijo);
+
+  // Memoria a largo plazo — fire and forget. Si la conversación creció
+  // más allá de la ventana, este job genera/actualiza el resumen
+  // acumulativo con gpt-4o-mini para que el próximo turno tenga
+  // contexto completo sin explotar tokens. No bloquea la respuesta:
+  // los errores se loguean adentro y nunca propagan.
+  void actualizarMemoriaSiNecesario(conversacion, cuenta);
 }

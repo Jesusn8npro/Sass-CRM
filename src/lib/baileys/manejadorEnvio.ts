@@ -25,6 +25,7 @@ import {
   type Cuenta,
   type FilaBandejaSalida,
   type MedioBiblioteca,
+  type Producto,
 } from "../baseDatos";
 import { generarAudioTTS } from "../elevenlabs";
 import { asegurarFormatoVoz } from "./conversion";
@@ -32,6 +33,7 @@ import {
   borrarTemporal,
   descargarBiblioteca,
   descargarMediaChat,
+  descargarProductoImagen,
   escribirTemporal,
   guardarMediaSubido,
 } from "./medios";
@@ -109,9 +111,15 @@ export function dormir(ms: number): Promise<void> {
 }
 
 /**
- * Envía una parte de texto del bot: calcula un delay natural según
- * largo, guarda en DB y envía por Baileys. No emite presence updates
- * (eso lo hace el caller entre partes).
+ * Envía una parte de texto del bot: espera el delay configurado por
+ * la cuenta (durante ese tiempo el "escribiendo..." sigue visible
+ * porque el caller emite presence='composing' antes), guarda en DB
+ * y envía por Baileys.
+ *
+ * `delayMs` viene del manejadorIA, que lo calcula a partir de
+ * `cuenta.delay_entre_partes_segundos`. Pasarlo por argumento (en vez
+ * de leer la cuenta acá) deja a esta función libre de fetchs y
+ * mantiene la lógica de configuración en un solo lugar.
  */
 export async function enviarParteTexto(
   sock: WASocket,
@@ -121,13 +129,9 @@ export async function enviarParteTexto(
   contenido: string,
   prefijo: string,
   numParte: string,
+  delayMs: number,
 ): Promise<void> {
-  const charsPorSegundo = 35;
-  const delayMs = Math.min(
-    4000,
-    Math.max(800, (contenido.length / charsPorSegundo) * 1000),
-  );
-  await dormir(delayMs);
+  if (delayMs > 0) await dormir(delayMs);
 
   // El sock que llegó por parámetro pudo haberse cerrado mientras la
   // IA pensaba (code 440 reconecta y deja un sock nuevo en el gestor).
@@ -208,10 +212,12 @@ export async function enviarParteAudio(
   texto: string,
   prefijo: string,
   numParte: string,
+  delayMs: number,
 ): Promise<boolean> {
   let archivoTempEntrada: string | null = null;
   let archivoTempSalida: string | null = null;
   try {
+    if (delayMs > 0) await dormir(delayMs);
     try {
       await sock.sendPresenceUpdate("recording", jid);
     } catch {}
@@ -437,6 +443,111 @@ async function obtenerMetadataAudio(
   }
   return { seconds, waveform };
 }
+/**
+ * Envía la foto de un producto al cliente. Resuelve la imagen así:
+ *   1) Si el producto tiene `imagen_url_externa` no vacía → fetch del
+ *      buffer (timeout 8s, max 8MB) y se envía como image. media_path
+ *      en DB queda como `url:<URL>` para que el panel la renderice
+ *      directo desde el origen externo.
+ *   2) Sino, si tiene `imagen_path` → descarga del bucket `productos`
+ *      y se envía. media_path en DB queda como el path interno (sin
+ *      prefijo) — `BurbujaMensaje` lo resuelve via `/api/media/...`.
+ *      // NOTA: la ruta interna de productos hoy se sirve via
+ *      //       /api/productos/<path> en el modal. La burbuja apunta
+ *      //       a /api/media/<idCuenta>/<archivo>; si la convención no
+ *      //       matchea, el panel mostrará el alt — lo importante es
+ *      //       que el cliente reciba la imagen por WhatsApp.
+ *   3) Si no tiene foto → no-op (warning).
+ *
+ * Errores de red en URL externa → log y skip silencioso (no romper
+ * el flujo de la respuesta IA).
+ */
+export async function enviarFotoProducto(
+  sock: WASocket,
+  jid: string,
+  cuentaId: string,
+  conversacionId: string,
+  producto: Producto,
+  prefijo: string,
+): Promise<void> {
+  const urlExterna = producto.imagen_url_externa?.trim() ?? "";
+  const pathInterno = producto.imagen_path?.trim() ?? "";
+
+  let buffer: Buffer | null = null;
+  let mediaPathPanel: string | null = null;
+
+  if (urlExterna) {
+    // Validamos protocolo http/https (no file:// ni rutas privadas)
+    if (!/^https?:\/\//i.test(urlExterna)) {
+      console.warn(
+        `${prefijo} foto producto ${producto.id}: URL externa con protocolo inválido, ignorada`,
+      );
+      return;
+    }
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(urlExterna, { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!res.ok) {
+        console.warn(
+          `${prefijo} foto producto ${producto.id}: HTTP ${res.status} fetcheando ${urlExterna}`,
+        );
+        return;
+      }
+      const ab = await res.arrayBuffer();
+      if (ab.byteLength > 8 * 1024 * 1024) {
+        console.warn(
+          `${prefijo} foto producto ${producto.id}: imagen externa pesa ${ab.byteLength}b > 8MB, skip`,
+        );
+        return;
+      }
+      buffer = Buffer.from(ab);
+      mediaPathPanel = `url:${urlExterna}`;
+    } catch (err) {
+      const detalle = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `${prefijo} foto producto ${producto.id}: error fetcheando URL externa: ${detalle.slice(0, 100)}`,
+      );
+      return;
+    }
+  } else if (pathInterno) {
+    const desc = await descargarProductoImagen(pathInterno);
+    if (!desc) {
+      console.warn(
+        `${prefijo} foto producto ${producto.id}: imagen_path "${pathInterno}" no existe en bucket`,
+      );
+      return;
+    }
+    buffer = desc.buffer;
+    mediaPathPanel = pathInterno;
+  } else {
+    console.warn(
+      `${prefijo} foto producto ${producto.id}: sin imagen disponible (skip)`,
+    );
+    return;
+  }
+
+  const sockActual = obtenerGestor().obtenerSocket(cuentaId) ?? sock;
+  try {
+    const msgId = reservarMsgId(sockActual, cuentaId, conversacionId);
+    await sockActual.sendMessage(jid, { image: buffer }, { messageId: msgId });
+    await insertarMensaje(cuentaId, conversacionId, "asistente", "", {
+      tipo: "imagen",
+      media_path: mediaPathPanel,
+      wa_msg_id: msgId,
+    });
+    console.log(
+      `${prefijo} → foto producto "${producto.nombre}" (id ${producto.id}) enviada`,
+    );
+  } catch (err) {
+    console.error(
+      `${prefijo} error enviando foto producto ${producto.id}:`,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+}
+
 // Bandeja de salida — envía mensajes humanos / multimedia desde el panel
 // ============================================================
 async function enviarItemBandeja(

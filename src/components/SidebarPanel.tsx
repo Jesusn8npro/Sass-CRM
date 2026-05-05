@@ -28,7 +28,7 @@ import {
 } from "./SidebarPanel.iconos";
 
 interface InfoUsuario {
-  usuario: { email: string; plan: string };
+  usuario: { email: string; plan: string; es_admin?: boolean };
   plan: { nombre: string; id: string };
   uso: { cuentas: number; limite_cuentas: number | null };
 }
@@ -73,6 +73,7 @@ export function SidebarPanel({
   const email = info?.usuario.email ?? "";
   const planId = info?.plan.id ?? "free";
   const planNombre = info?.plan.nombre ?? "Gratis";
+  const esAdmin = info?.usuario.es_admin === true;
 
   function cambiarCuenta(idNuevo: string) {
     setDropdownAbierto(false);
@@ -304,6 +305,35 @@ export function SidebarPanel({
             actual={pathname}
           />
         </SeccionNav>
+
+        {/* Sección de admin del SaaS — solo visible para los emails
+            declarados en ADMIN_EMAIL. Si no es admin, nunca renderiza
+            estos links. */}
+        {esAdmin && (
+          <SeccionNav titulo="Admin · Plataforma">
+            <ItemNav
+              icono={<IconoReportes />}
+              etiqueta="Panel admin"
+              href="/app/admin"
+              actual={pathname}
+              matchPaths={["/app/admin"]}
+            />
+            <ItemNav
+              icono={<IconoClientes />}
+              etiqueta="Usuarios"
+              href="/app/admin/usuarios"
+              actual={pathname}
+              matchPaths={["/admin/usuarios"]}
+            />
+            <ItemNav
+              icono={<IconoInversiones />}
+              etiqueta="Ingresos"
+              href="/app/admin/ingresos"
+              actual={pathname}
+              matchPaths={["/admin/ingresos"]}
+            />
+          </SeccionNav>
+        )}
       </nav>
 
       {/* Footer: notif + tema + usuario */}

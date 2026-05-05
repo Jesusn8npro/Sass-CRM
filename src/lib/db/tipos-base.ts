@@ -169,6 +169,28 @@ export interface Cuenta {
    *  recordatorios para conversaciones de esta cuenta. Los pasos
    *  configurados viven en `auto_seguimientos_pasos`. */
   auto_seguimiento_activo: boolean;
+  /** Segundos a esperar entre cada parte del agente. Default 3 = humano natural.
+   *  Durante esa espera el bot muestra "escribiendo..." al cliente. */
+  delay_entre_partes_segundos: number;
+  /** Cantidad de mensajes recientes que se mandan al LLM como contexto literal.
+   *  Default 20. Mensajes más viejos viven en resumen_contexto si memoria_largo_plazo=true. */
+  mensajes_contexto: number;
+  /** Si true, mantiene un resumen acumulativo (en conversaciones.resumen_contexto)
+   *  de los mensajes anteriores a la ventana actual. Permite contexto de toda la
+   *  conversación sin explotar tokens. */
+  memoria_largo_plazo: boolean;
+  /** Número WhatsApp personal del dueño donde el bot le manda alertas
+   *  importantes y un resumen diario del negocio. Sin "+", ej: "573144096187". */
+  telefono_operador_privado: string | null;
+  /** Si true, recibe a las 9am un resumen del día anterior (mensajes,
+   *  leads nuevos, citas, top productos). */
+  operador_privado_resumen_diario: boolean;
+  /** Si true, recibe alertas urgentes en tiempo real (lead score >=80,
+   *  handoff a humano, cuenta caída). */
+  operador_privado_alertas: boolean;
+  /** Opt-in para emails transaccionales por Resend (bienvenida,
+   *  reportes, cuenta caída). Billing va aparte. */
+  notificaciones_email_activas: boolean;
   creada_en: string;
   actualizada_en: string;
 }

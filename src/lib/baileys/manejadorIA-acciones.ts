@@ -23,7 +23,14 @@ import {
 import { iniciarLlamadaConContexto } from "../llamadas";
 import { type RespuestaIA } from "../openai";
 import { dispararWebhook } from "../webhooks";
+import { enviarAlertaOperador } from "../operadorPrivado";
+import { urlApp } from "../emails/cliente";
 import { parseFechaIso } from "./manejadorEnvio";
+
+/** Identificación legible de un cliente para alertas al operador. */
+function nombreCliente(c: Conversacion): string {
+  return (c.nombre ?? "").trim() || `+${c.telefono}`;
+}
 
 // Helper: la IA a veces manda una FECHA en cita_id en vez del UUID.
 // Si lo detectamos, intentamos resolver mirando las citas activas y
@@ -101,6 +108,31 @@ export async function procesarAccionesIA(
       nombre: conversacion.nombre,
       razon,
     });
+    // Alerta al operador privado (fire-and-forget)
+    void enviarAlertaOperador(
+      cuenta,
+      `⚠️ Handoff solicitado por: ${nombreCliente(conversacion)} — Razón: ${razon}\n` +
+        `Ver: ${urlApp()}/app/cuentas/${cuenta.id}/conversaciones`,
+    );
+  }
+
+  // Alerta operador privado por lead caliente (score >= 80).
+  // El score real lo persiste manejadorIA-captura.ts; acá nos basamos
+  // en el valor que el LLM mandó en la misma respuesta.
+  if (
+    respuesta.actualizar_score?.activar &&
+    Number.isFinite(respuesta.actualizar_score.score) &&
+    respuesta.actualizar_score.score >= 80
+  ) {
+    const score = Math.round(respuesta.actualizar_score.score);
+    const motivo = respuesta.actualizar_score.motivo?.trim() ?? "";
+    void enviarAlertaOperador(
+      cuenta,
+      `🔥 Lead caliente — score ${score}\n` +
+        `Cliente: ${nombreCliente(conversacion)}\n` +
+        (motivo ? `Motivo: ${motivo}\n` : "") +
+        `Ver: ${urlApp()}/app/cuentas/${cuenta.id}/conversaciones`,
+    );
   }
 
   // Si el LLM decidió iniciar una llamada Vapi, dispararla con el
