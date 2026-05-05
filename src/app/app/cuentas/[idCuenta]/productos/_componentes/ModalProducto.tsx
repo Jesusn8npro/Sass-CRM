@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import type { Producto } from "@/lib/baseDatos";
 import { PanelUploadsProducto } from "./_modalProducto-uploads";
 import { MONEDAS } from "@/lib/constantes";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 export function ModalProducto({
   idCuenta,
@@ -37,6 +38,7 @@ export function ModalProducto({
 
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { confirmar } = useConfirm();
 
   // Imagen: si hay una pendiente (File en memoria), se sube tras guardar.
   // Si ya hay una guardada en server (productoActual.imagen_path), la mostramos.
@@ -176,7 +178,12 @@ export function ModalProducto({
       return;
     }
     if (!idEditar || !imagenActual) return;
-    if (!confirm("¿Quitar la imagen guardada?")) return;
+    const ok = await confirmar({
+      mensaje: "¿Quitar la imagen guardada?",
+      textoConfirmar: "Quitar",
+      variante: "peligro",
+    });
+    if (!ok) return;
     await fetch(`/api/cuentas/${idCuenta}/productos/${idEditar}/imagen`, {
       method: "DELETE",
     });
@@ -189,7 +196,12 @@ export function ModalProducto({
       return;
     }
     if (!idEditar || !videoActual) return;
-    if (!confirm("¿Quitar el video guardado?")) return;
+    const ok = await confirmar({
+      mensaje: "¿Quitar el video guardado?",
+      textoConfirmar: "Quitar",
+      variante: "peligro",
+    });
+    if (!ok) return;
     await fetch(`/api/cuentas/${idCuenta}/productos/${idEditar}/video`, {
       method: "DELETE",
     });

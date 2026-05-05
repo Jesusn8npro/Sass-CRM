@@ -6,6 +6,7 @@ import type {
   ConversacionConPreview,
   RespuestaRapida,
 } from "@/lib/baseDatos";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 interface RespuestaPlantillas {
   respuestas: RespuestaRapida[];
@@ -41,6 +42,7 @@ export default function PaginaPlantillas() {
   const [plantillaParaEnvio, setPlantillaParaEnvio] = useState<string>("");
   const [enviando, setEnviando] = useState(false);
   const [resultadoEnvio, setResultadoEnvio] = useState<string | null>(null);
+  const { confirmar } = useConfirm();
 
   async function cargar() {
     setCargando(true);
@@ -90,7 +92,12 @@ export default function PaginaPlantillas() {
   }
 
   async function borrar(id: string) {
-    if (!confirm("¿Borrar plantilla?")) return;
+    const ok = await confirmar({
+      mensaje: "¿Borrar plantilla?",
+      textoConfirmar: "Borrar",
+      variante: "peligro",
+    });
+    if (!ok) return;
     await fetch(`/api/cuentas/${idCuenta}/respuestas-rapidas/${id}`, {
       method: "DELETE",
     });
@@ -124,11 +131,10 @@ export default function PaginaPlantillas() {
       setResultadoEnvio("✗ Elegí al menos un contacto");
       return;
     }
-    if (
-      !confirm(
-        `Vas a encolar el envío de "${plantilla.atajo}" a ${seleccionadas.size} contacto${seleccionadas.size === 1 ? "" : "s"}.\n\nLos mensajes se mandan respetando límite diario (80/cuenta) y horario humano (8-22h). ¿Continuar?`,
-      )
-    ) {
+    const ok2 = await confirmar({
+      mensaje: `Vas a encolar el envío de "${plantilla.atajo}" a ${seleccionadas.size} contacto${seleccionadas.size === 1 ? "" : "s"}.\n\nLos mensajes se mandan respetando límite diario (80/cuenta) y horario humano (8-22h). ¿Continuar?`,
+    });
+    if (!ok2) {
       return;
     }
     setEnviando(true);

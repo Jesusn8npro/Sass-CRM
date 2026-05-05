@@ -25,6 +25,7 @@ import type {
 } from "@/lib/baseDatos";
 import { InterruptorTema } from "@/components/InterruptorTema";
 import { usePollingVisible } from "@/components/usePollingVisible";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -63,6 +64,7 @@ export default function PaginaPipeline() {
   );
   const [nombreEtapaNueva, setNombreEtapaNueva] = useState("");
   const [colorEtapaNueva, setColorEtapaNueva] = useState("zinc");
+  const { confirmar } = useConfirm();
 
   const sensores = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -182,12 +184,13 @@ export default function PaginaPipeline() {
   }
 
   async function borrarEtapa(idEtapa: string) {
-    if (
-      !confirm(
+    const ok = await confirmar({
+      mensaje:
         "¿Borrar esta etapa? Las conversaciones quedan sin etapa (no se borran).",
-      )
-    )
-      return;
+      textoConfirmar: "Borrar",
+      variante: "peligro",
+    });
+    if (!ok) return;
     await fetch(`/api/cuentas/${idCuenta}/etapas/${idEtapa}`, {
       method: "DELETE",
     });

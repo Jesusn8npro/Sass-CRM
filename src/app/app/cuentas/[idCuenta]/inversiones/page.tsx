@@ -10,6 +10,7 @@ import type {
 } from "@/lib/baseDatos";
 import { InterruptorTema } from "@/components/InterruptorTema";
 import { ModalInversion } from "./_modal";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -40,6 +41,7 @@ export default function PaginaInversiones() {
   const [resumen, setResumen] = useState<ResumenInversiones | null>(null);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [editando, setEditando] = useState<Inversion | null>(null);
+  const { confirmar } = useConfirm();
 
   const cargar = useCallback(async () => {
     if (!idCuenta) return;
@@ -63,7 +65,12 @@ export default function PaginaInversiones() {
   }, [cargar]);
 
   async function borrar(id: string) {
-    if (!confirm("¿Borrar esta inversión?")) return;
+    const ok = await confirmar({
+      mensaje: "¿Borrar esta inversión?",
+      textoConfirmar: "Borrar",
+      variante: "peligro",
+    });
+    if (!ok) return;
     await fetch(`/api/cuentas/${idCuenta}/inversiones/${id}`, {
       method: "DELETE",
     });

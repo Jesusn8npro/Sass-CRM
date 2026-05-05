@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import { ProveedoresUI } from "@/components/ProveedoresUI";
 import "./globals.css";
 
 const inter = Inter({
@@ -47,7 +48,9 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: scriptInicializaTema }} />
       </head>
-      <body className="min-h-screen antialiased">{children}</body>
+      <body className="min-h-screen antialiased">
+        <ProveedoresUI>{children}</ProveedoresUI>
+      </body>
     </html>
   );
 }

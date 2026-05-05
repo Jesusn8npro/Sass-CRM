@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Cuenta, LlamadaVapi } from "@/lib/baseDatos";
+import { useConfirm } from "./ConfirmDialog";
 
 interface EstadoVapi {
   configurado: boolean;
@@ -34,6 +35,7 @@ export function BotonLlamar({
   >(null);
   // Estado Vapi efectivo (cuenta + fallback al .env del sistema).
   const [estadoVapi, setEstadoVapi] = useState<EstadoVapi | null>(null);
+  const { confirmar } = useConfirm();
 
   useEffect(() => {
     fetch(`/api/cuentas/${cuenta.id}/vapi/estado`, { cache: "no-store" })
@@ -58,7 +60,10 @@ export function BotonLlamar({
       setTimeout(() => setEstado(null), 6000);
       return;
     }
-    if (!confirm(`¿Llamar a +${telefono}${nombre ? ` (${nombre})` : ""}?`)) {
+    const ok = await confirmar({
+      mensaje: `¿Llamar a +${telefono}${nombre ? ` (${nombre})` : ""}?`,
+    });
+    if (!ok) {
       return;
     }
     setLlamando(true);

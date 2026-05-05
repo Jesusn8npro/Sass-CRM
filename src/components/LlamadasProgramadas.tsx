@@ -6,6 +6,7 @@ import type {
   ConversacionConPreview,
   LlamadaProgramadaConContexto,
 } from "@/lib/baseDatos";
+import { useConfirm } from "./ConfirmDialog";
 
 interface Props {
   idCuenta: string;
@@ -35,6 +36,7 @@ export function LlamadasProgramadas({ idCuenta }: Props) {
   const [motivo, setMotivo] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { confirmar } = useConfirm();
 
   async function cargar() {
     setCargando(true);
@@ -114,7 +116,12 @@ export function LlamadasProgramadas({ idCuenta }: Props) {
   }
 
   async function cancelar(id: string) {
-    if (!confirm("¿Cancelar esta llamada programada?")) return;
+    const ok = await confirmar({
+      mensaje: "¿Cancelar esta llamada programada?",
+      textoConfirmar: "Cancelar llamada",
+      variante: "peligro",
+    });
+    if (!ok) return;
     const res = await fetch(
       `/api/cuentas/${idCuenta}/llamadas-programadas/${id}`,
       {

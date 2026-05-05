@@ -7,6 +7,7 @@ import type { Cuenta, Producto } from "@/lib/baseDatos";
 import { InterruptorTema } from "@/components/InterruptorTema";
 import { TarjetaProducto } from "./_componentes/TarjetaProducto";
 import { ModalProducto } from "./_componentes/ModalProducto";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -24,6 +25,7 @@ export default function PaginaProductos() {
   const [, setCreando] = useState(false);
   const [editando, setEditando] = useState<string | null>(null);
   const [modalAbierto, setModalAbierto] = useState(false);
+  const { confirmar } = useConfirm();
 
   const cargar = useCallback(async () => {
     if (!idCuenta) return;
@@ -69,8 +71,12 @@ export default function PaginaProductos() {
   }
 
   async function borrar(id: string) {
-    if (!confirm("¿Borrar este producto? El historial de interés queda guardado."))
-      return;
+    const ok = await confirmar({
+      mensaje: "¿Borrar este producto? El historial de interés queda guardado.",
+      textoConfirmar: "Borrar",
+      variante: "peligro",
+    });
+    if (!ok) return;
     await fetch(`/api/cuentas/${idCuenta}/productos/${id}`, {
       method: "DELETE",
     });

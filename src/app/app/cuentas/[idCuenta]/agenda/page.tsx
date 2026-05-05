@@ -15,6 +15,7 @@ import {
 } from "./_componentes/compartido";
 import { ModalCita } from "./_componentes/ModalCita";
 import { VistaLista, VistaMes, VistaSemana } from "./_componentes/Vistas";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -26,6 +27,7 @@ interface RespuestaCitas {
 export default function PaginaAgenda() {
   const params = useParams<{ idCuenta: string }>();
   const idCuenta = params?.idCuenta ?? "";
+  const { confirmar } = useConfirm();
 
   const [cuenta, setCuenta] = useState<Cuenta | null>(null);
   const [citas, setCitas] = useState<Cita[]>([]);
@@ -98,7 +100,12 @@ export default function PaginaAgenda() {
   }
 
   async function borrar(id: string) {
-    if (!confirm("¿Borrar esta cita?")) return;
+    const ok = await confirmar({
+      mensaje: "¿Borrar esta cita?",
+      textoConfirmar: "Borrar",
+      variante: "peligro",
+    });
+    if (!ok) return;
     await fetch(`/api/cuentas/${idCuenta}/citas/${id}`, { method: "DELETE" });
     void cargar();
   }

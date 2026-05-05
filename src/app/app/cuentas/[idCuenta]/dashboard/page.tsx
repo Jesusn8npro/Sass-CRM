@@ -11,6 +11,8 @@ import type {
   MetricasCuenta,
 } from "@/lib/baseDatos";
 import { InterruptorTema } from "@/components/InterruptorTema";
+import { useToast } from "@/components/Toaster";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -54,6 +56,8 @@ export default function PaginaDashboard() {
     RespuestaTelefonos["contactos"]
   >([]);
   const [llamandoId, setLlamandoId] = useState<string | null>(null);
+  const toast = useToast();
+  const { confirmar } = useConfirm();
 
   const cargarTodo = useCallback(async () => {
     if (!idCuenta) return;
@@ -93,7 +97,8 @@ export default function PaginaDashboard() {
 
   async function llamarTelefono(idContacto: string, tel: string) {
     if (llamandoId !== null) return;
-    if (!confirm(`¿Llamar a +${tel}?`)) return;
+    const ok = await confirmar({ mensaje: `¿Llamar a +${tel}?` });
+    if (!ok) return;
     setLlamandoId(idContacto);
     try {
       const res = await fetch(`/api/cuentas/${idCuenta}/llamadas`, {
@@ -105,15 +110,15 @@ export default function PaginaDashboard() {
         | { llamada: { vapi_call_id: string } }
         | { error: string };
       if (res.ok && "llamada" in data) {
-        alert(`Llamada disparada (${data.llamada.vapi_call_id.slice(0, 10)}…)`);
+        toast.exito(`Llamada disparada (${data.llamada.vapi_call_id.slice(0, 10)}…)`);
       } else {
-        alert(
+        toast.error(
           "Error: " +
             (("error" in data && data.error) || `HTTP ${res.status}`),
         );
       }
     } catch (err) {
-      alert(
+      toast.error(
         "Error de red: " +
           (err instanceof Error ? err.message : "desconocido"),
       );

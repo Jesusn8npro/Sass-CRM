@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { EntradaConocimiento } from "@/lib/baseDatos";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 export function ModalEditor({
   idCuenta,
@@ -22,6 +23,7 @@ export function ModalEditor({
   const [activo, setActivo] = useState(entrada?.esta_activo ?? true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { confirmar } = useConfirm();
 
   const categoriasSugeridas = Array.from(
     new Set([...categoriasExistentes, "general", "productos", "precios", "faqs", "politicas", "casos_uso"]),
@@ -61,7 +63,12 @@ export function ModalEditor({
 
   async function borrar() {
     if (!entrada) return;
-    if (!confirm("¿Borrar este documento? Esta acción no se puede deshacer.")) return;
+    const ok = await confirmar({
+      mensaje: "¿Borrar este documento? Esta acción no se puede deshacer.",
+      textoConfirmar: "Borrar",
+      variante: "peligro",
+    });
+    if (!ok) return;
     setGuardando(true);
     try {
       const res = await fetch(

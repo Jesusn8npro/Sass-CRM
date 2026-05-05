@@ -3,6 +3,8 @@
 import { useState } from "react";
 import type { EtapaPipeline } from "@/lib/baseDatos";
 import { ModalPlantillas, ModalEditarPaso } from "./VistaConfiguracionFunnel-modales";
+import { useToast } from "./Toaster";
+import { useConfirm } from "./ConfirmDialog";
 
 interface PlantillaInfo {
   id: string;
@@ -67,6 +69,8 @@ export function VistaConfiguracionFunnel({
 }: Props) {
   const [modalPlantillas, setModalPlantillas] = useState(false);
   const [editando, setEditando] = useState<EtapaPipeline | "nuevo" | null>(null);
+  const toast = useToast();
+  const { confirmar } = useConfirm();
 
   // Ordenadas por orden ascendente
   const ordenadas = [...etapas].sort((a, b) => a.orden - b.orden);
@@ -82,12 +86,17 @@ export function VistaConfiguracionFunnel({
       await onCambio();
     } else {
       const d = (await res.json().catch(() => ({}))) as { error?: string };
-      alert(`Error: ${d.error ?? "no se pudo aplicar"}`);
+      toast.error(`Error: ${d.error ?? "no se pudo aplicar"}`);
     }
   }
 
   async function borrarEtapa(id: string) {
-    if (!confirm("¿Borrar este paso del funnel?")) return;
+    const ok = await confirmar({
+      mensaje: "¿Borrar este paso del funnel?",
+      textoConfirmar: "Borrar",
+      variante: "peligro",
+    });
+    if (!ok) return;
     await fetch(`/api/cuentas/${idCuenta}/etapas/${id}`, { method: "DELETE" });
     await onCambio();
   }

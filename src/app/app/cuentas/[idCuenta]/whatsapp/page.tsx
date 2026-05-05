@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import type { Cuenta } from "@/lib/baseDatos";
 import { PantallaQR } from "@/components/PantallaQR";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 interface CuentaConEstado extends Cuenta {
   bot_vivo?: boolean;
@@ -30,6 +31,7 @@ export default function PaginaWhatsApp() {
   const [cuenta, setCuenta] = useState<CuentaConEstado | null>(null);
   const [accion, setAccion] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const { confirmar } = useConfirm();
 
   async function cargar() {
     try {
@@ -83,7 +85,12 @@ export default function PaginaWhatsApp() {
       : limpiarAuth
       ? "Vas a desconectar y BORRAR la sesión. El bot va a generar un QR nuevo automáticamente. ¿Continuar?"
       : "Desconectar momentáneamente la cuenta?";
-    if (!confirm(confirmacion)) return;
+    const ok = await confirmar({
+      mensaje: confirmacion,
+      textoConfirmar: pausar ? "Apagar" : limpiarAuth ? "Desconectar" : "Desconectar",
+      variante: "peligro",
+    });
+    if (!ok) return;
 
     setAccion(true);
     setMensaje(null);
@@ -115,7 +122,10 @@ export default function PaginaWhatsApp() {
   }
 
   async function reactivar() {
-    if (!confirm("Reactivar la cuenta? El bot va a generar un QR nuevo para escanear.")) return;
+    const ok = await confirmar({
+      mensaje: "Reactivar la cuenta? El bot va a generar un QR nuevo para escanear.",
+    });
+    if (!ok) return;
     setAccion(true);
     setMensaje(null);
     try {

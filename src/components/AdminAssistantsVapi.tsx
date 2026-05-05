@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { AssistantVapi } from "@/lib/baseDatos";
 import { PruebaAssistantVapi } from "./PruebaAssistantVapi";
+import { useConfirm } from "./ConfirmDialog";
 
 interface Props {
   idCuenta: string;
@@ -170,6 +171,7 @@ function FilaAssistant({
   const [promptExtra, setPromptExtra] = useState(assistant.prompt_extra);
   const [maxSeg, setMaxSeg] = useState(assistant.max_segundos);
   const [grabar, setGrabar] = useState(assistant.grabar);
+  const { confirmar } = useConfirm();
 
   async function guardar() {
     setGuardando(true);
@@ -242,7 +244,12 @@ function FilaAssistant({
   }
 
   async function borrar() {
-    if (!confirm(`¿Borrar el assistant "${assistant.nombre}"?`)) return;
+    const ok = await confirmar({
+      mensaje: `¿Borrar el assistant "${assistant.nombre}"?`,
+      textoConfirmar: "Borrar",
+      variante: "peligro",
+    });
+    if (!ok) return;
     setBorrando(true);
     try {
       await fetch(

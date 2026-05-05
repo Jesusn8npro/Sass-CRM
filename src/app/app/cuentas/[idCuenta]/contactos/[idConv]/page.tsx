@@ -12,6 +12,8 @@ import type {
 } from "@/lib/baseDatos";
 import { InterruptorTema } from "@/components/InterruptorTema";
 import { usePollingVisible } from "@/components/usePollingVisible";
+import { useToast } from "@/components/Toaster";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 interface RespuestaCliente360 {
   conversacion: Conversacion;
@@ -63,6 +65,8 @@ export default function PaginaCliente360() {
   const idConv = params?.idConv ?? "";
 
   const [data, setData] = useState<RespuestaCliente360 | null>(null);
+  const toast = useToast();
+  const { confirmar } = useConfirm();
 
   const cargar = useCallback(async () => {
     if (!idCuenta || !idConv) return;
@@ -80,7 +84,8 @@ export default function PaginaCliente360() {
 
   async function llamar() {
     if (!data) return;
-    if (!confirm(`¿Llamar a +${data.conversacion.telefono}?`)) return;
+    const ok = await confirmar({ mensaje: `¿Llamar a +${data.conversacion.telefono}?` });
+    if (!ok) return;
     const res = await fetch(`/api/cuentas/${idCuenta}/llamadas`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -90,11 +95,11 @@ export default function PaginaCliente360() {
       }),
     });
     if (res.ok) {
-      alert("Llamada disparada. Verificá en /llamadas en unos segundos.");
+      toast.exito("Llamada disparada. Verificá en /llamadas en unos segundos.");
       cargar();
     } else {
       const d = (await res.json().catch(() => ({}))) as { error?: string };
-      alert("Error: " + (d.error ?? `HTTP ${res.status}`));
+      toast.error("Error: " + (d.error ?? `HTTP ${res.status}`));
     }
   }
 

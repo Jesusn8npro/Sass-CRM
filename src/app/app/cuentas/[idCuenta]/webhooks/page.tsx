@@ -25,6 +25,8 @@ interface RespuestaLista {
 
 
 import { ModalWebhook } from "./_componentes/ModalWebhook";
+import { useToast } from "@/components/Toaster";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 function tiempoRelativo(iso: string | null): string {
   if (!iso) return "—";
@@ -41,6 +43,8 @@ export default function PaginaWebhooks() {
   const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [editando, setEditando] = useState<WebhookSaliente | null>(null);
+  const toast = useToast();
+  const { confirmar } = useConfirm();
 
   async function cargar() {
     setCargando(true);
@@ -80,11 +84,11 @@ export default function PaginaWebhooks() {
       ok?: boolean;
       resultado?: string;
     };
-    alert(
-      data.ok
-        ? `✓ Prueba exitosa: ${data.resultado ?? "OK"}`
-        : `✗ Error: ${data.resultado ?? "Falló el envío"}`,
-    );
+    if (data.ok) {
+      toast.exito(`✓ Prueba exitosa: ${data.resultado ?? "OK"}`);
+    } else {
+      toast.error(`✗ Error: ${data.resultado ?? "Falló el envío"}`);
+    }
     void cargar();
   }
 
@@ -93,7 +97,12 @@ export default function PaginaWebhooks() {
   }
 
   async function borrar(id: string) {
-    if (!confirm("¿Borrar este webhook? Dejará de recibir eventos.")) return;
+    const ok = await confirmar({
+      mensaje: "¿Borrar este webhook? Dejará de recibir eventos.",
+      textoConfirmar: "Borrar",
+      variante: "peligro",
+    });
+    if (!ok) return;
     await fetch(`/api/cuentas/${idCuenta}/webhooks/${id}`, {
       method: "DELETE",
     });

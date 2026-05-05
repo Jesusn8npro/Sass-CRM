@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { Cuenta, EstadoSeguimiento, SeguimientoProgramado } from "@/lib/baseDatos";
 import { InterruptorTema } from "@/components/InterruptorTema";
 import { usePollingVisible } from "@/components/usePollingVisible";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -68,6 +69,7 @@ export default function PaginaSeguimientos() {
   const [seguimientos, setSeguimientos] = useState<SeguimientoConContacto[]>(
     [],
   );
+  const { confirmar } = useConfirm();
 
   const cargar = useCallback(async () => {
     if (!idCuenta) return;
@@ -88,8 +90,12 @@ export default function PaginaSeguimientos() {
   usePollingVisible(cargar, 30000);
 
   async function cancelar(id: string) {
-    if (!confirm("¿Cancelar este seguimiento? No se enviará al cliente."))
-      return;
+    const ok = await confirmar({
+      mensaje: "¿Cancelar este seguimiento? No se enviará al cliente.",
+      textoConfirmar: "Cancelar seguimiento",
+      variante: "peligro",
+    });
+    if (!ok) return;
     await fetch(`/api/cuentas/${idCuenta}/seguimientos/${id}`, {
       method: "DELETE",
     });
