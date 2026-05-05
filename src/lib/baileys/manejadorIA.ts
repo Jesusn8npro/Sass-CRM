@@ -20,8 +20,16 @@ import {
   type Cuenta,
 } from "../baseDatos";
 import { construirPromptSistema } from "../construirPrompt";
+import {
+  mensajeFueraDeServicioCliente,
+  verificarLimiteMensajes,
+  yaSeNotificoCerca,
+  yaSeNotificoLimite,
+} from "../limitesPlan";
 import { actualizarMemoriaSiNecesario } from "../memoria";
 import { generarRespuesta, type RespuestaIA } from "../openai";
+import { enviarAlertaOperador } from "../operadorPrivado";
+import { urlApp } from "../emails/cliente";
 import { buscarConocimientoRelevante } from "../rag/buscar";
 import {
   dormir,
@@ -43,6 +51,93 @@ export async function generarYEnviarRespuesta(
   jidParaEnviar: string,
   prefijo: string,
 ): Promise<void> {
+  // ============================================================
+  // GUARD-RAIL: límite de plan.
+  // Si el usuario llegó a su tope mensual de mensajes IA, NO llamamos
+  // a OpenAI (ahorra tu plata) y notificamos al operador 1 vez por mes.
+  // Al cliente le mandamos un mensaje genérico "fuera de servicio" sin
+  // exponer que es por un límite.
+  // ============================================================
+  try {
+    const lim = await verificarLimiteMensajes(cuenta.usuario_id);
+    if (lim.lleno) {
+      const yaNotif = await yaSeNotificoLimite(cuenta.id);
+      if (!yaNotif) {
+        // Mensaje al cliente (1 sola vez al hit)
+        try {
+          const { enviarParteTexto } = await import("./manejadorEnvio");
+          await enviarParteTexto(
+            sock,
+            cuenta.id,
+            conversacion.id,
+            jidParaEnviar,
+            mensajeFueraDeServicioCliente(cuenta),
+            prefijo,
+            "1/1",
+            0,
+          );
+        } catch {
+          /* ignorar — caemos al marcador igual */
+        }
+        // Marcador para no notificar de nuevo este mes
+        try {
+          const { insertarMensaje } = await import("../baseDatos");
+          await insertarMensaje(
+            cuenta.id,
+            conversacion.id,
+            "sistema",
+            "[limite_plan_alcanzado_mes]",
+            { tipo: "sistema" },
+          );
+        } catch {
+          /* ignorar */
+        }
+        // Alerta al operador privado (separada de la cuenta — fire and forget)
+        void enviarAlertaOperador(
+          cuenta,
+          `🚫 Límite mensual alcanzado (plan ${lim.plan.toUpperCase()}: ${lim.usados}/${lim.limite} mensajes IA).\n\n` +
+            `El agente NO está respondiendo a clientes nuevos. Subí de plan para reanudar:\n` +
+            `${urlApp()}/app/mi-cuenta/upgrade`,
+        );
+      }
+      console.warn(
+        `${prefijo} ⛔ límite mensual alcanzado (${lim.usados}/${lim.limite}). Skipeando respuesta IA.`,
+      );
+      return;
+    }
+    if (lim.cerca) {
+      const yaNotif = await yaSeNotificoCerca(cuenta.id);
+      if (!yaNotif) {
+        try {
+          const { insertarMensaje } = await import("../baseDatos");
+          await insertarMensaje(
+            cuenta.id,
+            conversacion.id,
+            "sistema",
+            "[limite_plan_cerca_mes]",
+            { tipo: "sistema" },
+          );
+        } catch {
+          /* ignorar */
+        }
+        void enviarAlertaOperador(
+          cuenta,
+          `⚠️ Tu cuenta llegó al 90% del límite mensual (${lim.usados}/${lim.limite} mensajes IA).\n\n` +
+            `Considerá subir de plan antes de quedarte sin servicio:\n` +
+            `${urlApp()}/app/mi-cuenta/upgrade`,
+        );
+      }
+      // No bloqueamos — solo advertimos.
+    }
+  } catch (errLim) {
+    // Si el chequeo de límites falla (DB caída, plan no existe, etc.) NO
+    // bloqueamos al usuario — preferible procesar de más que de menos.
+    console.warn(
+      `${prefijo} ⚠ check de límite falló (sigo igual):`,
+      errLim instanceof Error ? errLim.message : errLim,
+    );
+  }
+
   // Ventana de contexto literal — configurable por cuenta (default 20).
   // Mensajes anteriores (si memoria_largo_plazo=true) se condensan en
   // conversacion.resumen_contexto y se inyectan al system prompt.
@@ -116,18 +211,48 @@ export async function generarYEnviarRespuesta(
       idCuenta: cuenta.id,
       modelo: cuenta.modelo ?? "default",
     });
-    if (detalle.includes("401") || detalle.includes("invalid_api_key")) {
+    // Detectar tipo de error para clasificar nivel
+    const sinCreditos =
+      detalle.includes("429") || detalle.includes("quota");
+    const apiKeyInvalida =
+      detalle.includes("401") || detalle.includes("invalid_api_key");
+    const modeloMalo =
+      detalle.includes("model") && detalle.includes("not found");
+    if (apiKeyInvalida) {
       console.error(
         `${prefijo}   → OPENAI_API_KEY inválida o revocada. Verificá .env.local.`,
       );
-    } else if (detalle.includes("429") || detalle.includes("quota")) {
+    } else if (sinCreditos) {
       console.error(
         `${prefijo}   → Sin créditos en OpenAI o rate limit. Recargá saldo en https://platform.openai.com/account/billing`,
       );
-    } else if (detalle.includes("model") && detalle.includes("not found")) {
+    } else if (modeloMalo) {
       console.error(
         `${prefijo}   → Modelo "${cuenta.modelo ?? "default"}" no existe o tu cuenta no tiene acceso. Cambialo a 'gpt-4o-mini' en /configuracion → Comportamiento.`,
       );
+    }
+    // Log en DB visible desde panel admin (fire-and-forget)
+    try {
+      const { registrarEvento } = await import("../db/eventosLog");
+      registrarEvento({
+        cuentaId: cuenta.id,
+        // sin créditos / api key inválida son críticos: el SaaS no responde
+        nivel: sinCreditos || apiKeyInvalida ? "critical" : "error",
+        contexto: "openai.generarRespuesta",
+        mensaje: detalle.slice(0, 500),
+        metadata: {
+          modelo: cuenta.modelo ?? "default",
+          tipo: apiKeyInvalida
+            ? "api_key_invalida"
+            : sinCreditos
+              ? "sin_creditos_o_rate_limit"
+              : modeloMalo
+                ? "modelo_no_disponible"
+                : "otro",
+        },
+      });
+    } catch {
+      /* ignorar */
     }
     try {
       await sock.sendPresenceUpdate("paused", jidParaEnviar);

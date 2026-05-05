@@ -276,6 +276,22 @@ class GestorCuentas {
           console.log(
             `${prefijo} sesión cerrada por WhatsApp. Limpiando creds.`,
           );
+          // Log admin: loggedOut es crítico (cuenta sale de servicio
+          // hasta que el dueño escanee QR de nuevo). Fire-and-forget.
+          void (async () => {
+            try {
+              const { registrarEvento } = await import("../db/eventosLog");
+              registrarEvento({
+                cuentaId: cuenta.id,
+                nivel: "critical",
+                contexto: "baileys.gestor.loggedOut",
+                mensaje: `Sesión WhatsApp cerrada (código ${codigo}). Requiere re-escaneo de QR.`,
+                metadata: { etiqueta: cuenta.etiqueta, codigo },
+              });
+            } catch {
+              /* ignorar */
+            }
+          })();
           void actualizarEstadoCuenta(cuenta.id, {
             estado: "desconectado",
             cadena_qr: null,
@@ -354,6 +370,26 @@ class GestorCuentas {
         estado: "desconectado",
         cadena_qr: null,
       });
+      // Log admin: conflicto multi-instancia es crítico (cuenta fuera 15min).
+      void (async () => {
+        try {
+          const { registrarEvento } = await import("../db/eventosLog");
+          registrarEvento({
+            cuentaId,
+            nivel: "critical",
+            contexto: "baileys.gestor.conflicto440",
+            mensaje: `Conflicto multi-instancia detectado: ${UMBRAL_CONFLICTO440}+ desconexiones en ${VENTANA_CONFLICTO_MS / 1000}s. Reconexión pausada ${TIEMPO_PAUSA_CONFLICTO_MS / 60000} min.`,
+            metadata: {
+              etiqueta: entrada.etiqueta,
+              umbral: UMBRAL_CONFLICTO440,
+              ventana_ms: VENTANA_CONFLICTO_MS,
+              pausa_ms: TIEMPO_PAUSA_CONFLICTO_MS,
+            },
+          });
+        } catch {
+          /* ignorar */
+        }
+      })();
       // Email transaccional al dueño: la cuenta queda fuera 15min, vale avisar.
       void enviarWhatsAppCaido(cuentaId);
       // Registramos la pausa en el map dedicado y limpiamos el socket.

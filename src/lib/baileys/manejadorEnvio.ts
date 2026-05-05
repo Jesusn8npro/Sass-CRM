@@ -158,6 +158,18 @@ export async function enviarParteTexto(
       `${prefijo} error enviando parte ${numParte} texto (tras retry):`,
       err instanceof Error ? err.message : String(err),
     );
+    try {
+      const { registrarEvento } = await import("../db/eventosLog");
+      registrarEvento({
+        cuentaId,
+        nivel: "error",
+        contexto: "baileys.envio.texto",
+        mensaje: `Falla al enviar parte ${numParte} (tras retry): ${err instanceof Error ? err.message : String(err)}`,
+        metadata: { conversacionId, numParte },
+      });
+    } catch {
+      /* ignorar */
+    }
   }
 }
 
@@ -341,6 +353,18 @@ export async function enviarParteAudio(
     console.error(
       `${prefijo} error parte ${numParte} audio: ${detalle.slice(0, 200)}`,
     );
+    try {
+      const { registrarEvento } = await import("../db/eventosLog");
+      registrarEvento({
+        cuentaId: cuenta.id,
+        nivel: "error",
+        contexto: "baileys.envio.audio",
+        mensaje: `Falla al enviar parte ${numParte} audio (TTS o Baileys): ${detalle.slice(0, 400)}`,
+        metadata: { conversacionId, numParte },
+      });
+    } catch {
+      /* ignorar */
+    }
     return false;
   } finally {
     if (archivoTempEntrada) borrarTemporal(archivoTempEntrada);

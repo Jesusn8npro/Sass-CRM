@@ -306,6 +306,16 @@ export function SidebarPanel({
           />
         </SeccionNav>
 
+        <SeccionNav titulo="Ayuda">
+          <ItemNav
+            icono={<IconoConocimiento />}
+            etiqueta="Soporte"
+            href={`/app/cuentas/${idCuentaActual}/soporte`}
+            actual={pathname}
+            matchPaths={["/soporte"]}
+          />
+        </SeccionNav>
+
         {/* Sección de admin del SaaS — solo visible para los emails
             declarados en ADMIN_EMAIL. Si no es admin, nunca renderiza
             estos links. */}

@@ -19,7 +19,7 @@ const PLANES = [
     u: "/mes · cuenta",
     d: "Para emprendedores que ya venden por WhatsApp.",
     items: ["WhatsApp ilimitados", "Conversaciones ilimitadas", "Voz clonada + Vapi", "Multi-modelo (GPT-4o · Claude)", "Soporte prioritario"],
-    cta: "Probar 7 días",
+    cta: "Ver demostración en vivo",
     destacado: true,
   },
   {

@@ -13,6 +13,29 @@ interface Props {
   mensajeBienvenida: string;
 }
 
+// Cloudflare Turnstile site key — pública, exponer al cliente está OK.
+// Si no está configurada, el widget no se renderiza y el endpoint
+// server-side hace bypass del check (rate limit por IP sigue activo).
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
+
+interface TurnstileWindow extends Window {
+  turnstile?: {
+    render: (
+      el: HTMLElement,
+      opts: {
+        sitekey: string;
+        callback?: (token: string) => void;
+        "expired-callback"?: () => void;
+        "error-callback"?: () => void;
+        size?: "normal" | "compact" | "invisible";
+        appearance?: "always" | "execute" | "interaction-only";
+      },
+    ) => string;
+    reset: (widgetId?: string) => void;
+    getResponse: (widgetId?: string) => string;
+  };
+}
+
 /**
  * Chat sandbox del demo. Estado en memoria; al refrescar se pierde
  * (intencional para un demo público).
@@ -25,6 +48,54 @@ export function ChatDemo({ idIndustria, nombreAgente, mensajeBienvenida }: Props
   const [escribiendo, setEscribiendo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cajaRef = useRef<HTMLDivElement | null>(null);
+  const turnstileTokenRef = useRef<string>("");
+  const turnstileContainerRef = useRef<HTMLDivElement | null>(null);
+  const turnstileWidgetIdRef = useRef<string | null>(null);
+
+  // Cargar el script de Turnstile una sola vez si la site key está
+  // configurada. El widget se renderiza en modo "invisible" — no se
+  // ve, pero genera token cuando hace falta.
+  useEffect(() => {
+    if (!TURNSTILE_SITE_KEY) return;
+    if (typeof window === "undefined") return;
+    const w = window as TurnstileWindow;
+    if (w.turnstile) {
+      renderWidget();
+      return;
+    }
+    const yaCargado = document.querySelector(
+      'script[src*="challenges.cloudflare.com/turnstile"]',
+    );
+    if (yaCargado) return;
+    const script = document.createElement("script");
+    script.src =
+      "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.defer = true;
+    script.onload = renderWidget;
+    document.head.appendChild(script);
+
+    function renderWidget() {
+      const w2 = window as TurnstileWindow;
+      const ts = w2.turnstile;
+      if (!ts || !turnstileContainerRef.current) return;
+      if (turnstileWidgetIdRef.current) return;
+      turnstileWidgetIdRef.current = ts.render(turnstileContainerRef.current, {
+        sitekey: TURNSTILE_SITE_KEY,
+        size: "invisible",
+        appearance: "interaction-only",
+        callback: (token) => {
+          turnstileTokenRef.current = token;
+        },
+        "expired-callback": () => {
+          turnstileTokenRef.current = "";
+        },
+        "error-callback": () => {
+          turnstileTokenRef.current = "";
+        },
+      });
+    }
+  }, []);
 
   // Auto-scroll al final cuando llega un mensaje nuevo o cuando aparece
   // el indicador de escribiendo.
@@ -54,6 +125,7 @@ export function ChatDemo({ idIndustria, nombreAgente, mensajeBienvenida }: Props
           idIndustria,
           historial: mensajes,
           nuevoMensaje: texto,
+          turnstile_token: turnstileTokenRef.current,
         }),
       });
 
@@ -90,6 +162,11 @@ export function ChatDemo({ idIndustria, nombreAgente, mensajeBienvenida }: Props
 
   return (
     <div className="flex h-[60vh] min-h-[480px] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0A0A0A]">
+      {/* Turnstile widget invisible — solo se monta si la site key
+          está configurada vía NEXT_PUBLIC_TURNSTILE_SITE_KEY. */}
+      {TURNSTILE_SITE_KEY && (
+        <div ref={turnstileContainerRef} className="hidden" aria-hidden />
+      )}
       {/* Header tipo whatsapp */}
       <div className="flex items-center gap-3 border-b border-white/[0.06] bg-black/40 px-5 py-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/15 font-mono text-[11px] font-semibold text-emerald-300">

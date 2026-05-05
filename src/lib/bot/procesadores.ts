@@ -157,9 +157,33 @@ export async function procesarSeguimientosPendientes(): Promise<void> {
       } catch (err) {
         console.error(`[bot] error encolando seguimiento ${s.id}:`, err);
         await marcarSeguimientoFallido(s.id, "error al encolar");
+        try {
+          const { registrarEvento } = await import("@/lib/db/eventosLog");
+          registrarEvento({
+            cuentaId: s.cuenta_id,
+            nivel: "error",
+            contexto: "bot.seguimientos.encolar",
+            mensaje: err instanceof Error ? err.message : String(err),
+            metadata: { seguimientoId: s.id },
+          });
+        } catch {
+          /* ignorar */
+        }
       }
     } catch (err) {
       console.error(`[bot] error procesando seguimiento ${s.id}:`, err);
+      try {
+        const { registrarEvento } = await import("@/lib/db/eventosLog");
+        registrarEvento({
+          cuentaId: s.cuenta_id,
+          nivel: "error",
+          contexto: "bot.seguimientos.procesar",
+          mensaje: err instanceof Error ? err.message : String(err),
+          metadata: { seguimientoId: s.id },
+        });
+      } catch {
+        /* ignorar */
+      }
     }
   }
 }
@@ -209,6 +233,18 @@ export async function procesarRecordatoriosCitas(): Promise<void> {
       );
     } catch (err) {
       console.error(`[bot] error recordatorio cita ${cita.id}:`, err);
+      try {
+        const { registrarEvento } = await import("@/lib/db/eventosLog");
+        registrarEvento({
+          cuentaId: cita.cuenta_id,
+          nivel: "error",
+          contexto: "bot.recordatoriosCitas",
+          mensaje: err instanceof Error ? err.message : String(err),
+          metadata: { citaId: cita.id },
+        });
+      } catch {
+        /* ignorar */
+      }
     }
   }
 }
@@ -288,6 +324,18 @@ export async function procesarLlamadasProgramadas(): Promise<void> {
           lp.id,
           err instanceof Error ? err.message : "error desconocido",
         );
+      } catch {
+        /* ignorar */
+      }
+      try {
+        const { registrarEvento } = await import("@/lib/db/eventosLog");
+        registrarEvento({
+          cuentaId: lp.cuenta_id,
+          nivel: "error",
+          contexto: "bot.llamadasProgramadas",
+          mensaje: err instanceof Error ? err.message : String(err),
+          metadata: { llamadaProgramadaId: lp.id },
+        });
       } catch {
         /* ignorar */
       }

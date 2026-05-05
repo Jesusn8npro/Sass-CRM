@@ -15,9 +15,38 @@ interface Cuerpo {
   idIndustria?: unknown;
   historial?: unknown;
   nuevoMensaje?: unknown;
+  turnstile_token?: unknown;
 }
 
 const cliente = new OpenAI({ apiKey: process.env.OPENAI_API_KEY ?? "" });
+
+/**
+ * Valida un token de Cloudflare Turnstile contra siteverify. Retorna
+ * true si el token es válido. Si TURNSTILE_SECRET_KEY no está
+ * configurado, retorna true (no-op) — el rate limit por IP sigue activo
+ * como capa adicional de defensa.
+ */
+async function validarTurnstile(token: string, ip: string): Promise<boolean> {
+  const secret = process.env.TURNSTILE_SECRET_KEY;
+  if (!secret) return true; // CAPTCHA no habilitado — fallback a rate limit
+  if (!token) return false;
+  try {
+    const formData = new FormData();
+    formData.append("secret", secret);
+    formData.append("response", token);
+    formData.append("remoteip", ip);
+    const r = await fetch(
+      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+      { method: "POST", body: formData },
+    );
+    if (!r.ok) return false;
+    const j = (await r.json()) as { success?: boolean };
+    return !!j.success;
+  } catch (err) {
+    console.warn("[demo/chat] turnstile siteverify falló:", err);
+    return false;
+  }
+}
 
 /**
  * POST /api/demo/chat
@@ -51,6 +80,20 @@ export async function POST(req: NextRequest) {
   const nuevoMensaje =
     typeof cuerpo.nuevoMensaje === "string" ? cuerpo.nuevoMensaje.trim() : "";
   const historialRaw = Array.isArray(cuerpo.historial) ? cuerpo.historial : [];
+  const turnstileToken =
+    typeof cuerpo.turnstile_token === "string" ? cuerpo.turnstile_token : "";
+
+  // CAPTCHA invisible — solo se valida si TURNSTILE_SECRET_KEY está
+  // configurada. Sin la env var, el endpoint sigue funcionando (rate
+  // limit por IP es la capa de defensa). Si la key SÍ está y el token
+  // es inválido/falta, rechazamos.
+  const captchaOk = await validarTurnstile(turnstileToken, ip);
+  if (!captchaOk) {
+    return NextResponse.json(
+      { error: "Verificación anti-bot fallida. Recargá la página y probá de nuevo." },
+      { status: 403 },
+    );
+  }
 
   if (!idIndustria || !nuevoMensaje) {
     return NextResponse.json(

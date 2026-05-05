@@ -46,3 +46,4 @@ export * from "./autoSeguimientos";
 export * from "./conocimientoChunks";
 export * from "./meteringUso";
 export * from "./pagos";
+export * from "./eventosLog";
