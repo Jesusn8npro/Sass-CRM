@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { etiquetaTipoConsumo } from "@/lib/creditos/precios";
+import { PayPalCheckout, PayPalProvider } from "@/components/PayPalCheckout";
 
 interface FilaUso {
   id: string;
@@ -19,6 +20,14 @@ interface Saldo {
   proximo_reset: string | null;
 }
 
+interface Paquete {
+  id: string;
+  nombre: string;
+  creditos: number;
+  precio_usd: number;
+  destacado: boolean;
+}
+
 interface RespuestaApi {
   saldo: Saldo;
   uso: FilaUso[];
@@ -28,29 +37,26 @@ export default function PaginaCreditos() {
   const { idCuenta } = useParams<{ idCuenta: string }>();
   const [saldo, setSaldo] = useState<Saldo | null>(null);
   const [uso, setUso] = useState<FilaUso[]>([]);
+  const [paquetes, setPaquetes] = useState<Paquete[]>([]);
+  const [paqueteElegido, setPaqueteElegido] = useState<string | null>(null);
+  const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const [cargando, setCargando] = useState(true);
 
-  useEffect(() => {
+  async function cargarTodo() {
     if (!idCuenta) return;
-    let cancelado = false;
-    async function cargar() {
-      try {
-        const r = await fetch(`/api/cuentas/${idCuenta}/creditos`, {
-          cache: "no-store",
-        });
-        if (!r.ok) return;
-        const d = (await r.json()) as RespuestaApi;
-        if (cancelado) return;
-        setSaldo(d.saldo);
-        setUso(d.uso);
-      } finally {
-        if (!cancelado) setCargando(false);
-      }
-    }
-    cargar();
-    return () => {
-      cancelado = true;
-    };
+    const [creditos, paqs] = await Promise.all([
+      fetch(`/api/cuentas/${idCuenta}/creditos`, { cache: "no-store" }).then((r) => r.json() as Promise<RespuestaApi>),
+      fetch(`/api/billing/paquetes`, { cache: "no-store" }).then((r) => r.json() as Promise<{ paquetes: Paquete[] }>),
+    ]);
+    setSaldo(creditos.saldo);
+    setUso(creditos.uso);
+    setPaquetes(paqs.paquetes);
+    setCargando(false);
+  }
+
+  useEffect(() => {
+    void cargarTodo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idCuenta]);
 
   return (
@@ -85,6 +91,72 @@ export default function PaginaCreditos() {
             {" — "}
             {saldo.saldo_mensual} créditos/mes
           </p>
+        )}
+      </section>
+
+      {mensaje && (
+        <div
+          className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
+            mensaje.tipo === "ok"
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+              : "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+          }`}
+        >
+          {mensaje.texto}
+        </div>
+      )}
+
+      <section className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 md:p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="mb-4 flex items-baseline justify-between gap-2">
+          <h2 className="text-sm font-semibold">Recargar créditos</h2>
+          <span className="text-[10px] uppercase tracking-wider text-zinc-500">pago vía PayPal</span>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {paquetes.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setPaqueteElegido(p.id)}
+              className={`relative flex flex-col items-start gap-1 rounded-xl border p-4 text-left transition-all ${
+                paqueteElegido === p.id
+                  ? "border-emerald-500/60 bg-emerald-500/[0.06] shadow-[0_0_30px_-10px_rgba(52,211,153,0.5)]"
+                  : "border-zinc-200 bg-white hover:border-emerald-500/40 dark:border-zinc-800 dark:bg-zinc-950"
+              }`}
+            >
+              {p.destacado && (
+                <span className="absolute -top-2 right-3 rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+                  popular
+                </span>
+              )}
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                {p.nombre}
+              </span>
+              <span className="text-2xl font-bold tracking-tight">
+                {p.creditos}
+                <span className="ml-1 text-xs font-normal text-zinc-500">créditos</span>
+              </span>
+              <span className="font-mono text-sm text-emerald-600 dark:text-emerald-400">
+                ${p.precio_usd.toFixed(2)} USD
+              </span>
+            </button>
+          ))}
+        </div>
+        {paqueteElegido && (
+          <div className="mt-4 max-w-md">
+            <PayPalProvider modo="recarga">
+              <PayPalCheckout
+                modo="recarga"
+                identificador={paqueteElegido}
+                cuentaId={idCuenta}
+                onExito={(r) => {
+                  setMensaje({ tipo: "ok", texto: r.mensaje });
+                  setPaqueteElegido(null);
+                  void cargarTodo();
+                }}
+                onError={(m) => setMensaje({ tipo: "error", texto: m })}
+              />
+            </PayPalProvider>
+          </div>
         )}
       </section>
 

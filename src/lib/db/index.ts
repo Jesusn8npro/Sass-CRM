@@ -45,3 +45,4 @@ export * from "./leadsExtraidos";
 export * from "./autoSeguimientos";
 export * from "./conocimientoChunks";
 export * from "./meteringUso";
+export * from "./pagos";

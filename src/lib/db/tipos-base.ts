@@ -185,4 +185,10 @@ export interface UsuarioApp {
   rol: string; // owner | admin | etc.
   creado_en: string;
   actualizada_en: string;
+  estado_billing?: "activo" | "suspendido" | "impago" | "prueba";
+  pasarela?: "paypal" | "epayco" | null;
+  pasarela_customer_id?: string | null;
+  paypal_subscription_id?: string | null;
+  paypal_plan_id?: string | null;
+  vence_en?: string | null;
 }

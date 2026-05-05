@@ -13,6 +13,7 @@ const API_PUBLICA_ALLOWLIST = [
   "/api/wa-cloud/webhook",
   "/api/vapi/webhook",
   "/api/apify/webhook",
+  "/api/billing/paypal/webhook",
 ];
 
 export async function middleware(request: NextRequest) {
