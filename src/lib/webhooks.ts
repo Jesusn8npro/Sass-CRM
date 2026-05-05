@@ -11,8 +11,6 @@
  * en `webhooks_salientes.total_fallos` pero no fallan al caller.
  */
 
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
 import { crearClienteAdmin } from "./supabase/cliente-servidor";
 
 export type EventoWebhook =
@@ -155,8 +153,11 @@ async function urlSeguraParaWebhook(rawUrl: string): Promise<string | null> {
     return "host metadata interno";
   }
 
-  // Resolver TODAS las IPs y validar cada una. Si alguna es privada,
-  // bloqueamos.
+  // Imports dinámicos: node:dns y node:net son server-only. Se cargan
+  // acá adentro para que el bundler del cliente no intente incluirlos.
+  const { lookup } = await import("node:dns/promises");
+  const { isIP } = await import("node:net");
+
   const ips: string[] = isIP(host)
     ? [host]
     : (await lookup(host, { all: true, verbatim: true }).catch(() => []))
@@ -164,13 +165,13 @@ async function urlSeguraParaWebhook(rawUrl: string): Promise<string | null> {
 
   if (ips.length === 0) return "host sin resolución DNS";
   for (const ip of ips) {
-    if (esIpPrivada(ip)) return `IP privada/reservada (${ip})`;
+    if (esIpPrivada(ip, isIP)) return `IP privada/reservada (${ip})`;
   }
   return null;
 }
 
-function esIpPrivada(ip: string): boolean {
-  const v = isIP(ip);
+function esIpPrivada(ip: string, isIPFn: (s: string) => number): boolean {
+  const v = isIPFn(ip);
   if (v === 4) return esIpv4Privada(ip);
   if (v === 6) return esIpv6Privada(ip);
   return true;

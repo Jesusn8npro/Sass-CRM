@@ -10,7 +10,6 @@ import type {
   EstadoLead,
   MetricasCuenta,
   ModoConversacion,
-  RolMensaje,
 } from "./tipos";
 
 export async function obtenerMetricas(
@@ -42,12 +41,29 @@ export async function obtenerMetricas(
     datos_capturados: DatosCapturados;
   }>;
 
-  // Mensajes
-  const { data: msgs } = await db()
-    .from("mensajes")
-    .select("rol, creado_en")
-    .eq("cuenta_id", cuentaId);
-  const arrMsgs = (msgs ?? []) as Array<{ rol: RolMensaje; creado_en: string }>;
+  // Mensajes — usamos counts agregados en lugar de traer todas las filas
+  // (hay cuentas con 200k+ mensajes, cargarlas a memoria tira OOM).
+  // Sólo se trae detalle de los últimos 7 días para el gráfico por día.
+  const inicio7dISO = inicio7d.toISOString();
+  const inicioHoyISO = inicioHoy.toISOString();
+  const [
+    cntTotal,
+    cntUsuario,
+    cntAsistente,
+    cntHumano,
+    cntHoy,
+    cnt7d,
+    msgsRecientes,
+  ] = await Promise.all([
+    db().from("mensajes").select("id", { count: "exact", head: true }).eq("cuenta_id", cuentaId),
+    db().from("mensajes").select("id", { count: "exact", head: true }).eq("cuenta_id", cuentaId).eq("rol", "usuario"),
+    db().from("mensajes").select("id", { count: "exact", head: true }).eq("cuenta_id", cuentaId).eq("rol", "asistente"),
+    db().from("mensajes").select("id", { count: "exact", head: true }).eq("cuenta_id", cuentaId).eq("rol", "humano"),
+    db().from("mensajes").select("id", { count: "exact", head: true }).eq("cuenta_id", cuentaId).gte("creado_en", inicioHoyISO),
+    db().from("mensajes").select("id", { count: "exact", head: true }).eq("cuenta_id", cuentaId).gte("creado_en", inicio7dISO),
+    db().from("mensajes").select("creado_en").eq("cuenta_id", cuentaId).gte("creado_en", inicio7dISO),
+  ]);
+  const arrMsgsRecientes = (msgsRecientes.data ?? []) as Array<{ creado_en: string }>;
 
   // Etapas + count por etapa
   const etapas = await listarEtapas(cuentaId);
@@ -80,10 +96,8 @@ export async function obtenerMetricas(
 
   // Mensajes por día (últimos 7)
   const porDia = new Map<string, number>();
-  for (const m of arrMsgs) {
-    const d = new Date(m.creado_en);
-    if (d < inicio7d) continue;
-    const key = d.toISOString().slice(0, 10);
+  for (const m of arrMsgsRecientes) {
+    const key = m.creado_en.slice(0, 10);
     porDia.set(key, (porDia.get(key) ?? 0) + 1);
   }
   const mensajes_por_dia = Array.from(porDia.entries())
@@ -212,15 +226,12 @@ export async function obtenerMetricas(
     conversaciones_modo_ia: arrConvs.filter((c) => c.modo === "IA").length,
     conversaciones_modo_humano: arrConvs.filter((c) => c.modo === "HUMANO")
       .length,
-    mensajes_total: arrMsgs.length,
-    mensajes_recibidos: arrMsgs.filter((m) => m.rol === "usuario").length,
-    mensajes_enviados_bot: arrMsgs.filter((m) => m.rol === "asistente").length,
-    mensajes_enviados_humano: arrMsgs.filter((m) => m.rol === "humano").length,
-    mensajes_hoy: arrMsgs.filter((m) => new Date(m.creado_en) >= inicioHoy)
-      .length,
-    mensajes_ultimos_7d: arrMsgs.filter(
-      (m) => new Date(m.creado_en) >= inicio7d,
-    ).length,
+    mensajes_total: cntTotal.count ?? 0,
+    mensajes_recibidos: cntUsuario.count ?? 0,
+    mensajes_enviados_bot: cntAsistente.count ?? 0,
+    mensajes_enviados_humano: cntHumano.count ?? 0,
+    mensajes_hoy: cntHoy.count ?? 0,
+    mensajes_ultimos_7d: cnt7d.count ?? 0,
     emails_capturados: await contarContactosEmail(cuentaId),
     telefonos_capturados: await contarContactosTelefono(cuentaId),
     productos_total: productosTotal,
