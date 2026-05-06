@@ -116,6 +116,29 @@ export default async function PaginaPanel() {
                 </Link>
               </li>
             ))}
+            {/* Card siempre visible para crear cuenta nueva. El límite
+                del plan se valida en /app/cuentas/nueva (página dedicada
+                que muestra CTA de upgrade si está lleno). */}
+            <li>
+              <Link
+                href="/app/cuentas/nueva"
+                className="flex h-full items-center justify-center rounded-2xl border-2 border-dashed border-zinc-300 bg-zinc-50/50 p-5 transition-all hover:-translate-y-0.5 hover:border-emerald-500/60 hover:bg-emerald-50/40 dark:border-zinc-700 dark:bg-zinc-900/40 dark:hover:bg-emerald-500/[0.04]"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl border-2 border-dashed border-emerald-500/40 text-2xl text-emerald-600 dark:text-emerald-400">
+                    +
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-emerald-700 dark:text-emerald-300">
+                      Conectar otra cuenta
+                    </p>
+                    <p className="truncate text-xs text-zinc-500">
+                      Sumá un número de WhatsApp más
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            </li>
           </ul>
         )}
       </div>

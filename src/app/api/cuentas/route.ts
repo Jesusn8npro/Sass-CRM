@@ -8,7 +8,7 @@ import {
 } from "@/lib/baseDatos";
 import { arrancarBotEnProceso } from "@/lib/bot/cicloVida";
 import { calcularBotVivo } from "@/lib/latidoBot";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { esUsuarioAdmin, requerirSesion } from "@/lib/auth/sesion";
 import { obtenerPlan } from "@/lib/planes";
 
 export const dynamic = "force-dynamic";
@@ -77,10 +77,15 @@ export async function POST(req: NextRequest) {
   // Enforce de límite por plan: leemos el plan del usuario y comparamos
   // contra cuentas activas. Devolvemos 402 (Payment Required) cuando
   // hay que upgradear — el front muestra CTA al plan superior.
-  const usuario = await obtenerUsuarioApp(auth.id);
+  // Excepción: el admin de la plataforma (rol=admin_plataforma) tiene
+  // cupo ilimitado independiente del plan — bypass del check.
+  const [usuario, esAdmin] = await Promise.all([
+    obtenerUsuarioApp(auth.id),
+    esUsuarioAdmin(auth.id),
+  ]);
   const plan = obtenerPlan(usuario?.plan);
   const usadas = await contarCuentasDeUsuario(auth.id);
-  if (usadas >= plan.limite_cuentas) {
+  if (!esAdmin && usadas >= plan.limite_cuentas) {
     return NextResponse.json(
       {
         error: `Llegaste al límite de ${plan.limite_cuentas} cuenta(s) del plan ${plan.nombre}. Actualizá a un plan superior para crear más.`,

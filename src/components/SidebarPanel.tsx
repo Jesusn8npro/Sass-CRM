@@ -115,12 +115,8 @@ export function SidebarPanel({
           <div className="relative mt-3">
             <button
               type="button"
-              onClick={() =>
-                cuentas.length > 1 && setDropdownAbierto((o) => !o)
-              }
-              className={`flex w-full items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-left dark:border-zinc-800 dark:bg-zinc-900 ${
-                cuentas.length > 1 ? "hover:border-emerald-500/40" : ""
-              }`}
+              onClick={() => setDropdownAbierto((o) => !o)}
+              className="flex w-full items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-left transition-colors hover:border-emerald-500/40 dark:border-zinc-800 dark:bg-zinc-900"
             >
               <span
                 className={`h-2 w-2 shrink-0 rounded-full ${
@@ -141,12 +137,10 @@ export function SidebarPanel({
                   </p>
                 )}
               </div>
-              {cuentas.length > 1 && (
-                <span className="text-zinc-400">▾</span>
-              )}
+              <span className="text-zinc-400">▾</span>
             </button>
 
-            {dropdownAbierto && cuentas.length > 1 && (
+            {dropdownAbierto && (
               <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
                 {cuentas.map((c) => (
                   <button
@@ -167,6 +161,16 @@ export function SidebarPanel({
                     <span className="truncate">{c.etiqueta}</span>
                   </button>
                 ))}
+                {/* Separador + nueva cuenta — siempre visible */}
+                <div className="my-1 border-t border-zinc-200 dark:border-zinc-700" />
+                <Link
+                  href="/app/cuentas/nueva"
+                  onClick={() => setDropdownAbierto(false)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-500/5"
+                >
+                  <span className="text-base leading-none">+</span>
+                  <span>Conectar otra cuenta</span>
+                </Link>
               </div>
             )}
           </div>
