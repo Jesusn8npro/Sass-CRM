@@ -219,4 +219,8 @@ export interface UsuarioApp {
   paypal_subscription_id?: string | null;
   paypal_plan_id?: string | null;
   vence_en?: string | null;
+  /** Cuentas WhatsApp extra otorgadas por el admin sobre el cupo del plan.
+   *  Default 0. Solo el admin puede modificar. Límite efectivo del usuario
+   *  = plan.limite_cuentas + cuentas_extra_admin. */
+  cuentas_extra_admin?: number;
 }

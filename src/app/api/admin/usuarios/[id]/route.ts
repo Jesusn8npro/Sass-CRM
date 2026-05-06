@@ -45,10 +45,12 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
 }
 
 interface CuerpoPatch {
-  /** "suspender" | "reactivar" | "dar_saldo" */
+  /** "suspender" | "reactivar" | "dar_saldo" | "set_cuentas_extra" */
   accion: string;
   cuentaId?: string;
   cantidadCreditos?: number;
+  /** Para set_cuentas_extra: cantidad nueva de cuentas extra (0-100). */
+  cuentasExtra?: number;
 }
 
 /**
@@ -98,6 +100,18 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     }
     await agregarCreditos(cuerpo.cuentaId, cantidad);
     return NextResponse.json({ ok: true });
+  }
+  if (cuerpo.accion === "set_cuentas_extra") {
+    const extra = Number(cuerpo.cuentasExtra);
+    if (!Number.isFinite(extra) || extra < 0 || extra > 100) {
+      return NextResponse.json(
+        { error: "cuentasExtra debe ser un entero entre 0 y 100" },
+        { status: 400 },
+      );
+    }
+    const { setCuentasExtraAdmin } = await import("@/lib/db/usuarios");
+    const actualizado = await setCuentasExtraAdmin(id, Math.floor(extra));
+    return NextResponse.json({ ok: true, usuario: actualizado });
   }
 
   return NextResponse.json({ error: "Acción inválida" }, { status: 400 });

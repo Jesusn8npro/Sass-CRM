@@ -32,9 +32,12 @@ export default async function PaginaNuevaCuenta() {
     contarCuentasDeUsuario(auth.id),
   ]);
   const plan = obtenerPlan(usuario?.plan);
-  const limite = Number.isFinite(plan.limite_cuentas)
+  const limiteBase = Number.isFinite(plan.limite_cuentas)
     ? plan.limite_cuentas
     : null;
+  const extraAdmin = Math.max(0, usuario?.cuentas_extra_admin ?? 0);
+  // Límite efectivo = plan + extras del admin. null = ilimitado.
+  const limite = limiteBase === null ? null : limiteBase + extraAdmin;
   const lleno = !esAdmin && limite !== null && usadas >= limite;
 
   return (
@@ -77,6 +80,13 @@ export default async function PaginaNuevaCuenta() {
                   </span>
                 )}
               </p>
+              {extraAdmin > 0 && !esAdmin && (
+                <p className="mt-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">
+                  Incluye <strong>+{extraAdmin}</strong> cuenta
+                  {extraAdmin === 1 ? "" : "s"} extra otorgada
+                  {extraAdmin === 1 ? "" : "s"} por el admin
+                </p>
+              )}
             </div>
             {!esAdmin && limite !== null && (
               <Link

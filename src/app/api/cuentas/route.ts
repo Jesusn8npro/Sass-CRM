@@ -77,21 +77,35 @@ export async function POST(req: NextRequest) {
   // Enforce de límite por plan: leemos el plan del usuario y comparamos
   // contra cuentas activas. Devolvemos 402 (Payment Required) cuando
   // hay que upgradear — el front muestra CTA al plan superior.
-  // Excepción: el admin de la plataforma (rol=admin_plataforma) tiene
-  // cupo ilimitado independiente del plan — bypass del check.
+  // Excepción 1: el admin de la plataforma (rol=admin_plataforma) tiene
+  //   cupo ilimitado independiente del plan — bypass del check.
+  // Excepción 2: el admin puede otorgar cuentas extra al usuario vía
+  //   usuarios.cuentas_extra_admin. Límite efectivo = plan + extra.
   const [usuario, esAdmin] = await Promise.all([
     obtenerUsuarioApp(auth.id),
     esUsuarioAdmin(auth.id),
   ]);
   const plan = obtenerPlan(usuario?.plan);
   const usadas = await contarCuentasDeUsuario(auth.id);
-  if (!esAdmin && usadas >= plan.limite_cuentas) {
+  const extraAdmin = Math.max(0, usuario?.cuentas_extra_admin ?? 0);
+  const limiteBase = Number.isFinite(plan.limite_cuentas)
+    ? plan.limite_cuentas
+    : Number.POSITIVE_INFINITY;
+  const limiteEfectivo = Number.isFinite(limiteBase)
+    ? (limiteBase as number) + extraAdmin
+    : Number.POSITIVE_INFINITY;
+  if (!esAdmin && usadas >= limiteEfectivo) {
     return NextResponse.json(
       {
-        error: `Llegaste al límite de ${plan.limite_cuentas} cuenta(s) del plan ${plan.nombre}. Actualizá a un plan superior para crear más.`,
+        error:
+          extraAdmin > 0
+            ? `Llegaste al límite de ${limiteEfectivo} cuenta(s) (plan ${plan.nombre} + ${extraAdmin} extra del admin). Actualizá de plan o pedile más cupo al admin.`
+            : `Llegaste al límite de ${plan.limite_cuentas} cuenta(s) del plan ${plan.nombre}. Actualizá a un plan superior para crear más.`,
         codigo: "limite_plan_alcanzado",
         plan_actual: plan.id,
-        limite: plan.limite_cuentas,
+        limite: limiteEfectivo,
+        limite_plan: plan.limite_cuentas,
+        cuentas_extra_admin: extraAdmin,
         usadas,
       },
       { status: 402 },

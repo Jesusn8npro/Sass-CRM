@@ -77,6 +77,29 @@ export async function marcarBillingUsuario(
   if (error) lanzar(error, "marcarBillingUsuario");
 }
 
+/**
+ * (ADMIN ONLY) Setea las cuentas WhatsApp adicionales otorgadas
+ * manualmente al usuario sobre el cupo de su plan. El check del
+ * límite en /api/cuentas suma plan.limite_cuentas + cuentas_extra_admin.
+ *
+ * Validación de admin la hace el caller (route handler con
+ * requerirAdmin) — esta función NO valida.
+ */
+export async function setCuentasExtraAdmin(
+  usuarioId: string,
+  cantidad: number,
+): Promise<UsuarioApp | null> {
+  const valor = Math.max(0, Math.min(100, Math.floor(cantidad)));
+  const { data, error } = await db()
+    .from("usuarios")
+    .update({ cuentas_extra_admin: valor })
+    .eq("id", usuarioId)
+    .select()
+    .single();
+  if (error) lanzar(error, "setCuentasExtraAdmin");
+  return (data as UsuarioApp) ?? null;
+}
+
 export async function obtenerUsuarioPorSubscriptionId(
   subId: string,
 ): Promise<UsuarioApp | null> {
