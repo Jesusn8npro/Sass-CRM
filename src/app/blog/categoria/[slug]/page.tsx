@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import {
@@ -85,20 +86,28 @@ export default async function PaginaCategoria({ params }: Props) {
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2">
-            {articulos.map((a) => (
+            {articulos.map((a, i) => (
               <Link
                 key={a.id}
                 href={`/blog/${a.slug}`}
+                style={{
+                  contentVisibility: "auto",
+                  containIntrinsicSize: "0 380px",
+                }}
                 className="group rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden hover:border-emerald-500 transition flex flex-col"
               >
                 {a.imagen_portada_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={a.imagen_portada_url}
-                    alt={a.imagen_portada_alt ?? a.titulo}
-                    className="w-full aspect-video object-cover"
-                    loading="lazy"
-                  />
+                  <div className="relative w-full aspect-video bg-zinc-100 dark:bg-zinc-800">
+                    <Image
+                      src={a.imagen_portada_url}
+                      alt={a.imagen_portada_alt ?? a.titulo}
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 480px"
+                      loading={i < 2 ? "eager" : "lazy"}
+                      priority={i < 2}
+                      className="object-cover"
+                    />
+                  </div>
                 ) : (
                   <div className="w-full aspect-video bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white text-3xl font-bold">
                     {a.titulo[0]?.toUpperCase()}

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { Metadata } from "next";
 import {
   listarArticulosPublicados,
@@ -82,8 +83,9 @@ export default async function PaginaBlogIndice() {
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2">
-            {articulos.map((a) => (
-              <TarjetaArticulo key={a.id} articulo={a} />
+            {articulos.map((a, i) => (
+              // Las 2 primeras tarjetas son LCP candidates → eager+priority
+              <TarjetaArticulo key={a.id} articulo={a} prioridad={i < 2} />
             ))}
           </div>
         )}
@@ -92,20 +94,37 @@ export default async function PaginaBlogIndice() {
   );
 }
 
-function TarjetaArticulo({ articulo }: { articulo: ArticuloConCategoria }) {
+function TarjetaArticulo({
+  articulo,
+  prioridad,
+}: {
+  articulo: ArticuloConCategoria;
+  prioridad?: boolean;
+}) {
   return (
     <Link
       href={`/blog/${articulo.slug}`}
+      // content-visibility: auto → el browser skipea render de tarjetas
+      // fuera del viewport hasta scrollear cerca. Mejora INP en listados
+      // largos. La altura intrinsic-size evita salto de layout.
+      style={{
+        contentVisibility: "auto",
+        containIntrinsicSize: "0 380px",
+      }}
       className="group rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden hover:border-emerald-500 transition flex flex-col"
     >
       {articulo.imagen_portada_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={articulo.imagen_portada_url}
-          alt={articulo.imagen_portada_alt ?? articulo.titulo}
-          className="w-full aspect-video object-cover bg-zinc-100 dark:bg-zinc-800"
-          loading="lazy"
-        />
+        <div className="relative w-full aspect-video bg-zinc-100 dark:bg-zinc-800">
+          <Image
+            src={articulo.imagen_portada_url}
+            alt={articulo.imagen_portada_alt ?? articulo.titulo}
+            fill
+            sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 480px"
+            loading={prioridad ? "eager" : "lazy"}
+            priority={prioridad}
+            className="object-cover"
+          />
+        </div>
       ) : (
         <div className="w-full aspect-video bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white text-4xl font-bold">
           {articulo.titulo[0]?.toUpperCase() ?? "B"}
