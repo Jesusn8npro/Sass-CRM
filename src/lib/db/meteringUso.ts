@@ -2,6 +2,7 @@ import { db, lanzar } from "./cliente";
 
 export type ProveedorMetering =
   | "openai"
+  | "anthropic"
   | "vapi"
   | "elevenlabs"
   | "whisper"

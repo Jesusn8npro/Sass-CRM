@@ -24,7 +24,9 @@ import {
   ejecutarComandoAdmin,
   parsearComandoAdmin,
 } from "../admin/comandos";
-import { formatearAyuda } from "../admin/reportesFormato";
+import { conversarConAdminNL } from "../admin/conversacionAdmin";
+import { calcularCostoAnthropicUSD, MODELO_ANTHROPIC_DEFAULT } from "../anthropic";
+import { registrarUso } from "../db/meteringUso";
 
 export interface ParamsManejoSuperAdmin {
   /** Socket activo de la cuenta receptora */
@@ -52,29 +54,40 @@ export interface ParamsManejoSuperAdmin {
 export async function manejarMensajeSuperAdmin(
   params: ParamsManejoSuperAdmin,
 ): Promise<void> {
-  const { cuentaId, conversacion, texto, superAdmin, prefijo } = params;
+  const { texto, superAdmin, prefijo } = params;
 
   console.log(
     `${prefijo} 👑 super-admin ${superAdmin.email} → "${texto.slice(0, 80)}"`,
   );
 
+  // Estrategia dual:
+  //   1. Primero intentamos parsear como comando slash determinístico
+  //      (/post, /reporte, /publicar, etc). Si matchea, ejecutamos el
+  //      handler determinístico — rápido, sin costo IA, fallback safe.
+  //   2. Si NO matchea, desviamos a Claude Haiku 4.5 con tool calling
+  //      para conversación en lenguaje natural.
+  //
+  // El Patrón puede usar cualquiera de los dos modos indistinto. Los
+  // slash commands son la red de seguridad si Claude se cae o si hay
+  // que ejecutar algo crítico sin riesgo de mala interpretación.
   const cmd = parsearComandoAdmin(texto);
 
-  // Comando no reconocido → mandar ayuda
-  if (!cmd) {
-    const ayuda = formatearAyuda();
-    await responderAdmin(params, ayuda);
-    await registrarAccionAdmin({
-      superAdminId: superAdmin.id,
-      origen: "whatsapp",
-      accion: "comando_desconocido",
-      payload: { texto: texto.slice(0, 500) },
-      resultado: null,
-    });
+  if (cmd) {
+    await procesarComandoSlash(params, cmd);
     return;
   }
 
-  // Comando válido → ejecutar y responder
+  // No matcheó ningún slash → conversación natural con Claude
+  await procesarConversacionNatural(params);
+}
+
+async function procesarComandoSlash(
+  params: ParamsManejoSuperAdmin,
+  cmd: ReturnType<typeof parsearComandoAdmin>,
+): Promise<void> {
+  if (!cmd) return;
+  const { superAdmin, prefijo } = params;
+
   const inicio = Date.now();
   let respuesta: string;
   let resultado: Record<string, unknown>;
@@ -96,13 +109,93 @@ export async function manejarMensajeSuperAdmin(
 
   await responderAdmin(params, respuesta);
 
-  // Audit trail — fire and forget
   void registrarAccionAdmin({
     superAdminId: superAdmin.id,
     origen: "whatsapp",
     accion: cmd.comando,
-    payload: { args: cmd.args, cuenta_id: cuentaId, conv_id: conversacion.id },
+    payload: {
+      args: cmd.args,
+      cuenta_id: params.cuentaId,
+      conv_id: params.conversacion.id,
+    },
     resultado: { ...resultado, ms },
+    error,
+  });
+}
+
+async function procesarConversacionNatural(
+  params: ParamsManejoSuperAdmin,
+): Promise<void> {
+  const { cuentaId, conversacion, texto, superAdmin, prefijo } = params;
+
+  const inicio = Date.now();
+  let respuesta = "";
+  let tokensIn = 0;
+  let tokensOut = 0;
+  let toolsEjecutadas = 0;
+  let nombresTools: string[] = [];
+  let error: string | null = null;
+
+  try {
+    const r = await conversarConAdminNL({
+      conversacionId: conversacion.id,
+      textoEntrante: texto,
+      superAdmin,
+    });
+    respuesta = r.respuesta;
+    tokensIn = r.tokensIn;
+    tokensOut = r.tokensOut;
+    toolsEjecutadas = r.toolsEjecutadas;
+    nombresTools = r.nombresTools;
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
+    console.error(`${prefijo} error en conversación NL admin:`, err);
+    respuesta =
+      `❌ Patrón, no pude procesar tu mensaje con el agente IA.\n\n` +
+      `Detalle: ${error.slice(0, 200)}\n\n` +
+      `Probá con un slash command (escribí "ayuda" para ver la lista).`;
+  }
+
+  const ms = Date.now() - inicio;
+  await responderAdmin(params, respuesta);
+
+  // Metering del consumo Anthropic (si no fue error puro)
+  if (!error && (tokensIn > 0 || tokensOut > 0)) {
+    registrarUso({
+      cuenta_id: cuentaId,
+      proveedor: "anthropic",
+      modelo: MODELO_ANTHROPIC_DEFAULT,
+      tokens_in: tokensIn,
+      tokens_out: tokensOut,
+      costo_usd: calcularCostoAnthropicUSD(
+        MODELO_ANTHROPIC_DEFAULT,
+        tokensIn,
+        tokensOut,
+      ),
+      metadata: {
+        tipo: "agente_admin_nl",
+        tools: nombresTools,
+        ms,
+      },
+    });
+  }
+
+  void registrarAccionAdmin({
+    superAdminId: superAdmin.id,
+    origen: "whatsapp",
+    accion: "conversacion_natural",
+    payload: {
+      texto: texto.slice(0, 500),
+      cuenta_id: cuentaId,
+      conv_id: conversacion.id,
+    },
+    resultado: {
+      ms,
+      tokens_in: tokensIn,
+      tokens_out: tokensOut,
+      tools_ejecutadas: toolsEjecutadas,
+      tools: nombresTools,
+    },
     error,
   });
 }

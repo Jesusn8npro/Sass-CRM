@@ -43,6 +43,7 @@ function SidebarAdmin({ emailAdmin }: { emailAdmin: string }) {
     { href: "/app/admin", label: "Inicio", clave: "inicio" },
     { href: "/app/admin/usuarios", label: "Usuarios", clave: "usuarios" },
     { href: "/app/admin/blog", label: "Blog", clave: "blog" },
+    { href: "/app/admin/agente-admin", label: "Agente Admin", clave: "agente" },
     { href: "/app/admin/ingresos", label: "Ingresos", clave: "ingresos" },
     { href: "/app/admin/logs", label: "Logs", clave: "logs" },
   ];

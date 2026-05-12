@@ -260,6 +260,23 @@ export function registrarManejadores(
           continue;
         }
 
+        // ============================================================
+        // CANAL ADMIN DEDICADO: si esta cuenta está marcada como
+        // panel admin, solo procesamos mensajes del super-admin global.
+        // Cualquier otro remitente se ignora SILENCIOSAMENTE — ni se
+        // guarda mensaje, ni se crea conversación, ni se responde.
+        // Esto blinda al canal admin de exposición externa.
+        // ============================================================
+        if (cuenta.es_panel_admin) {
+          const admin = await obtenerSuperAdminPorTelefono(telefonoMostrable);
+          if (!admin) {
+            console.log(
+              `${prefijo} 🚫 cuenta panel-admin recibió mensaje de no-admin (${telefonoMostrable}) — ignorado silencioso`,
+            );
+            continue;
+          }
+        }
+
         // ---- Procesar contenido del mensaje ----
         // Primero intentar texto plano, después media (audio/imagen/etc)
         const textoPlano = extraerTexto(msg.message);

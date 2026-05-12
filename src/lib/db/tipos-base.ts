@@ -197,6 +197,12 @@ export interface Cuenta {
   /** Si true, el agente puede usar emojis con moderación. Si false (default),
    *  NUNCA usa emojis — tono más profesional. */
   usar_emojis: boolean;
+  /** Si true, esta cuenta es el canal admin global del super-admin.
+   *  El manejador Baileys solo procesa mensajes entrantes si el remitente
+   *  está en `super_admins`; los demás se ignoran silenciosos. Permite
+   *  tener un número WhatsApp dedicado al patrón sin exponer el bot a
+   *  desconocidos. Migración 21. */
+  es_panel_admin: boolean;
   creada_en: string;
   actualizada_en: string;
 }

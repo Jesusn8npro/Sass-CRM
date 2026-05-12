@@ -218,3 +218,59 @@ export async function listarCuentasDeUsuarioAdmin(
   if (error) lanzar(error, "listarCuentasDeUsuarioAdmin");
   return (data ?? []) as Cuenta[];
 }
+
+/**
+ * Devuelve la cuenta marcada actualmente como `es_panel_admin = true`.
+ * Solo debería haber UNA cuenta panel admin a la vez (la lógica de
+ * marcado garantiza eso). Si no hay ninguna, devuelve null.
+ */
+export async function obtenerCuentaPanelAdmin(): Promise<Cuenta | null> {
+  const { data, error } = await db()
+    .from("cuentas")
+    .select("*")
+    .eq("es_panel_admin", true)
+    .eq("esta_archivada", false)
+    .limit(1)
+    .maybeSingle();
+  if (error) lanzar(error, "obtenerCuentaPanelAdmin");
+  return (data ?? null) as Cuenta | null;
+}
+
+/**
+ * Marca una cuenta como canal admin global. Garantiza exclusividad:
+ * primero desmarca cualquier otra cuenta que tuviera el flag y después
+ * marca la nueva. Operación idempotente — si la cuenta ya era panel
+ * admin, no hace nada extra.
+ */
+export async function marcarCuentaComoPanelAdmin(
+  cuentaId: string,
+): Promise<void> {
+  // Desmarcar TODAS las cuentas (incluida la archivada, por las dudas)
+  const { error: errDesmarca } = await db()
+    .from("cuentas")
+    .update({ es_panel_admin: false })
+    .eq("es_panel_admin", true)
+    .neq("id", cuentaId);
+  if (errDesmarca) lanzar(errDesmarca, "marcarCuentaComoPanelAdmin:desmarcar");
+
+  // Marcar la nueva
+  const { error: errMarca } = await db()
+    .from("cuentas")
+    .update({ es_panel_admin: true })
+    .eq("id", cuentaId);
+  if (errMarca) lanzar(errMarca, "marcarCuentaComoPanelAdmin:marcar");
+}
+
+/**
+ * Quita el flag de panel admin de una cuenta. Si no era panel admin,
+ * el update no afecta filas — no es error.
+ */
+export async function desmarcarCuentaComoPanelAdmin(
+  cuentaId: string,
+): Promise<void> {
+  const { error } = await db()
+    .from("cuentas")
+    .update({ es_panel_admin: false })
+    .eq("id", cuentaId);
+  if (error) lanzar(error, "desmarcarCuentaComoPanelAdmin");
+}
