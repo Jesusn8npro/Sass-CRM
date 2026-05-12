@@ -7,7 +7,7 @@
  * server-side ya hacen fetch directo a DB sin pasar por acá.
  */
 import { NextResponse } from "next/server";
-import { requerirSuperAdmin } from "@/lib/admin/sesion";
+import { requerirAdmin } from "@/lib/auth/sesion";
 import {
   obtenerMetricasGlobales,
   listarCuentasCaidas,
@@ -16,8 +16,8 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const sesion = await requerirSuperAdmin();
-  if (sesion instanceof NextResponse) return sesion;
+  const auth = await requerirAdmin();
+  if (auth instanceof NextResponse) return auth;
 
   try {
     const [metricas, caidas] = await Promise.all([

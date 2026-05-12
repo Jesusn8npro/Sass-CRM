@@ -3,10 +3,11 @@
  * POST /api/admin/blog/articulos  — crear artículo manual
  */
 import { NextRequest, NextResponse } from "next/server";
-import { requerirSuperAdmin } from "@/lib/admin/sesion";
+import { requerirAdmin } from "@/lib/auth/sesion";
 import {
   crearArticulo,
   listarTodosLosArticulos,
+  obtenerSuperAdminPorEmail,
   registrarAccionAdmin,
   type EstadoArticulo,
 } from "@/lib/baseDatos";
@@ -16,8 +17,8 @@ import { calcularTiempoLectura } from "@/lib/blog/markdown";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const sesion = await requerirSuperAdmin();
-  if (sesion instanceof NextResponse) return sesion;
+  const auth = await requerirAdmin();
+  if (auth instanceof NextResponse) return auth;
 
   const { searchParams } = new URL(req.url);
   const estadoRaw = searchParams.get("estado");
@@ -39,8 +40,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const sesion = await requerirSuperAdmin();
-  if (sesion instanceof NextResponse) return sesion;
+  const auth = await requerirAdmin();
+  if (auth instanceof NextResponse) return auth;
 
   let body: Record<string, unknown>;
   try {
@@ -77,18 +78,23 @@ export async function POST(req: NextRequest) {
       seo_keywords: Array.isArray(body.seo_keywords)
         ? (body.seo_keywords as string[])
         : [],
-      autor_nombre: (body.autor_nombre as string) || sesion.email,
-      autor_email: sesion.email,
+      autor_nombre: (body.autor_nombre as string) || auth.email,
+      autor_email: auth.email,
       tiempo_lectura_min: tiempo,
       generado_por: "humano",
     });
 
-    void registrarAccionAdmin({
-      superAdminId: sesion.superAdmin.id,
-      origen: "panel",
-      accion: "blog_articulo_crear",
-      payload: { articulo_id: articulo.id, slug: articulo.slug },
-    });
+    // Audit trail solo si el admin también está en super_admins
+    // (admin_acciones requiere super_admin_id NOT NULL).
+    const sa = await obtenerSuperAdminPorEmail(auth.email);
+    if (sa) {
+      void registrarAccionAdmin({
+        superAdminId: sa.id,
+        origen: "panel",
+        accion: "blog_articulo_crear",
+        payload: { articulo_id: articulo.id, slug: articulo.slug },
+      });
+    }
 
     return NextResponse.json({ articulo }, { status: 201 });
   } catch (e) {

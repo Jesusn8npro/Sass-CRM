@@ -1,11 +1,5 @@
 "use client";
 
-/**
- * Editor cliente del artículo (CRUD + publicar/archivar/eliminar).
- *
- * Diseño minimalista: textarea para markdown, inputs para metadata SEO,
- * select para categoría, y 4 botones grandes para acciones.
- */
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
@@ -89,7 +83,7 @@ export function EditorArticulo({
           .filter((k) => k.length > 0),
       });
       if (ok) {
-        setFeedback("Guardado ✓");
+        setFeedback("guardado ✓");
         router.refresh();
       }
     });
@@ -100,7 +94,7 @@ export function EditorArticulo({
     startTransition(async () => {
       const ok = await llamarApi({ accion: "publicar" });
       if (ok) {
-        setFeedback("Publicado ✓");
+        setFeedback("publicado ✓");
         router.refresh();
       }
     });
@@ -111,7 +105,7 @@ export function EditorArticulo({
     startTransition(async () => {
       const ok = await llamarApi({ accion: "archivar" });
       if (ok) {
-        setFeedback("Archivado ✓");
+        setFeedback("archivado ✓");
         router.refresh();
       }
     });
@@ -128,190 +122,208 @@ export function EditorArticulo({
         setError(j?.error || `HTTP ${r.status}`);
         return;
       }
-      router.push("/admin/blog");
+      router.push("/app/admin/blog");
     });
   }
 
+  const inputClase =
+    "w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none dark:border-white/[0.08] dark:bg-white/[0.02] dark:text-white dark:placeholder:text-white/30";
+  const botonAccion =
+    "rounded-full px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.22em] transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs text-zinc-500 font-mono">/{articulo.slug}</p>
-          <h2 className="text-xl font-bold">Editor</h2>
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-300">
+            // blog · editor
+          </p>
+          <h1 className="font-display mt-1 text-3xl italic leading-tight text-zinc-900 dark:text-white">
+            {articulo.estado === "publicado" ? "Publicado" : articulo.estado === "borrador" ? "Borrador" : "Archivado"}
+          </h1>
+          <p className="font-mono text-[10px] text-zinc-400 dark:text-white/35">
+            /{articulo.slug}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <a
             href={`/blog/${articulo.slug}`}
             target="_blank"
             rel="noreferrer"
-            className="px-3 py-1.5 text-sm rounded-lg bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300"
+            className={`${botonAccion} border border-zinc-200 text-zinc-700 hover:border-zinc-400 dark:border-white/15 dark:text-white/70 dark:hover:border-white/30`}
           >
-            👁 Preview
+            👁 preview
           </a>
           <button
             onClick={guardar}
             disabled={pending}
-            className="px-4 py-1.5 text-sm rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-50"
+            className={`${botonAccion} bg-emerald-600 text-white hover:bg-emerald-700`}
           >
-            Guardar cambios
+            guardar
           </button>
           {articulo.estado === "borrador" && (
             <button
               onClick={publicar}
               disabled={pending}
-              className="px-4 py-1.5 text-sm rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50"
+              className={`${botonAccion} bg-blue-600 text-white hover:bg-blue-700`}
             >
-              📢 Publicar
+              📢 publicar
             </button>
           )}
           {articulo.estado === "publicado" && (
             <button
               onClick={archivar}
               disabled={pending}
-              className="px-4 py-1.5 text-sm rounded-lg bg-amber-500 text-white font-medium hover:bg-amber-600 disabled:opacity-50"
+              className={`${botonAccion} bg-amber-500 text-white hover:bg-amber-600`}
             >
-              📦 Archivar
+              📦 archivar
             </button>
           )}
           <button
             onClick={eliminar}
             disabled={pending}
-            className="px-4 py-1.5 text-sm rounded-lg bg-rose-600 text-white font-medium hover:bg-rose-700 disabled:opacity-50"
+            className={`${botonAccion} bg-red-600 text-white hover:bg-red-700`}
           >
-            🗑 Eliminar
+            🗑 eliminar
           </button>
         </div>
-      </div>
+      </header>
 
       {feedback && (
-        <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 text-sm">
+        <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 font-mono text-xs text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300">
           {feedback}
         </div>
       )}
       {error && (
-        <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/30 text-rose-700 text-sm">
+        <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 font-mono text-xs text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">
           {error}
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Contenido (col 2) */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="space-y-4 lg:col-span-2">
           <input
             type="text"
             value={estado.titulo}
             onChange={(e) => actualizar("titulo", e.target.value)}
             placeholder="Título"
-            className="w-full px-4 py-3 rounded-lg border bg-white dark:bg-zinc-900 border-zinc-300 text-2xl font-bold"
+            className={`${inputClase} font-display text-2xl italic`}
           />
           <textarea
             value={estado.resumen}
             onChange={(e) => actualizar("resumen", e.target.value)}
             rows={3}
             placeholder="Resumen / excerpt (30-500 chars)"
-            className="w-full px-4 py-2 rounded-lg border bg-white dark:bg-zinc-900 border-zinc-300 text-sm"
+            className={inputClase}
           />
           <textarea
             value={estado.contenido_md}
             onChange={(e) => actualizar("contenido_md", e.target.value)}
             rows={28}
-            placeholder="Contenido en Markdown..."
-            className="w-full px-4 py-3 rounded-lg border bg-white dark:bg-zinc-900 border-zinc-300 font-mono text-sm"
+            placeholder="Contenido en Markdown…"
+            className={`${inputClase} font-mono`}
           />
         </div>
 
         {/* Sidebar (col 1) */}
-        <div className="space-y-4 text-sm">
-          <div>
-            <label className="block font-medium mb-1">Categoría</label>
+        <aside className="space-y-4 text-sm">
+          <Campo etiqueta="// categoría">
             <select
               value={estado.categoria_id}
               onChange={(e) => actualizar("categoria_id", e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border bg-white dark:bg-zinc-900 border-zinc-300"
+              className={inputClase}
             >
-              <option value="">Sin categoría</option>
+              <option value="">sin categoría</option>
               {categorias.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nombre}
                 </option>
               ))}
             </select>
-          </div>
+          </Campo>
 
-          <div>
-            <label className="block font-medium mb-1">Imagen portada URL</label>
+          <Campo etiqueta="// imagen portada (url)">
             <input
               type="url"
               value={estado.imagen_portada_url}
               onChange={(e) => actualizar("imagen_portada_url", e.target.value)}
-              placeholder="https://..."
-              className="w-full px-3 py-2 rounded-lg border bg-white dark:bg-zinc-900 border-zinc-300"
+              placeholder="https://…"
+              className={inputClase}
             />
             {estado.imagen_portada_url && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={estado.imagen_portada_url}
                 alt=""
-                className="mt-2 w-full aspect-video object-cover rounded-lg"
+                className="mt-2 aspect-video w-full rounded-lg object-cover"
               />
             )}
-          </div>
+          </Campo>
 
-          <div>
-            <label className="block font-medium mb-1">Alt de portada</label>
+          <Campo etiqueta="// alt portada">
             <input
               type="text"
               value={estado.imagen_portada_alt}
               onChange={(e) => actualizar("imagen_portada_alt", e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border bg-white dark:bg-zinc-900 border-zinc-300"
+              className={inputClase}
             />
-          </div>
+          </Campo>
 
-          <hr className="border-zinc-200 dark:border-zinc-800" />
+          <hr className="border-zinc-200 dark:border-white/[0.06]" />
 
-          <h3 className="font-semibold">SEO</h3>
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-white/40">
+            // seo
+          </p>
 
-          <div>
-            <label className="block font-medium mb-1">
-              SEO título ({estado.seo_titulo.length}/65)
-            </label>
+          <Campo etiqueta={`// seo título (${estado.seo_titulo.length}/65)`}>
             <input
               type="text"
               value={estado.seo_titulo}
               onChange={(e) => actualizar("seo_titulo", e.target.value)}
               maxLength={65}
-              className="w-full px-3 py-2 rounded-lg border bg-white dark:bg-zinc-900 border-zinc-300"
+              className={inputClase}
             />
-          </div>
+          </Campo>
 
-          <div>
-            <label className="block font-medium mb-1">
-              SEO descripción ({estado.seo_descripcion.length}/160)
-            </label>
+          <Campo etiqueta={`// descripción (${estado.seo_descripcion.length}/160)`}>
             <textarea
               value={estado.seo_descripcion}
               onChange={(e) => actualizar("seo_descripcion", e.target.value)}
               maxLength={160}
               rows={3}
-              className="w-full px-3 py-2 rounded-lg border bg-white dark:bg-zinc-900 border-zinc-300"
+              className={inputClase}
             />
-          </div>
+          </Campo>
 
-          <div>
-            <label className="block font-medium mb-1">
-              Keywords (separadas con coma)
-            </label>
+          <Campo etiqueta="// keywords (separadas con coma)">
             <input
               type="text"
               value={estado.seo_keywords}
               onChange={(e) => actualizar("seo_keywords", e.target.value)}
               placeholder="whatsapp, ia, marketing"
-              className="w-full px-3 py-2 rounded-lg border bg-white dark:bg-zinc-900 border-zinc-300"
+              className={inputClase}
             />
-          </div>
-        </div>
+          </Campo>
+        </aside>
       </div>
+    </div>
+  );
+}
+
+function Campo({
+  etiqueta,
+  children,
+}: {
+  etiqueta: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <p className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 dark:text-white/40">
+        {etiqueta}
+      </p>
+      {children}
     </div>
   );
 }

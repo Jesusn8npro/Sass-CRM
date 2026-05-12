@@ -11,8 +11,7 @@
  * `ultimo_reporte_diario_en`).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { obtenerUsuarioActual } from "@/lib/auth/sesion";
-import { obtenerSuperAdminPorEmail } from "@/lib/baseDatos";
+import { esUsuarioAdmin, obtenerUsuarioActual } from "@/lib/auth/sesion";
 import { procesarReporteDiario } from "@/lib/admin/reporteDiario";
 
 export const dynamic = "force-dynamic";
@@ -22,20 +21,16 @@ async function autorizar(req: NextRequest): Promise<NextResponse | null> {
   const auth = req.headers.get("authorization") ?? "";
   const secretEsperado = process.env.CRON_SECRET;
   if (secretEsperado && auth === `Bearer ${secretEsperado}`) {
-    return null; // OK
+    return null;
   }
 
-  // Modo 2: sesión super-admin
+  // Modo 2: sesión admin_plataforma
   const usuario = await obtenerUsuarioActual();
-  if (usuario?.email) {
-    const sa = await obtenerSuperAdminPorEmail(usuario.email);
-    if (sa) return null;
+  if (usuario && (await esUsuarioAdmin(usuario.id))) {
+    return null;
   }
 
-  return NextResponse.json(
-    { error: "No autorizado" },
-    { status: 401 },
-  );
+  return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 }
 
 export async function POST(req: NextRequest) {

@@ -40,34 +40,37 @@ export function FormularioManual({
         return;
       }
       const j = await r.json();
-      router.push(`/admin/blog/${j.articulo.id}`);
+      router.push(`/app/admin/blog/${j.articulo.id}`);
     });
   }
 
+  const inputClase =
+    "w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none dark:border-white/[0.08] dark:bg-white/[0.02] dark:text-white dark:placeholder:text-white/30";
+
   return (
-    <form onSubmit={enviar} className="space-y-4 max-w-3xl">
+    <form onSubmit={enviar} className="space-y-5">
       <input
         type="text"
         value={titulo}
         onChange={(e) => setTitulo(e.target.value)}
         placeholder="Título *"
         required
-        className="w-full px-4 py-3 rounded-lg border bg-white dark:bg-zinc-900 border-zinc-300 text-xl font-bold"
+        className={`${inputClase} font-display text-2xl italic`}
       />
       <textarea
         value={resumen}
         onChange={(e) => setResumen(e.target.value)}
         rows={3}
-        placeholder="Resumen / excerpt para listados *"
+        placeholder="Resumen / excerpt para listados (30-500) *"
         required
-        className="w-full px-4 py-2 rounded-lg border bg-white dark:bg-zinc-900 border-zinc-300 text-sm"
+        className={inputClase}
       />
       <select
         value={categoriaId}
         onChange={(e) => setCategoriaId(e.target.value)}
-        className="px-3 py-2 rounded-lg border bg-white dark:bg-zinc-900 border-zinc-300 text-sm"
+        className={inputClase}
       >
-        <option value="">— Sin categoría —</option>
+        <option value="">— sin categoría —</option>
         {categorias.map((c) => (
           <option key={c.id} value={c.id}>
             {c.nombre}
@@ -78,13 +81,13 @@ export function FormularioManual({
         value={contenido}
         onChange={(e) => setContenido(e.target.value)}
         rows={24}
-        placeholder="Contenido en Markdown..."
+        placeholder="Contenido en Markdown…"
         required
-        className="w-full px-4 py-3 rounded-lg border bg-white dark:bg-zinc-900 border-zinc-300 font-mono text-sm"
+        className={`${inputClase} font-mono`}
       />
 
       {error && (
-        <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/30 text-rose-700 text-sm">
+        <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 font-mono text-xs text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">
           {error}
         </div>
       )}
@@ -92,9 +95,9 @@ export function FormularioManual({
       <button
         type="submit"
         disabled={pending}
-        className="px-5 py-2.5 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-50"
+        className="rounded-full bg-emerald-600 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.22em] text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {pending ? "Guardando..." : "Crear borrador"}
+        {pending ? "guardando…" : "crear borrador"}
       </button>
     </form>
   );

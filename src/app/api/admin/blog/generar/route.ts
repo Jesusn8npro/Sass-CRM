@@ -8,12 +8,13 @@
  * No publica automáticamente — el admin revisa y publica con un click.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { requerirSuperAdmin } from "@/lib/admin/sesion";
+import { requerirAdmin } from "@/lib/auth/sesion";
 import {
   crearArticulo,
   obtenerCategoriaPorSlug,
   obtenerOCrearTagsPorNombres,
   asignarTagsAArticulo,
+  obtenerSuperAdminPorEmail,
   registrarAccionAdmin,
 } from "@/lib/baseDatos";
 import { generarArticulo } from "@/lib/blog/generador";
@@ -25,8 +26,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120; // 2 min — generar + imagen puede tomar
 
 export async function POST(req: NextRequest) {
-  const sesion = await requerirSuperAdmin();
-  if (sesion instanceof NextResponse) return sesion;
+  const auth = await requerirAdmin();
+  if (auth instanceof NextResponse) return auth;
 
   let body: Record<string, unknown>;
   try {
@@ -97,8 +98,8 @@ export async function POST(req: NextRequest) {
       seo_titulo: generado.seo_titulo,
       seo_descripcion: generado.seo_descripcion,
       seo_keywords: generado.seo_keywords,
-      autor_nombre: sesion.superAdmin.nombre ?? "Equipo",
-      autor_email: sesion.email,
+      autor_nombre: "Equipo",
+      autor_email: auth.email,
       tiempo_lectura_min: generado.tiempo_lectura_min,
       generado_por: "ia",
       prompt_origen: tema,
@@ -115,19 +116,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 7) Audit
-    void registrarAccionAdmin({
-      superAdminId: sesion.superAdmin.id,
-      origen: "panel",
-      accion: "blog_generar_ia",
-      payload: { tema, categoria: categoriaSlug, longitud, articulo_id: articulo.id },
-      resultado: {
-        slug,
-        ms_contenido: msContenido,
-        ms_imagen: msImagen,
-        tags_count: generado.tags_sugeridos.length,
-      },
-    });
+    // 7) Audit (solo si el admin además está en super_admins)
+    const sa = await obtenerSuperAdminPorEmail(auth.email);
+    if (sa) {
+      void registrarAccionAdmin({
+        superAdminId: sa.id,
+        origen: "panel",
+        accion: "blog_generar_ia",
+        payload: {
+          tema,
+          categoria: categoriaSlug,
+          longitud,
+          articulo_id: articulo.id,
+        },
+        resultado: {
+          slug,
+          ms_contenido: msContenido,
+          ms_imagen: msImagen,
+          tags_count: generado.tags_sugeridos.length,
+        },
+      });
+    }
 
     return NextResponse.json({
       articulo,
@@ -137,13 +146,16 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     const detalle = e instanceof Error ? e.message : String(e);
-    void registrarAccionAdmin({
-      superAdminId: sesion.superAdmin.id,
-      origen: "panel",
-      accion: "blog_generar_ia",
-      payload: { tema },
-      error: detalle.slice(0, 500),
-    });
+    const sa = await obtenerSuperAdminPorEmail(auth.email);
+    if (sa) {
+      void registrarAccionAdmin({
+        superAdminId: sa.id,
+        origen: "panel",
+        accion: "blog_generar_ia",
+        payload: { tema },
+        error: detalle.slice(0, 500),
+      });
+    }
     return NextResponse.json({ error: detalle }, { status: 500 });
   }
 }

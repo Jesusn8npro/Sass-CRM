@@ -3,15 +3,15 @@
  * POST /api/admin/blog/categorias — crear nueva
  */
 import { NextRequest, NextResponse } from "next/server";
-import { requerirSuperAdmin } from "@/lib/admin/sesion";
+import { requerirAdmin } from "@/lib/auth/sesion";
 import { crearCategoria, listarCategorias } from "@/lib/baseDatos";
 import { slugificar } from "@/lib/blog/slug";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const sesion = await requerirSuperAdmin();
-  if (sesion instanceof NextResponse) return sesion;
+  const auth = await requerirAdmin();
+  if (auth instanceof NextResponse) return auth;
   try {
     const categorias = await listarCategorias();
     return NextResponse.json({ categorias });
@@ -24,8 +24,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const sesion = await requerirSuperAdmin();
-  if (sesion instanceof NextResponse) return sesion;
+  const auth = await requerirAdmin();
+  if (auth instanceof NextResponse) return auth;
 
   let body: Record<string, unknown>;
   try {

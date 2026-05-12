@@ -8,12 +8,13 @@
  *   { accion: "archivar" }  → archiva (saca del index público)
  */
 import { NextRequest, NextResponse } from "next/server";
-import { requerirSuperAdmin } from "@/lib/admin/sesion";
+import { requerirAdmin } from "@/lib/auth/sesion";
 import {
   actualizarArticulo,
   archivarArticulo,
   eliminarArticulo,
   obtenerArticuloPorId,
+  obtenerSuperAdminPorEmail,
   publicarArticulo,
   registrarAccionAdmin,
 } from "@/lib/baseDatos";
@@ -25,9 +26,24 @@ interface Ctx {
   params: Promise<{ id: string }>;
 }
 
+async function auditar(
+  email: string,
+  accion: string,
+  payload?: Record<string, unknown>,
+) {
+  const sa = await obtenerSuperAdminPorEmail(email);
+  if (!sa) return;
+  void registrarAccionAdmin({
+    superAdminId: sa.id,
+    origen: "panel",
+    accion,
+    payload: payload ?? null,
+  });
+}
+
 export async function GET(_req: NextRequest, ctx: Ctx) {
-  const sesion = await requerirSuperAdmin();
-  if (sesion instanceof NextResponse) return sesion;
+  const auth = await requerirAdmin();
+  if (auth instanceof NextResponse) return auth;
   const { id } = await ctx.params;
   const articulo = await obtenerArticuloPorId(id);
   if (!articulo) return NextResponse.json({ error: "No existe" }, { status: 404 });
@@ -35,8 +51,8 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 }
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
-  const sesion = await requerirSuperAdmin();
-  if (sesion instanceof NextResponse) return sesion;
+  const auth = await requerirAdmin();
+  if (auth instanceof NextResponse) return auth;
   const { id } = await ctx.params;
 
   let body: Record<string, unknown>;
@@ -50,22 +66,12 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     // Acciones especiales
     if (body.accion === "publicar") {
       const articulo = await publicarArticulo(id);
-      void registrarAccionAdmin({
-        superAdminId: sesion.superAdmin.id,
-        origen: "panel",
-        accion: "blog_articulo_publicar",
-        payload: { articulo_id: id },
-      });
+      void auditar(auth.email, "blog_articulo_publicar", { articulo_id: id });
       return NextResponse.json({ articulo });
     }
     if (body.accion === "archivar") {
       await archivarArticulo(id);
-      void registrarAccionAdmin({
-        superAdminId: sesion.superAdmin.id,
-        origen: "panel",
-        accion: "blog_articulo_archivar",
-        payload: { articulo_id: id },
-      });
+      void auditar(auth.email, "blog_articulo_archivar", { articulo_id: id });
       return NextResponse.json({ ok: true });
     }
 
@@ -93,11 +99,9 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     const articulo = await actualizarArticulo(id, cambios);
     if (!articulo) return NextResponse.json({ error: "No existe" }, { status: 404 });
 
-    void registrarAccionAdmin({
-      superAdminId: sesion.superAdmin.id,
-      origen: "panel",
-      accion: "blog_articulo_editar",
-      payload: { articulo_id: id, campos: Object.keys(cambios) },
+    void auditar(auth.email, "blog_articulo_editar", {
+      articulo_id: id,
+      campos: Object.keys(cambios),
     });
     return NextResponse.json({ articulo });
   } catch (e) {
@@ -107,17 +111,12 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 }
 
 export async function DELETE(_req: NextRequest, ctx: Ctx) {
-  const sesion = await requerirSuperAdmin();
-  if (sesion instanceof NextResponse) return sesion;
+  const auth = await requerirAdmin();
+  if (auth instanceof NextResponse) return auth;
   const { id } = await ctx.params;
   try {
     await eliminarArticulo(id);
-    void registrarAccionAdmin({
-      superAdminId: sesion.superAdmin.id,
-      origen: "panel",
-      accion: "blog_articulo_eliminar",
-      payload: { articulo_id: id },
-    });
+    void auditar(auth.email, "blog_articulo_eliminar", { articulo_id: id });
     return NextResponse.json({ ok: true });
   } catch (e) {
     const detalle = e instanceof Error ? e.message : String(e);
