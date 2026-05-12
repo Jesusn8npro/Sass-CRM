@@ -1,16 +1,24 @@
 /**
- * Wrapper de Google Gemini 2.5 Flash Image (alias "Nano Banana").
+ * Wrapper de Google Gemini Image (familia "Nano Banana").
  * image-to-image y text-to-image. Devuelve PNG bytes listos para subir
  * a Supabase Storage.
  *
  * Configuración:
  *   GEMINI_API_KEY en .env (Google AI Studio).
  *
- * Costo aprox: $0.039 / imagen out (1290 tokens × $30/1M).
+ * Modelos soportados (mayo 2026):
+ *   - gemini-2.5-flash-image          → ~$0.039/img (legacy, default histórico)
+ *   - gemini-3.1-flash-image-preview  → ~$0.039/img (Nano Banana 2, mejor calidad mismo precio)
+ *   - gemini-3-pro-image-preview      → ~$0.134/img 1-2K, ~$0.24/img 4K (Pro: texto renderizado, layouts)
  */
 import { GoogleGenAI } from "@google/genai";
 
-const MODELO = "gemini-2.5-flash-image";
+export type ModeloImagen =
+  | "gemini-2.5-flash-image"
+  | "gemini-3.1-flash-image-preview"
+  | "gemini-3-pro-image-preview";
+
+const MODELO_DEFAULT: ModeloImagen = "gemini-2.5-flash-image";
 
 let _cliente: GoogleGenAI | null = null;
 function cliente(): GoogleGenAI {
@@ -29,16 +37,22 @@ function cliente(): GoogleGenAI {
 interface ResultadoImagen {
   pngBytes: Buffer;
   mimetype: string;
+  modeloUsado: ModeloImagen;
 }
 
 /**
  * Genera una imagen a partir de un prompt + opcionalmente una imagen
  * base (image-to-image). Devuelve PNG bytes.
+ *
+ * `opciones.modelo` permite forzar Pro o Banana 2 sin tocar callers
+ * existentes (legacy sigue usando 2.5-flash-image por defecto).
  */
 export async function generarImagen(
   prompt: string,
   imagenBase?: { mimetype: string; bytes: Buffer },
+  opciones?: { modelo?: ModeloImagen },
 ): Promise<ResultadoImagen> {
+  const modelo = opciones?.modelo ?? MODELO_DEFAULT;
   const partes: Array<
     | { text: string }
     | { inlineData: { mimeType: string; data: string } }
@@ -55,7 +69,7 @@ export async function generarImagen(
   partes.push({ text: prompt });
 
   const res = await cliente().models.generateContent({
-    model: MODELO,
+    model: modelo,
     contents: partes,
   });
 
@@ -83,5 +97,6 @@ export async function generarImagen(
   return {
     pngBytes: Buffer.from(parteImagen.inlineData.data, "base64"),
     mimetype: parteImagen.inlineData.mimeType,
+    modeloUsado: modelo,
   };
 }

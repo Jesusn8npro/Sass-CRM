@@ -19,7 +19,10 @@ import {
 } from "@/lib/baseDatos";
 import { generarArticulo } from "@/lib/blog/generador";
 import { generarSlugUnico } from "@/lib/blog/slug";
-import { generarImagenPortada } from "@/lib/blog/imagen";
+import {
+  generarImagenesArticulo,
+  type ModoImagenes,
+} from "@/lib/blog/imagenesArticulo";
 import { urlAbsoluta } from "@/lib/blog/siteUrl";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +49,20 @@ export async function POST(req: NextRequest) {
       : "medio"
   ) as "corto" | "medio" | "largo";
   const categoriaSlug = typeof body.categoria === "string" ? body.categoria : undefined;
-  const generarImagen = body.generar_imagen !== false; // default true
+  // generar_imagen=false → modo "sin-imagenes" (backward compat con UI vieja).
+  // modo_imagenes nuevo: "auto" | "solo-portada" | "completo" | "sin-imagenes".
+  const generarImagen = body.generar_imagen !== false;
+  const modoImagenes: ModoImagenes = !generarImagen
+    ? "sin-imagenes"
+    : ((
+        ["auto", "solo-portada", "completo", "sin-imagenes"].includes(
+          body.modo_imagenes as string,
+        )
+          ? body.modo_imagenes
+          : "auto"
+      ) as ModoImagenes);
+  const tierPortada =
+    body.tier_portada === "pro" ? ("pro" as const) : ("estandar" as const);
 
   const inicio = Date.now();
   try {
@@ -68,33 +84,26 @@ export async function POST(req: NextRequest) {
     // 3) Slug único en DB
     const slug = await generarSlugUnico(generado.titulo);
 
-    // 4) Generar imagen de portada (opcional, en background si falla)
-    let imagen_portada_url: string | null = null;
-    let imagen_portada_alt: string | null = null;
-    let msImagen = 0;
-    if (generarImagen) {
-      const inicioImg = Date.now();
-      try {
-        const img = await generarImagenPortada(generado.imagen_prompt_sugerido, {
-          slugArticulo: slug,
-        });
-        imagen_portada_url = img.url_publica;
-        imagen_portada_alt = generado.titulo;
-        msImagen = Date.now() - inicioImg;
-      } catch (errImg) {
-        console.warn("[blog/generar] imagen falló, sigo sin portada:", errImg);
-      }
-    }
+    // 4) Generar imágenes (portada + inlines según modo). El orquestador
+    //    paraleliza todo y aisla errores: si una falla, las otras igual van.
+    const inicioImg = Date.now();
+    const imgs = await generarImagenesArticulo(
+      generado,
+      slug,
+      modoImagenes,
+      tierPortada,
+    );
+    const msImagen = Date.now() - inicioImg;
 
-    // 5) Crear artículo como borrador
+    // 5) Crear artículo como borrador (contenido ya con inlines inyectadas)
     const articulo = await crearArticulo({
       slug,
       titulo: generado.titulo,
       resumen: generado.resumen,
-      contenido_md: generado.contenido_md,
+      contenido_md: imgs.contenido_md_final,
       categoria_id: categoriaId,
-      imagen_portada_url,
-      imagen_portada_alt,
+      imagen_portada_url: imgs.portada?.url_publica ?? null,
+      imagen_portada_alt: imgs.portada ? generado.titulo : null,
       seo_titulo: generado.seo_titulo,
       seo_descripcion: generado.seo_descripcion,
       seo_keywords: generado.seo_keywords,
@@ -127,6 +136,8 @@ export async function POST(req: NextRequest) {
           tema,
           categoria: categoriaSlug,
           longitud,
+          modo_imagenes: modoImagenes,
+          tier_portada: tierPortada,
           articulo_id: articulo.id,
         },
         resultado: {
@@ -134,6 +145,9 @@ export async function POST(req: NextRequest) {
           ms_contenido: msContenido,
           ms_imagen: msImagen,
           tags_count: generado.tags_sugeridos.length,
+          portada_ok: !!imgs.portada,
+          inlines_generadas: imgs.inlines.length,
+          inlines_sugeridas: imgs.inlines_sugeridas,
         },
       });
     }

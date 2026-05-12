@@ -32,6 +32,8 @@ export type ComandoAdmin =
   | "alertas"
   | "ayuda"
   | "post"
+  | "post-rapido"
+  | "post-completo"
   | "borradores"
   | "publicar";
 
@@ -69,6 +71,10 @@ const ALIASES: Record<string, ComandoAdmin> = {
   post: "post",
   articulo: "post",
   blog: "post",
+  "post-rapido": "post-rapido",
+  rapido: "post-rapido",
+  "post-completo": "post-completo",
+  completo: "post-completo",
   borradores: "borradores",
   drafts: "borradores",
   publicar: "publicar",
@@ -174,6 +180,27 @@ export async function ejecutarComandoAdmin(
           tema,
           contexto?.superAdminEmail ?? "admin@saas",
           contexto?.superAdminNombre ?? null,
+          "auto",
+        );
+      }
+      case "post-rapido": {
+        // Solo portada (más económico). Tema = args completos.
+        const tema = cmd.args.join(" ");
+        return ejecutarPostBlog(
+          tema,
+          contexto?.superAdminEmail ?? "admin@saas",
+          contexto?.superAdminNombre ?? null,
+          "solo-portada",
+        );
+      }
+      case "post-completo": {
+        // Portada + 2 inlines (más visual). Tema = args completos.
+        const tema = cmd.args.join(" ");
+        return ejecutarPostBlog(
+          tema,
+          contexto?.superAdminEmail ?? "admin@saas",
+          contexto?.superAdminNombre ?? null,
+          "completo",
         );
       }
       case "borradores": {

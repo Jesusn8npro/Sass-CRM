@@ -25,6 +25,15 @@ function cliente(): OpenAI {
   return _cliente;
 }
 
+export interface ImagenInlineSugerida {
+  /** Prompt en INGLÉS para Nano Banana (mejor calidad en EN). */
+  prompt: string;
+  /** Texto alt en español, para SEO/accesibilidad. */
+  alt_text: string;
+  /** Número del H2 después del cual va la imagen (1-indexed). */
+  despues_de_h2_numero: number;
+}
+
 export interface ArticuloGenerado {
   titulo: string;
   slug_sugerido: string;
@@ -36,6 +45,9 @@ export interface ArticuloGenerado {
   tags_sugeridos: string[];
   tiempo_lectura_min: number;
   imagen_prompt_sugerido: string;
+  /** 0-2 sugerencias para imágenes ilustrativas dentro del cuerpo.
+   *  El orquestador decide cuántas materializar según el modo. */
+  imagenes_inline_sugeridas: ImagenInlineSugerida[];
 }
 
 const ESQUEMA = {
@@ -51,6 +63,7 @@ const ESQUEMA = {
     "seo_keywords",
     "tags_sugeridos",
     "imagen_prompt_sugerido",
+    "imagenes_inline_sugeridas",
   ],
   properties: {
     titulo: { type: "string", description: "60-120 caracteres" },
@@ -74,7 +87,34 @@ const ESQUEMA = {
     },
     imagen_prompt_sugerido: {
       type: "string",
-      description: "Prompt en inglés para generar la imagen de portada",
+      description: "Prompt en INGLÉS para la imagen de portada (Nano Banana funciona mejor en EN)",
+    },
+    imagenes_inline_sugeridas: {
+      type: "array",
+      description:
+        "EXACTAMENTE 2 sugerencias de imágenes ilustrativas para el cuerpo del artículo. Cada una se insertará después de un H2 específico. El orquestador decide cuántas materializar según presupuesto.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["prompt", "alt_text", "despues_de_h2_numero"],
+        properties: {
+          prompt: {
+            type: "string",
+            description:
+              "Prompt en INGLÉS, fotorrealista o ilustración editorial moderna. Sin texto renderizado. Que ilustre concretamente el concepto del H2 al que acompaña.",
+          },
+          alt_text: {
+            type: "string",
+            description:
+              "Texto alt en español, descriptivo y con keyword del artículo si encaja natural. Máx 125 chars.",
+          },
+          despues_de_h2_numero: {
+            type: "integer",
+            description:
+              "1-indexed: 1 = después del primer H2, 2 = segundo, 3 = tercero. Distribuir entre las 2 sugerencias para que el artículo respire visualmente (ej: H2 #2 y H2 #4).",
+          },
+        },
+      },
     },
   },
 } as const;
@@ -106,6 +146,17 @@ SEO:
 - seo_descripcion: <=160 chars, vende el clic, NO duplicar título.
 - seo_keywords: 3-7, mix de short-tail y long-tail.
 - slug_sugerido: kebab-case ASCII, máximo 80 chars, basado en keywords.
+
+IMÁGENES:
+- imagen_prompt_sugerido: prompt EN INGLÉS para la PORTADA. Descripción
+  visual concreta, estilo editorial moderno o fotorrealista premium, sin
+  texto renderizado, sin clichés ("person looking at laptop"). Que capte
+  la METÁFORA central del artículo, no el tema literal.
+- imagenes_inline_sugeridas: array de EXACTAMENTE 2 imágenes para el
+  cuerpo. Cada una ilustra un concepto específico del H2 al que
+  acompaña. Distribuilas en H2 separados (típicamente H2 #2 y H2 #4)
+  para que el artículo respire visualmente. Prompts en INGLÉS también.
+  Alt text en español, con keyword si encaja natural.
 
 CONTEXTO DEL NEGOCIO: SaaS multi-tenant que conecta números de WhatsApp
 a un agente de IA. Vende a PYMEs y agencias en Latinoamérica.
@@ -172,6 +223,12 @@ Devolveme el JSON estructurado con todos los campos requeridos.`;
 
   // Calculo determinístico del tiempo de lectura desde el contenido real
   parsed.tiempo_lectura_min = calcularTiempoLectura(parsed.contenido_md);
+
+  // Defensa: si por algún motivo el modelo no devolvió el array (no
+  // debería pasar con strict schema), lo iniciamos vacío.
+  if (!Array.isArray(parsed.imagenes_inline_sugeridas)) {
+    parsed.imagenes_inline_sugeridas = [];
+  }
 
   return parsed;
 }

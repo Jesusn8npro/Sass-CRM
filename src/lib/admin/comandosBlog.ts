@@ -14,7 +14,10 @@ import {
 } from "@/lib/baseDatos";
 import { generarArticulo } from "@/lib/blog/generador";
 import { generarSlugUnico } from "@/lib/blog/slug";
-import { generarImagenPortada } from "@/lib/blog/imagen";
+import {
+  generarImagenesArticulo,
+  type ModoImagenes,
+} from "@/lib/blog/imagenesArticulo";
 import { urlAbsoluta } from "@/lib/blog/siteUrl";
 
 export interface ResultadoBlog {
@@ -22,13 +25,31 @@ export interface ResultadoBlog {
   resultado: Record<string, unknown>;
 }
 
+function construirLineaImagenes(
+  portadaOk: boolean,
+  inlines: number,
+  modo: ModoImagenes,
+): string {
+  if (modo === "sin-imagenes") return `🚫 Sin imágenes (modo testing)`;
+  if (!portadaOk) return `⚠ Portada falló — articulo sin imagen principal`;
+  if (inlines === 0) return `🎨 Portada generada ✓ (sin inlines)`;
+  return `🎨 Portada + ${inlines} inline${inlines === 1 ? "" : "s"} generadas ✓`;
+}
+
 /**
  * /post <tema> — genera y guarda como borrador.
+ *
+ * `modoImagenes` controla cuántas imágenes acompañan al artículo:
+ *   - "auto" (default)  → portada + inlines según largo (1500-2500 → 1, >2500 → 2)
+ *   - "solo-portada"    → solo la portada
+ *   - "completo"        → portada + las 2 inlines sugeridas por el modelo
+ *   - "sin-imagenes"    → cero imágenes (testing)
  */
 export async function ejecutarPostBlog(
   tema: string,
   superAdminEmail: string,
   superAdminNombre: string | null,
+  modoImagenes: ModoImagenes = "auto",
 ): Promise<ResultadoBlog> {
   if (tema.trim().length < 5) {
     return {
@@ -43,24 +64,16 @@ export async function ejecutarPostBlog(
     const generado = await generarArticulo({ tema, longitud: "medio" });
     const slug = await generarSlugUnico(generado.titulo);
 
-    // Imagen en background — si falla, sigue sin portada
-    let imagenUrl: string | null = null;
-    let imagenAlt: string | null = null;
-    try {
-      const img = await generarImagenPortada(generado.imagen_prompt_sugerido, {
-        slugArticulo: slug,
-      });
-      imagenUrl = img.url_publica;
-      imagenAlt = generado.titulo;
-    } catch (errImg) {
-      console.warn("[comandosBlog] imagen falló:", errImg);
-    }
+    // Orquestador: portada + 0-2 inlines según modo. Errores aislados.
+    const imgs = await generarImagenesArticulo(generado, slug, modoImagenes);
+    const imagenUrl = imgs.portada?.url_publica ?? null;
+    const imagenAlt = imgs.portada ? generado.titulo : null;
 
     const articulo = await crearArticulo({
       slug,
       titulo: generado.titulo,
       resumen: generado.resumen,
-      contenido_md: generado.contenido_md,
+      contenido_md: imgs.contenido_md_final,
       imagen_portada_url: imagenUrl,
       imagen_portada_alt: imagenAlt,
       seo_titulo: generado.seo_titulo,
@@ -92,6 +105,12 @@ export async function ejecutarPostBlog(
     const previewUrl = urlAbsoluta(`/blog/${slug}`);
     const idCorto = articulo.id.slice(0, 8);
 
+    const lineaImagenes = construirLineaImagenes(
+      !!imagenUrl,
+      imgs.inlines.length,
+      modoImagenes,
+    );
+
     return {
       respuesta: [
         `✅ *Artículo generado en ${(ms / 1000).toFixed(1)}s*`,
@@ -101,7 +120,7 @@ export async function ejecutarPostBlog(
         `${articulo.resumen}`,
         ``,
         `⏱ ${articulo.tiempo_lectura_min} min · 🔑 ${articulo.seo_keywords.slice(0, 3).join(", ")}`,
-        imagenUrl ? `🎨 Imagen de portada generada ✓` : `⚠ Sin imagen (Nano Banana falló)`,
+        lineaImagenes,
         ``,
         `👁 Preview: ${previewUrl}`,
         ``,
@@ -116,6 +135,8 @@ export async function ejecutarPostBlog(
         ms,
         tags_count: generado.tags_sugeridos.length,
         con_imagen: !!imagenUrl,
+        inlines: imgs.inlines.length,
+        modo_imagenes: modoImagenes,
       },
     };
   } catch (err) {

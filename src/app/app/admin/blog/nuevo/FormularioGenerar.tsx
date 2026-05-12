@@ -21,7 +21,12 @@ export function FormularioGenerar({
   const [longitud, setLongitud] = useState<"corto" | "medio" | "largo">(
     "medio",
   );
-  const [generarImagen, setGenerarImagen] = useState(true);
+  const [modoImagenes, setModoImagenes] = useState<
+    "auto" | "solo-portada" | "completo" | "sin-imagenes"
+  >("auto");
+  const [tierPortada, setTierPortada] = useState<"estandar" | "pro">(
+    "estandar",
+  );
   const [error, setError] = useState<string | null>(null);
 
   function enviar(e: React.FormEvent) {
@@ -40,7 +45,9 @@ export function FormularioGenerar({
             tema: tema.trim(),
             categoria: categoria || undefined,
             longitud,
-            generar_imagen: generarImagen,
+            modo_imagenes: modoImagenes,
+            tier_portada: tierPortada,
+            generar_imagen: modoImagenes !== "sin-imagenes",
           }),
         });
         if (!r.ok) {
@@ -105,15 +112,42 @@ export function FormularioGenerar({
         </Bloque>
       </div>
 
-      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 dark:border-white/[0.06] dark:bg-white/[0.02] dark:text-white/70">
-        <input
-          type="checkbox"
-          checked={generarImagen}
-          onChange={(e) => setGenerarImagen(e.target.checked)}
-          className="h-4 w-4"
-        />
-        Generar imagen de portada con IA (~30s extra)
-      </label>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Bloque etiqueta="// modo imágenes">
+          <select
+            value={modoImagenes}
+            onChange={(e) =>
+              setModoImagenes(e.target.value as typeof modoImagenes)
+            }
+            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 dark:border-white/[0.08] dark:bg-white/[0.02] dark:text-white"
+          >
+            <option value="auto">Auto · portada + inlines según largo</option>
+            <option value="solo-portada">Solo portada · más económico</option>
+            <option value="completo">Completo · portada + 2 inline</option>
+            <option value="sin-imagenes">Sin imágenes · testing</option>
+          </select>
+          <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400 dark:text-white/35">
+            auto: 0 inline si &lt;1500 palabras, 1 si 1500-2500, 2 si más
+          </p>
+        </Bloque>
+
+        <Bloque etiqueta="// tier portada">
+          <select
+            value={tierPortada}
+            onChange={(e) =>
+              setTierPortada(e.target.value as typeof tierPortada)
+            }
+            disabled={modoImagenes === "sin-imagenes"}
+            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 disabled:opacity-50 dark:border-white/[0.08] dark:bg-white/[0.02] dark:text-white"
+          >
+            <option value="estandar">Estándar · Nano Banana 2 (~$0.04)</option>
+            <option value="pro">Pro · texto renderizado (~$0.13)</option>
+          </select>
+          <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400 dark:text-white/35">
+            pro solo conviene para portadas con texto / layouts complejos
+          </p>
+        </Bloque>
+      </div>
 
       {error && (
         <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 font-mono text-xs text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">
