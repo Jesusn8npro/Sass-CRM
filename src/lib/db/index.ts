@@ -47,3 +47,5 @@ export * from "./conocimientoChunks";
 export * from "./meteringUso";
 export * from "./pagos";
 export * from "./eventosLog";
+export * from "./superAdmins";
+export * from "./adminAcciones";

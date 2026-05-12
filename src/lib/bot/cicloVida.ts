@@ -11,6 +11,7 @@ import {
   procesarSeguimientosPendientes,
 } from "./procesadores";
 import { procesarAutoSeguimientos } from "./procesarAutoSeguimientos";
+import { procesarReporteDiario } from "@/lib/admin/reporteDiario";
 
 interface EstadoCicloVida {
   arrancando: boolean;
@@ -27,6 +28,7 @@ interface EstadoCicloVida {
   ultimaSemanaReporte: string | null;
   intervaloResumenOperador: NodeJS.Timeout | null;
   intervaloAlertasDesconexionOperador: NodeJS.Timeout | null;
+  intervaloReporteDiarioAdmin: NodeJS.Timeout | null;
   apagado: boolean;
   guardiasInstalados: boolean;
 }
@@ -53,6 +55,7 @@ if (!g[claveGlobal]) {
     ultimaSemanaReporte: null,
     intervaloResumenOperador: null,
     intervaloAlertasDesconexionOperador: null,
+    intervaloReporteDiarioAdmin: null,
     apagado: false,
     guardiasInstalados: false,
   };
@@ -210,6 +213,8 @@ function instalarGuardias(): void {
       clearInterval(estado.intervaloResumenOperador);
     if (estado.intervaloAlertasDesconexionOperador)
       clearInterval(estado.intervaloAlertasDesconexionOperador);
+    if (estado.intervaloReporteDiarioAdmin)
+      clearInterval(estado.intervaloReporteDiarioAdmin);
     try {
       await obtenerGestor().apagarTodo();
     } catch {
@@ -349,6 +354,16 @@ export async function arrancarBotEnProceso(): Promise<void> {
         console.error("[bot] error alertas desconexión operador:", err);
       });
     }, 120_000);
+
+    // Reporte diario al SUPER-ADMIN del SaaS: cada 5 min entre 8am y 10am.
+    // El procesador es idempotente — solo manda 1 vez por día por admin.
+    // Distinto del "resumen operador" (que es por cuenta, dueño del WA);
+    // este es el reporte global del dueño de la plataforma.
+    estado.intervaloReporteDiarioAdmin = setInterval(() => {
+      void procesarReporteDiario().catch((err) => {
+        console.error("[bot] error en reporte diario admin:", err);
+      });
+    }, 5 * 60_000);
 
     estado.arrancado = true;
   } finally {

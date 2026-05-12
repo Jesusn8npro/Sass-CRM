@@ -16,6 +16,7 @@ import {
   obtenerOCrearConversacion,
   obtenerConversacionPorId,
   obtenerCuenta,
+  obtenerSuperAdminPorTelefono,
   resetearPasoAutoSeguimiento,
   vincularEcoHumanoReciente,
   type Conversacion,
@@ -28,6 +29,7 @@ import {
 } from "./manejadorHistorial";
 import { generarYEnviarRespuesta } from "./manejadorIA";
 import { procesarMensajeOperadorPrivado } from "./manejadorOperadorPrivado";
+import { manejarMensajeSuperAdmin } from "./manejadorSuperAdmin";
 export { procesarBandejaSalidaDeCuenta } from "./manejadorEnvio";
 export { pedirMasHistorialConversacion } from "./manejadorHistorial";
 import { desempacarMensaje } from "./medios";
@@ -404,6 +406,36 @@ export function registrarManejadores(
           media_path: mediaPath,
           wa_msg_id: msg.key.id ?? null,
         });
+
+        // ============================================================
+        // SUPER-ADMIN: si el remitente es un admin global del SaaS,
+        // desviamos al flujo administrativo y NO disparamos la IA del
+        // negocio. Pasamos al siguiente mensaje en cuanto respondamos.
+        // ============================================================
+        if (tipo === "texto" && contenido) {
+          try {
+            const superAdmin = await obtenerSuperAdminPorTelefono(
+              telefonoMostrable,
+            );
+            if (superAdmin) {
+              await manejarMensajeSuperAdmin({
+                sock,
+                cuentaId,
+                conversacion,
+                telefonoAdmin: telefonoMostrable,
+                texto: contenido,
+                jidParaEnviar,
+                superAdmin,
+                prefijo,
+              });
+              continue; // No procesar como conversación normal
+            }
+          } catch (err) {
+            console.error(`${prefijo} error en flujo super-admin:`, err);
+            // Si el flujo admin reventó, dejamos caer al flujo IA normal
+            // como fallback — peor es no responder nada.
+          }
+        }
 
         // El cliente respondió → resetear contador de auto-seguimientos
         // SOLO si la cuenta tiene la feature activa (evita query inútil
