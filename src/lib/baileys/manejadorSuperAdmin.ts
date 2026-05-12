@@ -61,10 +61,10 @@ export interface ParamsManejoSuperAdmin {
 export async function manejarMensajeSuperAdmin(
   params: ParamsManejoSuperAdmin,
 ): Promise<void> {
-  const { texto, superAdmin, prefijo } = params;
+  const { texto, superAdmin, prefijo, conversacion } = params;
 
   console.log(
-    `${prefijo} 👑 super-admin ${superAdmin.email} → "${texto.slice(0, 80)}"`,
+    `${prefijo} 👑 super-admin ${superAdmin.email} (conv=${conversacion.id.slice(0, 8)}) → "${texto.slice(0, 80)}"`,
   );
 
   // Estrategia dual:

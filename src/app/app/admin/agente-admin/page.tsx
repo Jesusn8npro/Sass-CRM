@@ -85,8 +85,14 @@ export default async function PaginaAgenteAdmin() {
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link
-                href="/app/admin/agente-admin/configurar"
+                href="/app/admin/agente-admin/chat"
                 className="rounded-full bg-emerald-600 px-5 py-2 font-mono text-[10px] uppercase tracking-[0.22em] text-white hover:bg-emerald-700"
+              >
+                💬 chatear con marco
+              </Link>
+              <Link
+                href="/app/admin/agente-admin/configurar"
+                className="rounded-full border border-emerald-300 px-5 py-2 font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-500/10"
               >
                 ✎ editar system prompt
               </Link>
