@@ -150,10 +150,7 @@ async function procesarConversacionNatural(
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
     console.error(`${prefijo} error en conversación NL admin:`, err);
-    respuesta =
-      `❌ Patrón, no pude procesar tu mensaje con el agente IA.\n\n` +
-      `Detalle: ${error.slice(0, 200)}\n\n` +
-      `Probá con un slash command (escribí "ayuda" para ver la lista).`;
+    respuesta = construirMensajeErrorAmigable(error);
   }
 
   const ms = Date.now() - inicio;
@@ -209,6 +206,69 @@ async function procesarConversacionNatural(
  * (aunque ese cliente normalmente no debería ver esta conversación porque
  * es entre vos como SaaS-admin y su número).
  */
+/**
+ * Convierte errores técnicos del SDK Anthropic/red en mensajes
+ * accionables para el Patrón. No expone el stack ni payloads crudos.
+ */
+function construirMensajeErrorAmigable(errorMsg: string): string {
+  const lower = errorMsg.toLowerCase();
+
+  // 401 — key inválida o mal formateada
+  if (
+    lower.includes("invalid x-api-key") ||
+    lower.includes("authentication_error") ||
+    lower.includes("401")
+  ) {
+    return [
+      `❌ Patrón, la API key de Anthropic no es válida.`,
+      ``,
+      `Verificá en Easy Panel la variable *ANTHROPIC_API_KEY*:`,
+      `· Debe empezar con \`sk-ant-api03-\` UNA sola vez`,
+      `· Sin espacios al inicio o final`,
+      `· Largo total ~108 caracteres`,
+      ``,
+      `Mientras tanto podés usar slash commands. Escribí *ayuda* para la lista.`,
+    ].join("\n");
+  }
+
+  // 429 — rate limit
+  if (lower.includes("rate_limit") || lower.includes("429")) {
+    return [
+      `⏳ Patrón, llegamos al rate limit de Anthropic.`,
+      ``,
+      `Esperá 30 segundos y volvé a escribirme, o usá un slash command.`,
+    ].join("\n");
+  }
+
+  // 529 / overloaded
+  if (lower.includes("overloaded") || lower.includes("529")) {
+    return [
+      `⚠️ Patrón, Anthropic está sobrecargada justo ahora.`,
+      ``,
+      `Volvé a intentarlo en 1-2 minutos. Para algo urgente, slash command.`,
+    ].join("\n");
+  }
+
+  // 402 / insufficient credit
+  if (lower.includes("credit_balance") || lower.includes("insufficient")) {
+    return [
+      `💳 Patrón, se acabó el saldo de Anthropic.`,
+      ``,
+      `Recargá en https://console.anthropic.com/settings/billing`,
+      `Mientras, los slash commands siguen funcionando.`,
+    ].join("\n");
+  }
+
+  // Genérico
+  return [
+    `❌ Patrón, no pude procesar tu mensaje con el agente IA.`,
+    ``,
+    `Detalle técnico: ${errorMsg.slice(0, 200)}`,
+    ``,
+    `Probá con un slash command — escribí *ayuda* para la lista.`,
+  ].join("\n");
+}
+
 async function responderAdmin(
   params: ParamsManejoSuperAdmin,
   texto: string,

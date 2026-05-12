@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { obtenerCuentaPanelAdmin } from "@/lib/baseDatos";
 import { db } from "@/lib/db/cliente";
 import { Selector } from "./Selector";
@@ -82,6 +83,20 @@ export default async function PaginaAgenteAdmin() {
               el bot ejecuta comandos (slash o lenguaje natural). Cuando
               cualquier otro número le escribe, se ignora silenciosamente.
             </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href="/app/admin/agente-admin/configurar"
+                className="rounded-full bg-emerald-600 px-5 py-2 font-mono text-[10px] uppercase tracking-[0.22em] text-white hover:bg-emerald-700"
+              >
+                ✎ editar system prompt
+              </Link>
+              <Link
+                href={`/app/cuentas/${cuentaActual.id}/whatsapp`}
+                className="rounded-full border border-zinc-300 px-5 py-2 font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-700 hover:bg-zinc-50 dark:border-white/[0.12] dark:text-white/70 dark:hover:bg-white/[0.04]"
+              >
+                ver qr / reconectar
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="mt-3">
