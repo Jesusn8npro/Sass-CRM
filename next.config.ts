@@ -32,12 +32,39 @@ const HEADERS_SEGURIDAD = [
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  // Production source maps: false reduce el JS sin usar del cliente
+  // (las maps se servían inline cuando true). Sentry sube las suyas
+  // aparte vía build plugin.
+  productionBrowserSourceMaps: false,
+  // Comprime con gzip las respuestas HTML. Brotli lo agrega Easy Panel
+  // a nivel reverse-proxy; gzip nos cubre cuando no hay brotli.
+  compress: true,
+  // Reducir el "powered by" header (poco impacto pero limpieza).
+  poweredByHeader: false,
   serverExternalPackages: [
     "@whiskeysockets/baileys",
     "better-sqlite3",
     "pino",
     "ffmpeg-static",
   ],
+  experimental: {
+    // Inlinea critical CSS en el HTML y carga el resto async.
+    // Elimina los ~470ms de "solicitudes de bloqueo de renderización"
+    // que reporta Lighthouse. Usa el paquete `critters` (devDep).
+    optimizeCss: true,
+    // Tree-shake imports nominales de paquetes pesados: en vez de
+    // bundlear toda la lib, importa solo lo que se usa. Aplicado a
+    // los paquetes con mayor surface area.
+    optimizePackageImports: [
+      "@supabase/supabase-js",
+      "@supabase/ssr",
+      "openai",
+      "zod",
+      "ai",
+      "@ai-sdk/react",
+      "@ai-sdk/openai",
+    ],
+  },
   // Imágenes del blog (bucket público Supabase Storage) optimizadas por
   // Next: AVIF/WebP auto, sizes responsive, lazy loading nativo, cache
   // inmutable. Mejora LCP del blog ~30-50% vs <img> plano.
