@@ -24,7 +24,20 @@ import {
   type MensajeClaude,
   type ResultadoConversacion,
 } from "@/lib/anthropic";
+import { conversarConHerramientasOpenAI } from "@/lib/openaiAdminToolCalling";
 import { construirHerramientasAdmin } from "./herramientas";
+
+/**
+ * Motor de IA para el agente admin. Default: openai (gpt-4o-mini)
+ * porque es ~7× más barato que Claude Haiku. Para volver a Anthropic:
+ * setear AGENTE_ADMIN_MOTOR=anthropic en .env.local y Easy Panel.
+ */
+export type MotorAdmin = "openai" | "anthropic";
+
+export function motorAdminActivo(): MotorAdmin {
+  const env = (process.env.AGENTE_ADMIN_MOTOR ?? "openai").toLowerCase();
+  return env === "anthropic" ? "anthropic" : "openai";
+}
 
 /**
  * Prompt BASE editable por el Patrón desde /app/admin/agente-admin/configurar.
@@ -278,12 +291,20 @@ export async function conversarConAdminNL(params: {
   //    seteado, usar ese. Si no, el default conversacional.
   const systemPrompt = await resolverSystemPrompt();
 
-  // 6) Llamar a Claude con tool calling
-  const resultado = await conversarConHerramientas(
-    systemPrompt,
-    historialClaude,
-    herramientas,
-  );
+  // 6) Llamar al motor configurado (openai default, anthropic opcional)
+  const motor = motorAdminActivo();
+  const resultado =
+    motor === "anthropic"
+      ? await conversarConHerramientas(
+          systemPrompt,
+          historialClaude,
+          herramientas,
+        )
+      : await conversarConHerramientasOpenAI(
+          systemPrompt,
+          historialClaude,
+          herramientas,
+        );
 
   return resultado;
 }

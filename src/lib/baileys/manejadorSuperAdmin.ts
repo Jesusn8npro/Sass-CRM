@@ -24,8 +24,15 @@ import {
   ejecutarComandoAdmin,
   parsearComandoAdmin,
 } from "../admin/comandos";
-import { conversarConAdminNL } from "../admin/conversacionAdmin";
+import {
+  conversarConAdminNL,
+  motorAdminActivo,
+} from "../admin/conversacionAdmin";
 import { calcularCostoAnthropicUSD, MODELO_ANTHROPIC_DEFAULT } from "../anthropic";
+import {
+  calcularCostoOpenAIAdminUSD,
+  MODELO_OPENAI_ADMIN_DEFAULT,
+} from "../openaiAdminToolCalling";
 import { registrarUso } from "../db/meteringUso";
 
 export interface ParamsManejoSuperAdmin {
@@ -156,21 +163,27 @@ async function procesarConversacionNatural(
   const ms = Date.now() - inicio;
   await responderAdmin(params, respuesta);
 
-  // Metering del consumo Anthropic (si no fue error puro)
+  // Metering del consumo IA (según motor activo openai/anthropic)
   if (!error && (tokensIn > 0 || tokensOut > 0)) {
+    const motor = motorAdminActivo();
+    const modelo =
+      motor === "anthropic"
+        ? MODELO_ANTHROPIC_DEFAULT
+        : MODELO_OPENAI_ADMIN_DEFAULT;
+    const costo =
+      motor === "anthropic"
+        ? calcularCostoAnthropicUSD(modelo, tokensIn, tokensOut)
+        : calcularCostoOpenAIAdminUSD(modelo, tokensIn, tokensOut);
     registrarUso({
       cuenta_id: cuentaId,
-      proveedor: "anthropic",
-      modelo: MODELO_ANTHROPIC_DEFAULT,
+      proveedor: motor,
+      modelo,
       tokens_in: tokensIn,
       tokens_out: tokensOut,
-      costo_usd: calcularCostoAnthropicUSD(
-        MODELO_ANTHROPIC_DEFAULT,
-        tokensIn,
-        tokensOut,
-      ),
+      costo_usd: costo,
       metadata: {
         tipo: "agente_admin_nl",
+        motor,
         tools: nombresTools,
         ms,
       },
@@ -213,19 +226,28 @@ async function procesarConversacionNatural(
 function construirMensajeErrorAmigable(errorMsg: string): string {
   const lower = errorMsg.toLowerCase();
 
-  // 401 — key inválida o mal formateada
+  // 401 — key inválida (puede ser OpenAI o Anthropic según motor activo)
   if (
     lower.includes("invalid x-api-key") ||
     lower.includes("authentication_error") ||
+    lower.includes("incorrect api key") ||
+    lower.includes("invalid_api_key") ||
     lower.includes("401")
   ) {
+    const motor = motorAdminActivo();
+    const proveedor = motor === "anthropic" ? "Anthropic" : "OpenAI";
+    const variable =
+      motor === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+    const formatoEsperado =
+      motor === "anthropic"
+        ? "Debe empezar con `sk-ant-api03-` UNA sola vez, ~108 caracteres"
+        : "Debe empezar con `sk-proj-` o `sk-`, sin espacios";
     return [
-      `❌ Patrón, la API key de Anthropic no es válida.`,
+      `❌ Patrón, la API key de ${proveedor} no es válida.`,
       ``,
-      `Verificá en Easy Panel la variable *ANTHROPIC_API_KEY*:`,
-      `· Debe empezar con \`sk-ant-api03-\` UNA sola vez`,
+      `Verificá en Easy Panel la variable *${variable}*:`,
+      `· ${formatoEsperado}`,
       `· Sin espacios al inicio o final`,
-      `· Largo total ~108 caracteres`,
       ``,
       `Mientras tanto podés usar slash commands. Escribí *ayuda* para la lista.`,
     ].join("\n");
