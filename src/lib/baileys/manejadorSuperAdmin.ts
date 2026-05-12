@@ -80,7 +80,10 @@ export async function manejarMensajeSuperAdmin(
   let resultado: Record<string, unknown>;
   let error: string | null = null;
   try {
-    const ejec = await ejecutarComandoAdmin(cmd);
+    const ejec = await ejecutarComandoAdmin(cmd, {
+      superAdminEmail: superAdmin.email,
+      superAdminNombre: superAdmin.nombre,
+    });
     respuesta = ejec.respuesta;
     resultado = ejec.resultado;
   } catch (err) {

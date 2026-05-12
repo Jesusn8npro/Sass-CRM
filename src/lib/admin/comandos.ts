@@ -18,6 +18,11 @@ import {
   formatearReporteDiario,
   formatearUsuarios,
 } from "./reportesFormato";
+import {
+  ejecutarBorradores,
+  ejecutarPostBlog,
+  ejecutarPublicar,
+} from "./comandosBlog";
 
 export type ComandoAdmin =
   | "reporte"
@@ -25,7 +30,10 @@ export type ComandoAdmin =
   | "cuentas"
   | "ingresos"
   | "alertas"
-  | "ayuda";
+  | "ayuda"
+  | "post"
+  | "borradores"
+  | "publicar";
 
 export interface ComandoParseado {
   comando: ComandoAdmin;
@@ -58,6 +66,13 @@ const ALIASES: Record<string, ComandoAdmin> = {
   help: "ayuda",
   comandos: "ayuda",
   menu: "ayuda",
+  post: "post",
+  articulo: "post",
+  blog: "post",
+  borradores: "borradores",
+  drafts: "borradores",
+  publicar: "publicar",
+  publish: "publicar",
 };
 
 /**
@@ -92,10 +107,14 @@ export function parsearComandoAdmin(texto: string): ComandoParseado | null {
  * Ejecuta un comando parseado y devuelve la respuesta lista para enviar
  * por WhatsApp (string ya formateado).
  *
+ * Algunos comandos (post) requieren contexto del super-admin que los
+ * dispara, por eso recibimos `contexto` opcional.
+ *
  * Si el comando falla, devuelve un mensaje de error legible.
  */
 export async function ejecutarComandoAdmin(
   cmd: ComandoParseado,
+  contexto?: { superAdminEmail: string; superAdminNombre: string | null },
 ): Promise<{ respuesta: string; resultado: Record<string, unknown> }> {
   try {
     switch (cmd.comando) {
@@ -147,6 +166,22 @@ export async function ejecutarComandoAdmin(
       }
       case "ayuda": {
         return { respuesta: formatearAyuda(), resultado: {} };
+      }
+      case "post": {
+        // El tema es todo lo que vino después de "/post"
+        const tema = cmd.args.join(" ");
+        return ejecutarPostBlog(
+          tema,
+          contexto?.superAdminEmail ?? "admin@saas",
+          contexto?.superAdminNombre ?? null,
+        );
+      }
+      case "borradores": {
+        return ejecutarBorradores();
+      }
+      case "publicar": {
+        const idOPrefijo = cmd.args[0] ?? "";
+        return ejecutarPublicar(idOPrefijo);
       }
       default: {
         const _exhaustive: never = cmd.comando;

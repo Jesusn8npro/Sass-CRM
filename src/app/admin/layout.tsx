@@ -42,6 +42,7 @@ export default async function LayoutAdmin({
           <NavLink href="/admin">Dashboard</NavLink>
           <NavLink href="/admin/usuarios">Usuarios</NavLink>
           <NavLink href="/admin/cuentas">Cuentas WA</NavLink>
+          <NavLink href="/admin/blog">Blog</NavLink>
           <NavLink href="/admin/ingresos">Ingresos</NavLink>
           <NavLink href="/admin/logs">Logs</NavLink>
         </nav>

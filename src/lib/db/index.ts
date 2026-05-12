@@ -49,3 +49,5 @@ export * from "./pagos";
 export * from "./eventosLog";
 export * from "./superAdmins";
 export * from "./adminAcciones";
+export * from "./blog";
+export * from "./blogTaxonomia";

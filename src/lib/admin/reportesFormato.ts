@@ -155,8 +155,13 @@ export function formatearAyuda(): string {
     `/ingresos → Facturación del mes`,
     `/alertas  → Cuentas caídas`,
     ``,
-    `🆘 /ayuda  → Esta lista`,
+    `📰 *Blog SEO*`,
+    `/post <tema>     → Generar artículo con IA`,
+    `/borradores      → Ver borradores pendientes`,
+    `/publicar <id>   → Publicar un borrador`,
     ``,
-    `_Más comandos (publicar contenido, generar videos, noticias IA) llegan en las próximas fases._`,
+    `🆘 /ayuda → Esta lista`,
+    ``,
+    `_Más comandos (videos automáticos, noticias IA, redes sociales) llegan en próximas fases._`,
   ].join("\n");
 }

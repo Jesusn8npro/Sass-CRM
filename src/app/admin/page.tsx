@@ -88,6 +88,9 @@ export default async function PaginaDashboardAdmin() {
           <li><code>/cuentas</code> · estado de números WA</li>
           <li><code>/ingresos</code> · facturación del mes</li>
           <li><code>/alertas</code> · cuentas caídas (&gt;30 min)</li>
+          <li><code>/post &lt;tema&gt;</code> · generar artículo de blog con IA</li>
+          <li><code>/borradores</code> · ver borradores pendientes</li>
+          <li><code>/publicar &lt;id&gt;</code> · publicar borrador</li>
           <li><code>/ayuda</code> · esta lista</li>
         </ul>
         <p className="text-xs text-zinc-500 mt-3">
