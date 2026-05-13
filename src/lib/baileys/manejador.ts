@@ -425,11 +425,12 @@ export function registrarManejadores(
         });
 
         // ============================================================
-        // SUPER-ADMIN: si el remitente es un admin global del SaaS,
-        // desviamos al flujo administrativo y NO disparamos la IA del
-        // negocio. Pasamos al siguiente mensaje en cuanto respondamos.
+        // SUPER-ADMIN: solo activo en la cuenta dedicada (es_panel_admin).
+        // Si el remitente escribe a cualquier otra cuenta de un cliente,
+        // se lo trata como usuario normal — el admin puede probar el bot
+        // igual que lo haría un cliente real.
         // ============================================================
-        if (tipo === "texto" && contenido) {
+        if (tipo === "texto" && contenido && cuenta.es_panel_admin) {
           try {
             const superAdmin = await obtenerSuperAdminPorTelefono(
               telefonoMostrable,
