@@ -7,7 +7,11 @@ import {
   obtenerArticuloPorSlug,
   incrementarVisualizaciones,
 } from "@/lib/baseDatos";
-import { RenderMarkdown } from "@/lib/blog/markdown";
+import {
+  RenderMarkdown,
+  TablaContenidos,
+  extraerTabla,
+} from "@/lib/blog/markdown";
 import { urlAbsoluta } from "@/lib/blog/siteUrl";
 
 // Revalida cada 5 min — más conservador que el index porque la URL
@@ -178,6 +182,9 @@ export default async function PaginaArticulo({ params }: Props) {
 
       {/* Contenido */}
       <div className="mx-auto max-w-3xl px-4 sm:px-6 py-12">
+        {/* Tabla de contenidos — solo si hay >=2 headings H2/H3 */}
+        <TablaContenidos items={extraerTabla(articulo.contenido_md)} />
+
         <div className="text-zinc-800 dark:text-zinc-200">
           <RenderMarkdown md={articulo.contenido_md} />
         </div>

@@ -21,6 +21,14 @@ html, body {
   transition: background-color 200ms ease, color 200ms ease;
 }
 
+/* Smooth scroll para anchor links del TOC del blog y similares.
+   Respeta prefers-reduced-motion para accesibilidad. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 /* Modo claro (default) */
 body {
   color: #18181b;
