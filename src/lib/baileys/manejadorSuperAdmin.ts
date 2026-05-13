@@ -133,7 +133,7 @@ async function procesarComandoSlash(
 async function procesarConversacionNatural(
   params: ParamsManejoSuperAdmin,
 ): Promise<void> {
-  const { cuentaId, conversacion, texto, superAdmin, prefijo } = params;
+  const { cuentaId, conversacion, texto, superAdmin, prefijo, sock, jidParaEnviar } = params;
 
   const inicio = Date.now();
   let respuesta = "";
@@ -142,6 +142,9 @@ async function procesarConversacionNatural(
   let toolsEjecutadas = 0;
   let nombresTools: string[] = [];
   let error: string | null = null;
+
+  // Mostrar "escribiendo..." mientras el agente procesa (puede tardar 60-120s)
+  try { await sock.sendPresenceUpdate("composing", jidParaEnviar); } catch { /* no-op */ }
 
   try {
     const r = await conversarConAdminNL({
@@ -158,6 +161,8 @@ async function procesarConversacionNatural(
     error = err instanceof Error ? err.message : String(err);
     console.error(`${prefijo} error en conversación NL admin:`, err);
     respuesta = construirMensajeErrorAmigable(error);
+  } finally {
+    try { await sock.sendPresenceUpdate("paused", jidParaEnviar); } catch { /* no-op */ }
   }
 
   const ms = Date.now() - inicio;

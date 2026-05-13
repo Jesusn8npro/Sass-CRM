@@ -11,6 +11,9 @@ import {
   asignarTagsAArticulo,
   crearArticulo,
   publicarArticulo,
+  actualizarArticulo,
+  obtenerArticuloPorSlug,
+  obtenerCategoriaPorSlug,
 } from "@/lib/baseDatos";
 import { generarArticulo } from "@/lib/blog/generador";
 import { generarSlugUnico } from "@/lib/blog/slug";
@@ -19,6 +22,27 @@ import {
   type ModoImagenes,
 } from "@/lib/blog/imagenesArticulo";
 import { urlAbsoluta } from "@/lib/blog/siteUrl";
+
+const MAPA_CATEGORIAS: Array<{ slug: string; re: RegExp }> = [
+  { slug: "whatsapp-business", re: /whatsapp|wapp|\bwa\b/i },
+  {
+    slug: "inteligencia-artificial",
+    re: /\bia\b|inteligencia.artificial|\bai\b|agente|gpt|llm|openai|claude|chatbot/i,
+  },
+  { slug: "marketing", re: /marketing|vender|ventas|leads|conversion|growth/i },
+  { slug: "casos-de-uso", re: /caso.de.uso|empresa|negocio|ejemplo|testimonio/i },
+  { slug: "producto", re: /producto|plataforma|feature|novedad|actualizaci/i },
+];
+
+async function resolverCategoriaId(tema: string): Promise<string | null> {
+  for (const { slug, re } of MAPA_CATEGORIAS) {
+    if (re.test(tema)) {
+      const cat = await obtenerCategoriaPorSlug(slug);
+      return cat?.id ?? null;
+    }
+  }
+  return null;
+}
 
 export interface ResultadoBlog {
   respuesta: string;
@@ -50,6 +74,7 @@ export async function ejecutarPostBlog(
   superAdminEmail: string,
   superAdminNombre: string | null,
   modoImagenes: ModoImagenes = "auto",
+  publicarInmediatamente = false,
 ): Promise<ResultadoBlog> {
   if (tema.trim().length < 5) {
     return {
@@ -69,11 +94,14 @@ export async function ejecutarPostBlog(
     const imagenUrl = imgs.portada?.url_publica ?? null;
     const imagenAlt = imgs.portada ? generado.titulo : null;
 
+    const categoriaId = await resolverCategoriaId(tema);
+
     const articulo = await crearArticulo({
       slug,
       titulo: generado.titulo,
       resumen: generado.resumen,
       contenido_md: imgs.contenido_md_final,
+      categoria_id: categoriaId,
       imagen_portada_url: imagenUrl,
       imagen_portada_alt: imagenAlt,
       seo_titulo: generado.seo_titulo,
@@ -101,8 +129,12 @@ export async function ejecutarPostBlog(
       }
     }
 
+    if (publicarInmediatamente) {
+      await publicarArticulo(articulo.id);
+    }
+
     const ms = Date.now() - inicio;
-    const previewUrl = urlAbsoluta(`/blog/${slug}`);
+    const articuloUrl = urlAbsoluta(`/blog/${slug}`);
     const idCorto = articulo.id.slice(0, 8);
 
     const lineaImagenes = construirLineaImagenes(
@@ -110,6 +142,35 @@ export async function ejecutarPostBlog(
       imgs.inlines.length,
       modoImagenes,
     );
+
+    if (publicarInmediatamente) {
+      return {
+        respuesta: [
+          `✅ *Artículo publicado en ${(ms / 1000).toFixed(1)}s*`,
+          ``,
+          `📰 *${articulo.titulo}*`,
+          ``,
+          `${articulo.resumen}`,
+          ``,
+          `⏱ ${articulo.tiempo_lectura_min} min · 🔑 ${articulo.seo_keywords.slice(0, 3).join(", ")}`,
+          lineaImagenes,
+          ``,
+          `🔗 ${articuloUrl}`,
+          ``,
+          `_Google lo va a indexar en las próximas horas (sitemap actualizado)._`,
+        ].join("\n"),
+        resultado: {
+          articulo_id: articulo.id,
+          slug: articulo.slug,
+          ms,
+          publicado: true,
+          tags_count: generado.tags_sugeridos.length,
+          con_imagen: !!imagenUrl,
+          inlines: imgs.inlines.length,
+          modo_imagenes: modoImagenes,
+        },
+      };
+    }
 
     return {
       respuesta: [
@@ -122,10 +183,9 @@ export async function ejecutarPostBlog(
         `⏱ ${articulo.tiempo_lectura_min} min · 🔑 ${articulo.seo_keywords.slice(0, 3).join(", ")}`,
         lineaImagenes,
         ``,
-        `👁 Preview: ${previewUrl}`,
+        `👁 Preview: ${articuloUrl}`,
         ``,
-        `Para publicar:`,
-        `*/publicar ${idCorto}*`,
+        `Para publicar: */publicar ${idCorto}*`,
         ``,
         `_Está como borrador — solo vos lo ves hasta publicar._`,
       ].join("\n"),
@@ -133,6 +193,7 @@ export async function ejecutarPostBlog(
         articulo_id: articulo.id,
         slug: articulo.slug,
         ms,
+        publicado: false,
         tags_count: generado.tags_sugeridos.length,
         con_imagen: !!imagenUrl,
         inlines: imgs.inlines.length,
@@ -218,15 +279,19 @@ export async function ejecutarPublicar(
       articulo = await obtenerArticuloPorId(idOPrefijo);
     }
 
-    // Si no matcheó (o no era UUID), buscar por prefijo
+    // Si no matcheó UUID, intentar por slug (contiene guiones pero no es UUID)
+    if (!articulo && idOPrefijo.includes("-") && idOPrefijo.length > 8) {
+      const porSlug = await obtenerArticuloPorSlug(idOPrefijo, { incluirBorradores: true });
+      if (porSlug) articulo = porSlug;
+    }
+
+    // Si aún no encontró, buscar por prefijo de id
     if (!articulo) {
-      // Primero buscar en borradores (caso típico de /publicar)
       const borradores = await listarTodosLosArticulos({
         estado: "borrador",
         limite: 50,
       });
       let match = borradores.find((b) => b.id.startsWith(idOPrefijo));
-      // Si no apareció en borradores, ampliar a todos (publicado, archivado)
       if (!match) {
         const todos = await listarTodosLosArticulos({ limite: 100 });
         match = todos.find((b) => b.id.startsWith(idOPrefijo));
@@ -274,6 +339,93 @@ export async function ejecutarPublicar(
     const detalle = err instanceof Error ? err.message : String(err);
     return {
       respuesta: `❌ Error publicando:\n\n${detalle.slice(0, 200)}`,
+      resultado: { error: detalle },
+    };
+  }
+}
+
+/**
+ * Edita campos de un artículo existente (borrador o publicado).
+ * Acepta id corto, id completo o slug.
+ */
+export async function ejecutarEditarArticulo(
+  idOSlug: string,
+  cambios: {
+    titulo?: string;
+    resumen?: string;
+    contenido_adicional?: string;
+  },
+): Promise<ResultadoBlog> {
+  if (!idOSlug) {
+    return {
+      respuesta: "❌ Falta el ID o slug del artículo.",
+      resultado: { error: "id_faltante" },
+    };
+  }
+
+  const ES_UUID_COMPLETO =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  try {
+    let articulo = null as Awaited<ReturnType<typeof obtenerArticuloPorId>> | null;
+
+    if (ES_UUID_COMPLETO.test(idOSlug)) {
+      articulo = await obtenerArticuloPorId(idOSlug);
+    }
+    if (!articulo && idOSlug.includes("-") && idOSlug.length > 8) {
+      const porSlug = await obtenerArticuloPorSlug(idOSlug, { incluirBorradores: true });
+      if (porSlug) articulo = porSlug;
+    }
+    if (!articulo) {
+      const todos = await listarTodosLosArticulos({ limite: 100 });
+      const match = todos.find((a) => a.id.startsWith(idOSlug));
+      if (match) articulo = await obtenerArticuloPorId(match.id);
+    }
+
+    if (!articulo) {
+      return {
+        respuesta: `❌ No se encontró el artículo \`${idOSlug}\`.`,
+        resultado: { error: "no_encontrado" },
+      };
+    }
+
+    const actualizaciones: Parameters<typeof actualizarArticulo>[1] = {};
+    if (cambios.titulo) actualizaciones.titulo = cambios.titulo;
+    if (cambios.resumen) actualizaciones.resumen = cambios.resumen;
+    if (cambios.contenido_adicional) {
+      actualizaciones.contenido_md =
+        articulo.contenido_md + "\n\n" + cambios.contenido_adicional;
+    }
+
+    if (Object.keys(actualizaciones).length === 0) {
+      return {
+        respuesta: "⚠ No se especificaron cambios.",
+        resultado: { error: "sin_cambios" },
+      };
+    }
+
+    const actualizado = await actualizarArticulo(articulo.id, actualizaciones);
+    if (!actualizado) {
+      return {
+        respuesta: "❌ No se pudo actualizar el artículo.",
+        resultado: { error: "actualizar_fallo" },
+      };
+    }
+
+    return {
+      respuesta: [
+        `✅ *Artículo actualizado*`,
+        ``,
+        `📰 ${actualizado.titulo}`,
+        ``,
+        `🔗 ${urlAbsoluta(`/blog/${actualizado.slug}`)}`,
+      ].join("\n"),
+      resultado: { articulo_id: actualizado.id, slug: actualizado.slug },
+    };
+  } catch (err) {
+    const detalle = err instanceof Error ? err.message : String(err);
+    return {
+      respuesta: `❌ Error editando:\n\n${detalle.slice(0, 200)}`,
       resultado: { error: detalle },
     };
   }

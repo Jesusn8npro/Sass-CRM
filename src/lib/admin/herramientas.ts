@@ -23,6 +23,7 @@ import { obtenerMetricasGlobales, listarCuentasCaidas } from "./reportes";
 import {
   ejecutarPostBlog,
   ejecutarPublicar,
+  ejecutarEditarArticulo,
 } from "./comandosBlog";
 import { db } from "@/lib/db/cliente";
 import type { HerramientaAdmin } from "@/lib/anthropic";
@@ -396,7 +397,7 @@ export function construirHerramientasAdmin(contexto: {
     {
       name: "generar_articulo_blog",
       description:
-        "Genera un artículo de blog completo con IA (texto + portada + imágenes inline según modo) y lo deja como BORRADOR. NO publica automáticamente. Tarda 60-120 segundos. ANTES de invocar esta tool: si el Patrón pidió 'créame un artículo' sin tema o sin especificar modo de imágenes, PREGUNTÁ primero. No asumas tema ni modo.",
+        "Genera un artículo de blog completo con IA (texto + portada + imágenes inline) y lo guarda. Si el Patrón dice 'publícalo', 'que quede publicado' o similar al pedir el artículo, usa publicar_inmediatamente=true. Si solo pide 'créalo' sin mencionar publicar, déjalo como borrador (publicar_inmediatamente=false). La categoría se detecta automáticamente del tema. Tarda 60-120 segundos.",
       input_schema: {
         type: "object",
         properties: {
@@ -411,6 +412,11 @@ export function construirHerramientasAdmin(contexto: {
             description:
               "auto = decide según largo. solo-portada = barato. completo = portada + 2 inlines. sin-imagenes = solo texto.",
           },
+          publicar_inmediatamente: {
+            type: "boolean",
+            description:
+              "true = crea Y publica en un solo paso. false (default) = deja como borrador.",
+          },
         },
         required: ["tema"],
       },
@@ -423,12 +429,14 @@ export function construirHerramientasAdmin(contexto: {
             ? input.modo_imagenes
             : "auto"
         ) as "auto" | "solo-portada" | "completo" | "sin-imagenes";
+        const publicarYa = input.publicar_inmediatamente === true;
         if (tema.length < 5) return asJson({ error: "tema muy corto" });
         const r = await ejecutarPostBlog(
           tema,
           contexto.superAdminEmail,
           contexto.superAdminNombre,
           modo,
+          publicarYa,
         );
         return r.respuesta;
       },
@@ -451,6 +459,8 @@ export function construirHerramientasAdmin(contexto: {
           borradores: borradores.map((a) => ({
             id_corto: a.id.slice(0, 8),
             titulo: a.titulo,
+            slug: a.slug,
+            categoria: a.categoria_nombre ?? null,
             tiempo_lectura_min: a.tiempo_lectura_min,
             creado_en: a.creado_en,
           })),
@@ -461,13 +471,13 @@ export function construirHerramientasAdmin(contexto: {
     {
       name: "publicar_articulo_blog",
       description:
-        "Publica un artículo borrador. ACCIÓN DESTRUCTIVA — antes de invocar, confirmá explícito con el Patrón ('¿Confirmás que publique X?') y solo ejecutá si responde claramente que sí.",
+        "Publica un artículo borrador. Acepta: id corto (8 chars), UUID completo, o slug (ej: 'como-vender-mas-con-ia'). Si el Patrón pasa una URL del blog, extraé solo la parte del slug (lo que va después de /blog/). Si el artículo ya está publicado, lo informa sin error. Confirmá con el Patrón antes si hay ambigüedad.",
       input_schema: {
         type: "object",
         properties: {
           id_articulo: {
             type: "string",
-            description: "Id completo o prefijo de 8 chars.",
+            description: "Id corto (8 chars), UUID completo, o slug del artículo.",
           },
         },
         required: ["id_articulo"],
@@ -476,6 +486,45 @@ export function construirHerramientasAdmin(contexto: {
         const id = String(input.id_articulo ?? "").trim();
         if (!id) return asJson({ error: "falta id_articulo" });
         const r = await ejecutarPublicar(id);
+        return r.respuesta;
+      },
+    },
+    {
+      name: "editar_articulo_blog",
+      description:
+        "Edita un artículo existente (borrador o publicado). Puede cambiar título, resumen, o agregar texto al final del contenido. Acepta id corto, UUID o slug. Usalo cuando el Patrón dice 'agregale', 'cambiá el título', 'añadí una sección', etc.",
+      input_schema: {
+        type: "object",
+        properties: {
+          id_articulo: {
+            type: "string",
+            description: "Id corto (8 chars), UUID completo, o slug del artículo.",
+          },
+          titulo: {
+            type: "string",
+            description: "Nuevo título (opcional).",
+          },
+          resumen: {
+            type: "string",
+            description: "Nuevo resumen/descripción (opcional).",
+          },
+          contenido_adicional: {
+            type: "string",
+            description: "Texto en Markdown a AGREGAR al final del artículo (opcional).",
+          },
+        },
+        required: ["id_articulo"],
+      },
+      ejecutar: async (input) => {
+        const id = String(input.id_articulo ?? "").trim();
+        if (!id) return asJson({ error: "falta id_articulo" });
+        const r = await ejecutarEditarArticulo(id, {
+          titulo: input.titulo ? String(input.titulo) : undefined,
+          resumen: input.resumen ? String(input.resumen) : undefined,
+          contenido_adicional: input.contenido_adicional
+            ? String(input.contenido_adicional)
+            : undefined,
+        });
         return r.respuesta;
       },
     },

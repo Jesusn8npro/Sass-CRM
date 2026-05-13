@@ -24,8 +24,15 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Agente WhatsApp",
-  description: "Panel local para conversar y supervisar tu agente de WhatsApp.",
+  title: {
+    default: "Sass-CRM — Agente WhatsApp con IA",
+    template: "%s · Sass-CRM",
+  },
+  description:
+    "Automatiza tu WhatsApp Business con IA: responde leads, agenda citas y cierra ventas 24/7 sin programar.",
+  metadataBase: new URL(
+    process.env.APP_URL ?? process.env.PUBLIC_URL ?? "http://localhost:3000",
+  ),
 };
 
 const scriptInicializaTema = `
@@ -47,6 +54,16 @@ export default function RootLayout({
     <html lang="es" className={`${inter.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: scriptInicializaTema }} />
+        {/* Preconnect a Supabase Storage — las imágenes del blog vienen de ahí */}
+        <link rel="preconnect" href="https://hecrpmywujicgwcqmxbp.supabase.co" />
+        <link rel="dns-prefetch" href="https://hecrpmywujicgwcqmxbp.supabase.co" />
+        {/* Speculation Rules — prerender páginas del blog al hover (Chromium 121+) */}
+        <script
+          type="speculationrules"
+          dangerouslySetInnerHTML={{
+            __html: '{"prerender":[{"where":{"href_matches":"/blog/*"},"eagerness":"moderate"}]}',
+          }}
+        />
       </head>
       <body className="min-h-screen antialiased">
         <ProveedoresUI>{children}</ProveedoresUI>

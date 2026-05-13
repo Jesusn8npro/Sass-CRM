@@ -92,12 +92,15 @@ export default async function PaginaArticulo({ params }: Props) {
   void incrementarVisualizaciones(articulo.id);
 
   // JSON-LD Schema.org BlogPosting (lo lee Google para rich snippets)
+  const articuloUrl = urlAbsoluta(`/blog/${articulo.slug}`);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
     headline: articulo.titulo,
     description: articulo.resumen,
+    url: articuloUrl,
     image: articulo.imagen_portada_url ?? undefined,
+    inLanguage: "es",
     datePublished: articulo.publicado_en ?? articulo.creado_en,
     dateModified: articulo.actualizado_en,
     author: {
@@ -111,20 +114,19 @@ export default async function PaginaArticulo({ params }: Props) {
     },
     mainEntityOfPage: {
       "@type": "WebPage",
-      "@id": urlAbsoluta(`/blog/${articulo.slug}`),
+      "@id": articuloUrl,
     },
     keywords: articulo.seo_keywords.join(", "),
     wordCount: articulo.contenido_md.split(/\s+/).length,
+    articleSection: articulo.categoria_nombre ?? undefined,
   };
 
   return (
     <article className="min-h-screen bg-white dark:bg-zinc-950">
-      {/* JSON-LD para Google Search */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-
       {/* Hero */}
       <header className="mx-auto max-w-3xl px-4 sm:px-6 pt-12 pb-8">
         <Link

@@ -19,6 +19,7 @@
  * Output: React elements (server-component compatible).
  */
 import { Fragment, type ReactNode } from "react";
+import Image from "next/image";
 import { slugificar } from "./slug";
 
 // ============================================================
@@ -301,6 +302,28 @@ export function RenderMarkdown({ md }: { md: string }): ReactNode {
     // Regla horizontal
     if (/^-{3,}$/.test(linea.trim())) {
       bloques.push(<hr key={k} className="my-8 border-zinc-200 dark:border-zinc-800" />);
+      i++;
+      continue;
+    }
+
+    // Imagen inline ![alt](url) — renderiza con next/image para AVIF/WebP
+    // .*? no-greedy + backtracking para manejar alt texts con \] escapados
+    const imgMatch = /^!\[(.*?)\]\(([^)]+)\)$/.exec(linea.trim());
+    if (imgMatch) {
+      const alt = imgMatch[1] ?? "";
+      const src = imgMatch[2] ?? "";
+      bloques.push(
+        <div key={k} className="relative my-6 w-full overflow-hidden rounded-xl aspect-video bg-zinc-100 dark:bg-zinc-800">
+          <Image
+            src={src}
+            alt={alt}
+            fill
+            sizes="(max-width: 768px) 100vw, (max-width: 1280px) 80vw, 768px"
+            className="object-cover"
+            loading="lazy"
+          />
+        </div>,
+      );
       i++;
       continue;
     }
