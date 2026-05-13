@@ -202,17 +202,35 @@ export async function ejecutarPublicar(
     };
   }
 
-  try {
-    // Primero intentar como id completo (UUID)
-    let articulo = await obtenerArticuloPorId(idOPrefijo);
+  // Detectar si parece UUID completo (8-4-4-4-12 = 36 chars con guiones).
+  // Si no, vamos directo al match por prefijo — evita el error de Supabase
+  // 'invalid input syntax for type uuid' al pasarle un fragmento de 8 chars.
+  const ES_UUID_COMPLETO =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-    // Si no, buscar por prefijo en borradores
+  try {
+    let articulo = null as Awaited<
+      ReturnType<typeof obtenerArticuloPorId>
+    > | null;
+
+    // Solo intentar match exacto si tiene formato UUID válido
+    if (ES_UUID_COMPLETO.test(idOPrefijo)) {
+      articulo = await obtenerArticuloPorId(idOPrefijo);
+    }
+
+    // Si no matcheó (o no era UUID), buscar por prefijo
     if (!articulo) {
+      // Primero buscar en borradores (caso típico de /publicar)
       const borradores = await listarTodosLosArticulos({
         estado: "borrador",
         limite: 50,
       });
-      const match = borradores.find((b) => b.id.startsWith(idOPrefijo));
+      let match = borradores.find((b) => b.id.startsWith(idOPrefijo));
+      // Si no apareció en borradores, ampliar a todos (publicado, archivado)
+      if (!match) {
+        const todos = await listarTodosLosArticulos({ limite: 100 });
+        match = todos.find((b) => b.id.startsWith(idOPrefijo));
+      }
       if (match) {
         articulo = await obtenerArticuloPorId(match.id);
       }

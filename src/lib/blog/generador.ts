@@ -148,15 +148,30 @@ SEO:
 - slug_sugerido: kebab-case ASCII, máximo 80 chars, basado en keywords.
 
 IMÁGENES:
-- imagen_prompt_sugerido: prompt EN INGLÉS para la PORTADA. Descripción
-  visual concreta, estilo editorial moderno o fotorrealista premium, sin
-  texto renderizado, sin clichés ("person looking at laptop"). Que capte
-  la METÁFORA central del artículo, no el tema literal.
+- imagen_prompt_sugerido: prompt EN INGLÉS para la PORTADA CLICKBAIT.
+  ESTA ES LA MINIATURA QUE APARECE EN GOOGLE Y REDES — tiene que ROBAR
+  EL CLICK. Reglas obligatorias del prompt:
+    * Incluir TEXTO GRANDE RENDERIZADO con un gancho corto del título
+      (3-7 palabras, ej: "5 IDEAS DE IA", "VENDE MÁS CON WHATSAPP",
+      "EVITA ESTOS 3 ERRORES"). El modelo Nano Banana Pro renderiza
+      texto perfectamente legible — aprovechalo.
+    * Estilo VIRAL/CLICKBAIT moderno: colores vibrantes, contraste alto,
+      composición tipo YouTube thumbnail premium o portada Medium 2026.
+    * Elementos visuales que CHOQUEN: un símbolo grande, una flecha,
+      números enormes, un rostro expresivo, o un icono central llamativo.
+    * NO clichés genéricos ("person looking at laptop", "hands typing").
+    * Que se entienda LEGIBLE incluso en miniatura de 200x200px.
+  Ejemplo de prompt bien armado:
+    "Bold clickbait blog cover, vibrant gradient orange-to-purple
+     background, huge white text '7 ERRORES DE IA' centered top,
+     a giant red X mark crossing a chatbot icon, modern Y2K style,
+     high contrast, 1024x1024"
+
 - imagenes_inline_sugeridas: array de EXACTAMENTE 2 imágenes para el
-  cuerpo. Cada una ilustra un concepto específico del H2 al que
-  acompaña. Distribuilas en H2 separados (típicamente H2 #2 y H2 #4)
-  para que el artículo respire visualmente. Prompts en INGLÉS también.
-  Alt text en español, con keyword si encaja natural.
+  cuerpo. Estas SÍ van sin texto renderizado — son ilustraciones
+  contextuales. Cada una ilustra un concepto específico del H2 al
+  que acompaña. Distribuilas en H2 separados (típicamente H2 #2 y
+  H2 #4). Prompts en INGLÉS. Alt text en español.
 
 CONTEXTO DEL NEGOCIO: SaaS multi-tenant que conecta números de WhatsApp
 a un agente de IA. Vende a PYMEs y agencias en Latinoamérica.

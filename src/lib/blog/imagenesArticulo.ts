@@ -77,14 +77,19 @@ function decidirCantidadInlines(
  * Parámetros:
  *  - articulo: el output de `generarArticulo()` (texto + prompts).
  *  - slug: el slug definitivo (para naming trazable de archivos).
- *  - modo: cómo manejar imágenes (default "auto").
+ *  - modo: cómo manejar imágenes (default "completo").
  *  - tierPortada: "estandar" (Banana 2, ~$0.039) o "pro" (~$0.134).
+ *
+ * DEFAULT TIER: "pro". El Patrón valora portadas clickbait con texto
+ * renderizado dentro de la imagen — Pro es el único modelo que lo hace
+ * bien. Si querés ahorrar para un artículo específico, usá explícito
+ * tierPortada="estandar" en el caller.
  */
 export async function generarImagenesArticulo(
   articulo: ArticuloGenerado,
   slug: string,
-  modo: ModoImagenes = "auto",
-  tierPortada: TierImagen = "estandar",
+  modo: ModoImagenes = "completo",
+  tierPortada: TierImagen = "pro",
 ): Promise<ResultadoImagenesArticulo> {
   const palabras = contarPalabras(articulo.contenido_md);
   const sugeridas = articulo.imagenes_inline_sugeridas.length;

@@ -175,12 +175,16 @@ export async function ejecutarComandoAdmin(
       }
       case "post": {
         // El tema es todo lo que vino después de "/post"
+        // Default: modo "completo" — portada Pro con texto clickbait + 2
+        // imágenes inline. El Patrón valora que los artículos salgan ricos
+        // visualmente; el costo extra ($0.21 vs $0.04) lo asume.
+        // Para artículos económicos existe /post-rapido.
         const tema = cmd.args.join(" ");
         return ejecutarPostBlog(
           tema,
           contexto?.superAdminEmail ?? "admin@saas",
           contexto?.superAdminNombre ?? null,
-          "auto",
+          "completo",
         );
       }
       case "post-rapido": {
