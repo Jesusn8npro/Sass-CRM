@@ -6,6 +6,8 @@ import {
   actualizarEstadoCuenta,
 } from "@/lib/baseDatos";
 import { verificarAccesoCuenta } from "@/lib/auth/sesion";
+import { obtenerGestor } from "@/lib/baileys/gestor";
+import { borrarSesionBaileysDeCuenta } from "@/lib/baileys/auth-supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +35,13 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     /* sin body es OK — default flow regenerar QR */
   }
   const pausar = body.pausar === true;
+
+  // Soltar el socket en memoria — sin esto sincronizar() nunca regenera QR
+  // porque el socket "roto" sigue en el Map y la cuenta se queda atascada.
+  obtenerGestor().liberarSocket(idCuenta);
+
+  // Limpiar credenciales de Supabase para forzar QR nuevo en el próximo ciclo
+  void borrarSesionBaileysDeCuenta(idCuenta).catch(() => {});
 
   await actualizarEstadoCuenta(idCuenta, {
     estado: "desconectado",

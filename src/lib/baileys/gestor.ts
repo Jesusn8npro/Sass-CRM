@@ -310,6 +310,10 @@ class GestorCuentas {
           });
           // Email transaccional dedicado de WhatsApp caído (fire-and-forget).
           void enviarWhatsAppCaido(cuenta.id);
+          // Sacar el socket del Map con un tick de diferencia para no
+          // re-entrar en el mismo event handler. sincronizar() lo va a
+          // crear de cero en el próximo ciclo (3s) y generará QR nuevo.
+          setTimeout(() => { this.sockets.delete(cuenta.id); }, 200);
           return;
         }
 
@@ -492,6 +496,19 @@ class GestorCuentas {
     for (const id of Array.from(this.sockets.keys())) {
       await this.apagarSocket(id);
     }
+  }
+
+  /**
+   * Suelta el socket del Map sin llamar sock.logout() (no triggea loggedOut).
+   * Usar cuando el usuario pide "Reconectar" o "Desconectar para escanear QR".
+   * El próximo ciclo de sincronizar() crea socket nuevo y genera QR.
+   */
+  liberarSocket(cuentaId: string): void {
+    const entrada = this.sockets.get(cuentaId);
+    if (!entrada) return;
+    if (entrada.temporizadorReconexion) clearTimeout(entrada.temporizadorReconexion);
+    try { entrada.sock.end(undefined); } catch { /* ignorar */ }
+    this.sockets.delete(cuentaId);
   }
 
   obtenerSocket(cuentaId: string): WASocket | null {
