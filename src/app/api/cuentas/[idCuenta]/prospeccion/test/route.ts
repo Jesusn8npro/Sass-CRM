@@ -29,12 +29,31 @@ export async function POST(
     );
   }
 
+  // Crear run_apify de prueba (requerido por FK de leads_extraidos)
+  const { data: runPrueba, error: errRun } = await db()
+    .from("runs_apify")
+    .insert({
+      cuenta_id: idCuenta,
+      actor_id: "test/prospeccion-test",
+      input: { fuente: "test_endpoint" },
+      estado: "completado",
+    })
+    .select("id")
+    .single();
+
+  if (errRun) {
+    return NextResponse.json(
+      { error: `No se pudo crear run de prueba: ${errRun.message}` },
+      { status: 500 },
+    );
+  }
+
   // Insertar lead de prueba
   const { data: leadPrueba, error: errInsert } = await db()
     .from("leads_extraidos")
     .insert({
       cuenta_id: idCuenta,
-      run_apify_id: crypto.randomUUID(),
+      run_apify_id: runPrueba.id,
       nombre: "Negocio de Prueba S.A.S",
       telefono: process.env.OUTREACH_TEST_PHONE ?? "+573123790071",
       email: process.env.OUTREACH_TEST_EMAIL ?? null,
