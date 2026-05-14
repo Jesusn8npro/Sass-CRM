@@ -14,7 +14,7 @@ export const runtime = "nodejs";
  * Útil para verificar que el pipeline funciona sin leads reales.
  */
 export async function POST(
-  req: Request,
+  _req: Request,
   { params }: { params: Promise<{ idCuenta: string }> },
 ) {
   const { idCuenta } = await params;
