@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { verificarAccesoCuenta } from "@/lib/auth/sesion";
 import { db } from "@/lib/db/cliente";
-import { procesarOutreachCuenta } from "@/lib/outreach/orquestador";
+import { obtenerCuenta } from "@/lib/baseDatos";
+import { dispararLlamadaOutreach } from "@/lib/outreach/disparadorVapi";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -74,23 +75,53 @@ export async function POST(
     );
   }
 
-  // Disparar orquestador para esta cuenta
-  try {
-    await procesarOutreachCuenta(idCuenta);
-  } catch (err) {
+  // Obtener cuenta completa para resolver credenciales Vapi
+  const cuenta = await obtenerCuenta(idCuenta);
+  if (!cuenta) {
+    return NextResponse.json({ error: "Cuenta no encontrada." }, { status: 404 });
+  }
+
+  // Llamar directamente a dispararLlamadaOutreach para ver el error exacto
+  const resultado = await dispararLlamadaOutreach(
+    {
+      id: leadPrueba!.id,
+      cuenta_id: idCuenta,
+      nombre: "Negocio de Prueba S.A.S",
+      telefono: process.env.OUTREACH_TEST_PHONE ?? "+573123790071",
+      email: process.env.OUTREACH_TEST_EMAIL ?? null,
+      categoria: "Servicios de prueba",
+      direccion: "Calle Ficticia 123, Bogotá",
+      sitio_web: null,
+      estado_prospeccion: "nuevo",
+      metodo_contacto: null,
+      intentos_outreach: 0,
+      fuente_url: null,
+      run_apify_id: runPrueba.id,
+      raw: {},
+      creado_en: new Date().toISOString(),
+      prospeccion_actualizado_en: new Date().toISOString(),
+      importado: false,
+      conversacion_id: null,
+    },
+    cuenta,
+  );
+
+  if (!resultado.ok) {
     return NextResponse.json(
       {
-        advertencia: "Lead insertado pero el orquestador falló.",
+        ok: false,
+        error: resultado.error ?? "Error desconocido al disparar llamada Vapi.",
         lead: leadPrueba,
-        error: err instanceof Error ? err.message : String(err),
+        consejo: "Revisá que VAPI_PRIVATE_KEY, VAPI_PHONE_NUMBER_ID y OUTREACH_ASSISTANT_ID estén en EasyPanel.",
       },
-      { status: 207 },
+      { status: 500 },
     );
   }
 
   return NextResponse.json({
     ok: true,
-    mensaje: `Lead de prueba insertado y orquestador ejecutado. Revisá los logs y tu teléfono ${process.env.OUTREACH_TEST_PHONE}.`,
+    mensaje: `Llamada disparada. Revisá tu teléfono ${process.env.OUTREACH_TEST_PHONE}.`,
+    vapi_call_id: resultado.vapiCallId,
     lead: leadPrueba,
     modo_prueba: true,
   });
