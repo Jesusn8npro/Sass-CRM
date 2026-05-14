@@ -9,6 +9,18 @@ import { db, lanzar } from "./cliente";
 // Tipos
 // ============================================================
 
+export interface DatosCapturadosLlamada {
+  nombre_contacto?: string | null;
+  cargo?: string | null;
+  email?: string | null;
+  nivel_interes?: "alto" | "medio" | "bajo" | "no_interesado" | null;
+  reunion_agendada?: boolean | null;
+  fecha_reunion?: string | null;
+  objecion_principal?: string | null;
+  proximo_paso?: string | null;
+  notas?: string | null;
+}
+
 export interface RegistroLlamadaProspeccion {
   id: string;
   cuenta_id: string;
@@ -20,6 +32,7 @@ export interface RegistroLlamadaProspeccion {
   duracion_segundos: number | null;
   costo_usd: number | null;
   resumen: string | null;
+  datos_capturados: DatosCapturadosLlamada | null;
   creado_en: string;
 }
 
@@ -94,6 +107,7 @@ export async function actualizarRegistroLlamadaPorVapiId(
     duracion_segundos?: number | null;
     costo_usd?: number | null;
     resumen?: string | null;
+    datos_capturados?: DatosCapturadosLlamada | null;
   },
 ): Promise<void> {
   const { error } = await db()

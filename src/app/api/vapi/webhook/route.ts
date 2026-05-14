@@ -48,6 +48,7 @@ async function manejarWebhookOutreach(
     const urlGrabacion = message.recordingUrl ?? message.artifact?.recordingUrl ?? null;
     const resumen = message.summary ?? message.analysis?.summary ?? null;
     const endedReason = message.call?.endedReason ?? "";
+    const datosCapturados = message.analysis?.structuredData ?? null;
 
     const inicio = message.call?.startedAt ? new Date(message.call.startedAt).getTime() : null;
     const fin = message.call?.endedAt ? new Date(message.call.endedAt).getTime() : null;
@@ -61,6 +62,7 @@ async function manejarWebhookOutreach(
       duracion_segundos: duracion,
       costo_usd: typeof message.call?.cost === "number" ? message.call.cost : null,
       resumen,
+      datos_capturados: datosCapturados,
     });
 
     // Decidir estado final del lead
@@ -130,6 +132,7 @@ interface VapiWebhookMessage {
   };
   analysis?: {
     summary?: string;
+    structuredData?: Record<string, unknown>;
   };
 }
 
