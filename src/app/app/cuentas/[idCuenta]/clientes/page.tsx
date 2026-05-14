@@ -19,6 +19,7 @@ import {
   ModalDetalle,
 } from "./_componentes";
 import { HeroClientes } from "./_hero";
+import { EstadoVacio, SkeletonLineas } from "@/components/ui";
 
 interface RespuestaConvs {
   conversaciones: ConversacionConPreview[];
@@ -215,20 +216,23 @@ export default function PaginaClientes() {
       />
 
       {/* Tabla */}
-      <div className="flex-1 overflow-y-auto bg-zinc-50/50 px-6 py-5 dark:bg-zinc-950">
+      <div className="flex-1 overflow-y-auto bg-superficie-suave/40 px-6 py-5">
         {cargando ? (
-          <p className="text-center text-sm text-zinc-500">Cargando…</p>
-        ) : filas.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-12 text-center dark:border-zinc-700 dark:bg-zinc-900">
-            <p className="font-semibold">Aún no hay clientes</p>
-            <p className="mt-1 text-xs text-zinc-500">
-              Cuando alguien escriba a tu WhatsApp, aparecerá acá automáticamente.
-            </p>
+          <div className="rounded-2xl border border-borde bg-superficie p-5">
+            <SkeletonLineas filas={6} />
           </div>
+        ) : filas.length === 0 ? (
+          <EstadoVacio
+            tamano="lg"
+            titulo="Aún no hay clientes"
+            descripcion="Cuando alguien escriba a tu WhatsApp aparecerá acá automáticamente."
+          />
         ) : filtradas.length === 0 ? (
-          <p className="text-center text-sm text-zinc-500">
-            Ningún cliente matchea los filtros.
-          </p>
+          <EstadoVacio
+            tamano="sm"
+            titulo="Ningún cliente coincide"
+            descripcion="Probá quitar filtros o ajustar la búsqueda."
+          />
         ) : (
           <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div className="border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">

@@ -12,6 +12,7 @@ import type {
   MetricasCuenta,
 } from "@/lib/baseDatos";
 import { Kpi, formatearDia, formatearFecha } from "./_componentes";
+import { EstadoVacio } from "@/components/ui";
 
 const CLASE_COLOR_BARRA: Record<string, string> = {
   zinc: "bg-zinc-400",
@@ -259,10 +260,11 @@ export function SeccionContactosCapturados({
           )}
         </div>
         {contactos.length === 0 ? (
-          <p className="text-xs text-zinc-500">
-            Aún no se capturó ningún email. Cuando un cliente escriba su email
-            en una conversación, aparece acá.
-          </p>
+          <EstadoVacio
+            tamano="sm"
+            titulo="Sin emails capturados"
+            descripcion="Cuando un cliente escriba su email en una conversación va a aparecer acá."
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -318,11 +320,11 @@ export function SeccionContactosCapturados({
           )}
         </div>
         {telefonos.length === 0 ? (
-          <p className="text-xs text-zinc-500">
-            Cuando un cliente mencione otro número en una conversación
-            (ej: &quot;llamame al ...&quot;) lo capturamos acá. Excluimos el
-            propio teléfono del cliente.
-          </p>
+          <EstadoVacio
+            tamano="sm"
+            titulo="Sin teléfonos capturados"
+            descripcion="Cuando un cliente mencione otro número en la conversación lo capturamos acá. Excluye el propio número del cliente."
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

@@ -6,6 +6,73 @@
   --font-sans: var(--fuente-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--fuente-mono), ui-monospace, "SF Mono", Menlo, monospace;
   --font-display: var(--fuente-display), ui-serif, Georgia, serif;
+
+  /* Paleta de marca — esmeralda (mismos valores que emerald-*) */
+  --color-marca-50: #ecfdf5;
+  --color-marca-100: #d1fae5;
+  --color-marca-200: #a7f3d0;
+  --color-marca-300: #6ee7b7;
+  --color-marca-400: #34d399;
+  --color-marca-500: #10b981;
+  --color-marca-600: #059669;
+  --color-marca-700: #047857;
+  --color-marca-800: #065f46;
+  --color-marca-900: #064e3b;
+  --color-marca-950: #022c22;
+
+  /* Tokens semánticos que reaccionan al tema vía CSS variables */
+  --color-superficie: var(--ui-superficie);
+  --color-superficie-suave: var(--ui-superficie-suave);
+  --color-superficie-elevada: var(--ui-superficie-elevada);
+  --color-borde: var(--ui-borde);
+  --color-borde-fuerte: var(--ui-borde-fuerte);
+  --color-texto: var(--ui-texto);
+  --color-texto-suave: var(--ui-texto-suave);
+  --color-texto-tenue: var(--ui-texto-tenue);
+  --color-exito: var(--ui-exito);
+  --color-aviso: var(--ui-aviso);
+  --color-peligro: var(--ui-peligro);
+  --color-info: var(--ui-info);
+
+  /* Radios */
+  --radius-card: 1rem;
+  --radius-pill: 999px;
+
+  /* Sombras temáticas */
+  --shadow-glow-marca: 0 0 32px -8px rgba(16, 185, 129, 0.45);
+  --shadow-glow-marca-sm: 0 0 18px -6px rgba(16, 185, 129, 0.55);
+}
+
+/* Tokens semánticos por tema — modo claro (default) */
+:root {
+  --ui-superficie: #ffffff;
+  --ui-superficie-suave: #fafafa;
+  --ui-superficie-elevada: #f4f4f5;
+  --ui-borde: #e4e4e7;
+  --ui-borde-fuerte: #d4d4d8;
+  --ui-texto: #18181b;
+  --ui-texto-suave: #52525b;
+  --ui-texto-tenue: #a1a1aa;
+  --ui-exito: #059669;
+  --ui-aviso: #d97706;
+  --ui-peligro: #dc2626;
+  --ui-info: #0284c7;
+}
+
+/* Modo oscuro */
+.dark {
+  --ui-superficie: #09090b;
+  --ui-superficie-suave: #18181b;
+  --ui-superficie-elevada: #27272a;
+  --ui-borde: #27272a;
+  --ui-borde-fuerte: #3f3f46;
+  --ui-texto: #fafafa;
+  --ui-texto-suave: #a1a1aa;
+  --ui-texto-tenue: #71717a;
+  --ui-exito: #34d399;
+  --ui-aviso: #fbbf24;
+  --ui-peligro: #f87171;
+  --ui-info: #38bdf8;
 }
 
 /* ============================================================
@@ -110,4 +177,20 @@ body {
 }
 .animate-aparecer {
   animation: aparecer 200ms ease-out both;
+}
+
+@keyframes brillo-skeleton {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--ui-superficie-elevada) 0%,
+    var(--ui-borde) 50%,
+    var(--ui-superficie-elevada) 100%
+  );
+  background-size: 200% 100%;
+  animation: brillo-skeleton 1.6s ease-in-out infinite;
+  border-radius: 0.5rem;
 }

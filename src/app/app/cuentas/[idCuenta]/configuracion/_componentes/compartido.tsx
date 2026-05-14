@@ -1,6 +1,7 @@
 "use client";
 
 import type { Cuenta } from "@/lib/baseDatos";
+import { SkeletonLineas } from "@/components/ui";
 
 export interface PropsSeccionBase {
   cuenta: Cuenta;
@@ -8,12 +9,30 @@ export interface PropsSeccionBase {
 }
 
 export function CargandoOError({ mensaje }: { mensaje: string }) {
+  const esCargando = mensaje.toLowerCase().includes("cargando");
   return (
-    <main className="flex min-h-screen items-center justify-center">
-      <div className="flex items-center gap-3 text-sm text-zinc-500">
-        <span className="h-2 w-2 animate-pulso-suave rounded-full bg-zinc-400 dark:bg-zinc-600" />
-        {mensaje}
-      </div>
+    <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-4 py-10 md:px-6">
+      {esCargando ? (
+        <>
+          <div className="flex flex-col gap-2">
+            <div className="skeleton h-4 w-40 rounded" />
+            <div className="skeleton h-7 w-72 rounded" />
+          </div>
+          <div className="rounded-2xl border border-borde bg-superficie p-6">
+            <SkeletonLineas filas={5} />
+          </div>
+          <div className="rounded-2xl border border-borde bg-superficie p-6">
+            <SkeletonLineas filas={4} />
+          </div>
+          <span className="sr-only" role="status">
+            Cargando configuración del agente
+          </span>
+        </>
+      ) : (
+        <div className="flex items-center justify-center py-20">
+          <p className="text-sm text-texto-suave">{mensaje}</p>
+        </div>
+      )}
     </main>
   );
 }

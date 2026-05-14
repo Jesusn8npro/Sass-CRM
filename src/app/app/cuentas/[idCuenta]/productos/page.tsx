@@ -9,6 +9,7 @@ import { TarjetaProducto } from "./_componentes/TarjetaProducto";
 import { ModalProducto } from "./_componentes/ModalProducto";
 import { ModalImportCSV } from "./_componentes/ModalImportCSV";
 import { useConfirm } from "@/components/ConfirmDialog";
+import { Boton, EstadoVacio } from "@/components/ui";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -142,22 +143,16 @@ export default function PaginaProductos() {
 
       <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
         {productos.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center dark:border-zinc-700 dark:bg-zinc-900">
-            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-              Aún no hay productos
-            </p>
-            <p className="mt-1 text-xs text-zinc-500">
-              Agregá tu primer producto. El agente lo va a usar automáticamente
-              al chatear con clientes (precio, stock, descripción, foto).
-            </p>
-            <button
-              type="button"
-              onClick={abrirNuevo}
-              className="mt-4 rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-400"
-            >
-              + Crear primer producto
-            </button>
-          </div>
+          <EstadoVacio
+            tamano="lg"
+            titulo="Aún no hay productos"
+            descripcion="Agregá tu primer producto. El agente lo va a usar automáticamente al chatear con clientes (precio, stock, descripción, foto)."
+            accion={
+              <Boton tamano="sm" onClick={abrirNuevo}>
+                + Crear primer producto
+              </Boton>
+            }
+          />
         ) : (
           <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {productos.map((p) => (

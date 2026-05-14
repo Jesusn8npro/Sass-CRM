@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SkeletonLineas } from "@/components/ui";
 
 interface PasoUI {
   minutos_despues: number;
@@ -121,8 +122,8 @@ export function SeccionAutoSeguimientos({ idCuenta }: { idCuenta: string }) {
 
   if (cargando) {
     return (
-      <section className="rounded-2xl border border-zinc-200 bg-white p-4 md:p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <p className="text-xs text-zinc-500">Cargando…</p>
+      <section className="rounded-2xl border border-borde bg-superficie p-4 md:p-6">
+        <SkeletonLineas filas={4} />
       </section>
     );
   }

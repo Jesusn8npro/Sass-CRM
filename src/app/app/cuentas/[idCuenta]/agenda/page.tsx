@@ -16,6 +16,7 @@ import {
 import { ModalCita } from "./_componentes/ModalCita";
 import { VistaLista, VistaMes, VistaSemana } from "./_componentes/Vistas";
 import { useConfirm } from "@/components/ConfirmDialog";
+import { Boton, EstadoVacio } from "@/components/ui";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -253,16 +254,24 @@ export default function PaginaAgenda() {
       </header>
 
       {/* Body — vista actual */}
-      <div className="flex-1 overflow-y-auto bg-zinc-50/50 px-6 py-5 dark:bg-zinc-950">
+      <div className="flex-1 overflow-y-auto bg-superficie-suave/40 px-6 py-5">
         {citas.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-12 text-center dark:border-zinc-700 dark:bg-zinc-900">
-            <p className="font-semibold">Aún no hay citas en la agenda</p>
-            <p className="mt-1 text-xs text-zinc-500">
-              La IA agenda automáticamente cuando un cliente confirma fecha y
-              hora. También podés agregar manualmente con &quot;+ Nueva
-              cita&quot;.
-            </p>
-          </div>
+          <EstadoVacio
+            tamano="lg"
+            titulo="Aún no hay citas en la agenda"
+            descripcion="La IA agenda automáticamente cuando un cliente confirma fecha y hora. También podés agregar una manualmente."
+            accion={
+              <Boton
+                tamano="sm"
+                onClick={() => {
+                  setEditando(null);
+                  setModalAbierto(true);
+                }}
+              >
+                + Nueva cita
+              </Boton>
+            }
+          />
         ) : vista === "lista" ? (
           <VistaLista
             citas={citasFiltradas}

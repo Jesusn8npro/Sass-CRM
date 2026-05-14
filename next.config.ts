@@ -63,6 +63,9 @@ const nextConfig: NextConfig = {
       "ai",
       "@ai-sdk/react",
       "@ai-sdk/openai",
+      "react-hook-form",
+      "@hookform/resolvers",
+      "@hookform/resolvers/zod",
     ],
   },
   // Imágenes del blog (bucket público Supabase Storage) optimizadas por

@@ -1,10 +1,48 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import type { Producto } from "@/lib/baseDatos";
 import { PanelUploadsProducto } from "./_modalProducto-uploads";
 import { MONEDAS } from "@/lib/constantes";
 import { useConfirm } from "@/components/ConfirmDialog";
+
+// Todos los inputs son strings (así trabaja el DOM / react-hook-form con inputs
+// type="number"). La coerción a number ocurre en el handler guardar().
+const esquema = z
+  .object({
+    nombre: z
+      .string()
+      .min(1, "El nombre es obligatorio")
+      .max(100, "Máximo 100 caracteres"),
+    descripcion: z.string().max(2000, "Máximo 2000 caracteres"),
+    precio: z.string(),
+    moneda: z.string().min(1),
+    costo: z.string(),
+    stock: z.string(),
+    sku: z.string().max(80, "Máximo 80 caracteres"),
+    categoria: z.string().max(80, "Máximo 80 caracteres"),
+  })
+  .superRefine((d, ctx) => {
+    const validarNumerico = (campo: "precio" | "costo", val: string) => {
+      if (val.trim() === "") return;
+      if (isNaN(parseFloat(val)))
+        ctx.addIssue({ code: "custom", path: [campo], message: "Debe ser un número" });
+      else if (parseFloat(val) < 0)
+        ctx.addIssue({ code: "custom", path: [campo], message: "No puede ser negativo" });
+    };
+    validarNumerico("precio", d.precio);
+    validarNumerico("costo", d.costo);
+    if (d.stock.trim() !== "") {
+      if (isNaN(parseInt(d.stock, 10)))
+        ctx.addIssue({ code: "custom", path: ["stock"], message: "Debe ser un número entero" });
+      else if (parseInt(d.stock, 10) < 0)
+        ctx.addIssue({ code: "custom", path: ["stock"], message: "No puede ser negativo" });
+    }
+  });
+type Datos = z.infer<typeof esquema>;
 
 export function ModalProducto({
   idCuenta,
@@ -19,26 +57,26 @@ export function ModalProducto({
   onCerrar: () => void;
   onGuardado: () => void;
 }) {
-  const [nombre, setNombre] = useState(productoActual?.nombre ?? "");
-  const [descripcion, setDescripcion] = useState(
-    productoActual?.descripcion ?? "",
-  );
-  const [precio, setPrecio] = useState<string>(
-    productoActual?.precio != null ? String(productoActual.precio) : "",
-  );
-  const [moneda, setMoneda] = useState(productoActual?.moneda ?? "COP");
-  const [costo, setCosto] = useState<string>(
-    productoActual?.costo != null ? String(productoActual.costo) : "",
-  );
-  const [stock, setStock] = useState<string>(
-    productoActual?.stock != null ? String(productoActual.stock) : "",
-  );
-  const [sku, setSku] = useState(productoActual?.sku ?? "");
-  const [categoria, setCategoria] = useState(productoActual?.categoria ?? "");
-
-  const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorServidor, setErrorServidor] = useState<string | null>(null);
   const { confirmar } = useConfirm();
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<Datos>({
+    resolver: zodResolver(esquema),
+    defaultValues: {
+      nombre: productoActual?.nombre ?? "",
+      descripcion: productoActual?.descripcion ?? "",
+      precio: productoActual?.precio != null ? String(productoActual.precio) : "",
+      moneda: productoActual?.moneda ?? "COP",
+      costo: productoActual?.costo != null ? String(productoActual.costo) : "",
+      stock: productoActual?.stock != null ? String(productoActual.stock) : "",
+      sku: productoActual?.sku ?? "",
+      categoria: productoActual?.categoria ?? "",
+    },
+  });
 
   // Imagen: si hay una pendiente (File en memoria), se sube tras guardar.
   // Si ya hay una guardada en server (productoActual.imagen_path), la mostramos.
@@ -87,35 +125,28 @@ export function ModalProducto({
     );
     if (!res.ok) {
       const d = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(`Error subiendo ${tipo}: ${d.error ?? `HTTP ${res.status}`}`);
+      setErrorServidor(`Error subiendo ${tipo}: ${d.error ?? `HTTP ${res.status}`}`);
       return false;
     }
     return true;
   }
 
-  async function guardar(e: React.FormEvent) {
-    e.preventDefault();
-    if (guardando) return;
-    if (!nombre.trim()) {
-      setError("El nombre es obligatorio");
-      return;
-    }
-    setGuardando(true);
-    setError(null);
+  async function guardar(datos: Datos) {
+    setErrorServidor(null);
     try {
       const url = idEditar
         ? `/api/cuentas/${idCuenta}/productos/${idEditar}`
         : `/api/cuentas/${idCuenta}/productos`;
       const metodo = idEditar ? "PATCH" : "POST";
       const cuerpo = {
-        nombre: nombre.trim(),
-        descripcion,
-        precio: precio.trim() === "" ? null : Number(precio),
-        moneda,
-        costo: costo.trim() === "" ? null : Number(costo),
-        stock: stock.trim() === "" ? null : Number(stock),
-        sku: sku.trim() || null,
-        categoria: categoria.trim() || null,
+        nombre: datos.nombre.trim(),
+        descripcion: datos.descripcion,
+        precio: datos.precio.trim() === "" ? null : Number(datos.precio),
+        moneda: datos.moneda,
+        costo: datos.costo.trim() === "" ? null : Number(datos.costo),
+        stock: datos.stock.trim() === "" ? null : Number(datos.stock),
+        sku: datos.sku.trim() || null,
+        categoria: datos.categoria.trim() || null,
       };
       const res = await fetch(url, {
         method: metodo,
@@ -124,7 +155,7 @@ export function ModalProducto({
       });
       if (!res.ok) {
         const d = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(d.error ?? `Error HTTP ${res.status}`);
+        setErrorServidor(d.error ?? `Error HTTP ${res.status}`);
         return;
       }
       const data = (await res.json()) as { producto: Producto };
@@ -142,30 +173,28 @@ export function ModalProducto({
 
       onGuardado();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error de red");
-    } finally {
-      setGuardando(false);
+      setErrorServidor(err instanceof Error ? err.message : "Error de red");
     }
   }
 
   function elegirImagen(file: File) {
     if (!file.type.startsWith("image/")) {
-      setError("El archivo debe ser una imagen");
+      setErrorServidor("El archivo debe ser una imagen");
       return;
     }
     if (file.size > 8 * 1024 * 1024) {
-      setError("Imagen muy grande (máx 8MB)");
+      setErrorServidor("Imagen muy grande (máx 8MB)");
       return;
     }
     setImagenPendiente(file);
   }
   function elegirVideo(file: File) {
     if (!file.type.startsWith("video/")) {
-      setError("El archivo debe ser un video");
+      setErrorServidor("El archivo debe ser un video");
       return;
     }
     if (file.size > 50 * 1024 * 1024) {
-      setError("Video muy grande (máx 50MB)");
+      setErrorServidor("Video muy grande (máx 50MB)");
       return;
     }
     setVideoPendiente(file);
@@ -208,6 +237,13 @@ export function ModalProducto({
     setVideoActual(null);
   }
 
+  const inputClases = (conError: boolean) =>
+    `w-full rounded-xl border px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-900 ${
+      conError
+        ? "border-red-500 focus:border-red-500 focus:ring-red-500/15"
+        : "border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 focus:ring-emerald-500/15"
+    } focus:outline-none focus:ring-2`;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8 backdrop-blur-sm overflow-y-auto"
@@ -220,7 +256,7 @@ export function ModalProducto({
           {idEditar ? "Editar producto" : "Nuevo producto"}
         </h2>
 
-        <form onSubmit={guardar} className="flex flex-col gap-3">
+        <form onSubmit={handleSubmit(guardar)} className="flex flex-col gap-3">
           <PanelUploadsProducto
             urlImagen={urlImagen}
             urlVideo={urlVideo}
@@ -228,7 +264,7 @@ export function ModalProducto({
             videoPendiente={videoPendiente}
             refInputImagen={refInputImagen}
             refInputVideo={refInputVideo}
-            guardando={guardando}
+            guardando={isSubmitting}
             elegirImagen={elegirImagen}
             elegirVideo={elegirVideo}
             quitarImagen={quitarImagen}
@@ -237,17 +273,21 @@ export function ModalProducto({
 
           <div>
             <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-              Nombre
+              Nombre <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              required
+              {...register("nombre")}
               maxLength={100}
               placeholder="Ej: Acordeón Hohner Corona III"
-              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+              aria-invalid={!!errors.nombre}
+              className={inputClases(!!errors.nombre)}
             />
+            {errors.nombre && (
+              <p className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">
+                {errors.nombre.message}
+              </p>
+            )}
           </div>
 
           <div>
@@ -255,12 +295,17 @@ export function ModalProducto({
               Descripción
             </label>
             <textarea
-              value={descripcion}
-              onChange={(e) => setDescripcion(e.target.value)}
+              {...register("descripcion")}
               rows={3}
               placeholder="Detalle del producto. Lo va a leer el agente para responder."
-              className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+              aria-invalid={!!errors.descripcion}
+              className={`resize-none ${inputClases(!!errors.descripcion)}`}
             />
+            {errors.descripcion && (
+              <p className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">
+                {errors.descripcion.message}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -270,21 +315,25 @@ export function ModalProducto({
               </label>
               <input
                 type="number"
-                value={precio}
-                onChange={(e) => setPrecio(e.target.value)}
+                {...register("precio")}
                 step="0.01"
                 placeholder="vacío = consultar"
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                aria-invalid={!!errors.precio}
+                className={inputClases(!!errors.precio)}
               />
+              {errors.precio && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">
+                  {errors.precio.message}
+                </p>
+              )}
             </div>
             <div>
               <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
                 Moneda
               </label>
               <select
-                value={moneda}
-                onChange={(e) => setMoneda(e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                {...register("moneda")}
+                className={inputClases(false)}
               >
                 {MONEDAS.map((m) => (
                   <option key={m} value={m}>
@@ -302,12 +351,17 @@ export function ModalProducto({
               </label>
               <input
                 type="number"
-                value={costo}
-                onChange={(e) => setCosto(e.target.value)}
+                {...register("costo")}
                 step="0.01"
                 placeholder="opcional"
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                aria-invalid={!!errors.costo}
+                className={inputClases(!!errors.costo)}
               />
+              {errors.costo && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">
+                  {errors.costo.message}
+                </p>
+              )}
             </div>
             <div>
               <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
@@ -315,12 +369,17 @@ export function ModalProducto({
               </label>
               <input
                 type="number"
-                value={stock}
-                onChange={(e) => setStock(e.target.value)}
+                {...register("stock")}
                 min={0}
                 placeholder="vacío = no controla"
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                aria-invalid={!!errors.stock}
+                className={inputClases(!!errors.stock)}
               />
+              {errors.stock && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">
+                  {errors.stock.message}
+                </p>
+              )}
             </div>
           </div>
 
@@ -331,11 +390,16 @@ export function ModalProducto({
               </label>
               <input
                 type="text"
-                value={sku}
-                onChange={(e) => setSku(e.target.value)}
+                {...register("sku")}
                 placeholder="opcional"
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 font-mono text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                aria-invalid={!!errors.sku}
+                className={`font-mono ${inputClases(!!errors.sku)}`}
               />
+              {errors.sku && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">
+                  {errors.sku.message}
+                </p>
+              )}
             </div>
             <div>
               <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
@@ -343,17 +407,25 @@ export function ModalProducto({
               </label>
               <input
                 type="text"
-                value={categoria}
-                onChange={(e) => setCategoria(e.target.value)}
+                {...register("categoria")}
                 placeholder="Ej: Acordeones"
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                aria-invalid={!!errors.categoria}
+                className={inputClases(!!errors.categoria)}
               />
+              {errors.categoria && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">
+                  {errors.categoria.message}
+                </p>
+              )}
             </div>
           </div>
 
-          {error && (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
-              {error}
+          {errorServidor && (
+            <div
+              className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300"
+              role="alert"
+            >
+              {errorServidor}
             </div>
           )}
 
@@ -361,17 +433,17 @@ export function ModalProducto({
             <button
               type="button"
               onClick={onCerrar}
-              disabled={guardando}
+              disabled={isSubmitting}
               className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={guardando || !nombre.trim()}
+              disabled={isSubmitting}
               className="rounded-xl bg-emerald-500 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {guardando ? "Guardando..." : idEditar ? "Guardar cambios" : "Crear"}
+              {isSubmitting ? "Guardando..." : idEditar ? "Guardar cambios" : "Crear"}
             </button>
           </div>
         </form>

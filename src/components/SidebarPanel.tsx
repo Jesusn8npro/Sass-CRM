@@ -87,7 +87,7 @@ export function SidebarPanel({
   return (
     <aside
       aria-label="Navegación principal"
-      className={`fixed inset-y-0 left-0 z-50 flex h-screen w-[240px] flex-col border-r border-zinc-200 bg-white transition-transform duration-200 ease-out dark:border-zinc-800 dark:bg-zinc-950 lg:static lg:z-auto lg:translate-x-0 lg:shrink-0 ${
+      className={`fixed inset-y-0 left-0 z-50 flex h-screen w-[240px] flex-col border-r border-borde bg-superficie transition-transform duration-200 ease-out lg:static lg:z-auto lg:translate-x-0 lg:shrink-0 ${
         abierto ? "translate-x-0" : "-translate-x-full"
       }`}
       onClickCapture={(e) => {
@@ -97,16 +97,18 @@ export function SidebarPanel({
       }}
     >
       {/* Header: logo + selector cuenta */}
-      <div className="border-b border-zinc-200 px-4 py-4 dark:border-zinc-800">
+      <div className="border-b border-borde px-4 py-4">
         <Link href="/app" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-sm font-bold text-white shadow-sm">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-marca-500 to-marca-600 text-sm font-bold text-white shadow-[var(--shadow-glow-marca-sm)]">
             S
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold tracking-tight">
+            <p className="truncate text-sm font-semibold tracking-tight text-texto">
               Sass-CRM
             </p>
-            <p className="text-[10px] text-zinc-500">Panel</p>
+            <p className="text-[10px] uppercase tracking-wider text-texto-tenue">
+              Panel
+            </p>
           </div>
         </Link>
 
@@ -415,7 +417,7 @@ function SeccionNav({
 }) {
   return (
     <div className="mb-4">
-      <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+      <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-texto-tenue">
         {titulo}
       </p>
       <ul className="flex flex-col gap-0.5">{children}</ul>

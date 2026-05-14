@@ -43,6 +43,7 @@ import {
 } from "./_secciones";
 import { SeccionCRMyCitas } from "./_secciones-crm";
 import { SeccionProspeccion } from "./_seccion-prospeccion";
+import { SkeletonTarjetaKpi } from "@/components/ui";
 
 export default function PaginaDashboard() {
   const params = useParams<{ idCuenta: string }>();
@@ -185,7 +186,23 @@ export default function PaginaDashboard() {
 
       <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
         {!metricas ? (
-          <p className="text-sm text-zinc-500">Cargando métricas...</p>
+          <div className="flex flex-col gap-6">
+            <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonTarjetaKpi key={i} />
+              ))}
+            </section>
+            <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonTarjetaKpi key={i} />
+              ))}
+            </section>
+            <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <SkeletonTarjetaKpi key={i} />
+              ))}
+            </section>
+          </div>
         ) : (
           <div className="flex flex-col gap-6">
             {/* KPIs principales */}

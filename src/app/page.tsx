@@ -12,6 +12,8 @@ import {
   Precios,
   PreguntasFrecuentes,
 } from "./_componentes-landing/Comercial";
+import { LogosClientes } from "./_componentes-landing/LogosClientes";
+import { TestimoniosSociales } from "./_componentes-landing/TestimoniosSociales";
 import { urlAbsoluta } from "@/lib/blog/siteUrl";
 
 const TITULO = "Agente de WhatsApp con IA para PYMEs — Sass-CRM";
@@ -28,6 +30,12 @@ export const metadata: Metadata = {
     "crm whatsapp",
     "ventas whatsapp automatico",
     "bot whatsapp colombia",
+    "bot whatsapp argentina",
+    "bot whatsapp mexico",
+    "automatizacion whatsapp latam",
+    "whatsapp business ia pymes",
+    "agendar citas whatsapp ia",
+    "responder whatsapp automatico",
   ],
   alternates: { canonical: urlAbsoluta("/") },
   openGraph: {
@@ -115,6 +123,33 @@ const WEBSITE_SCHEMA = {
   },
 };
 
+const SOFTWARE_SCHEMA = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Sass-CRM",
+  url: urlAbsoluta("/"),
+  description: DESCRIPCION,
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web, Android, iOS",
+  inLanguage: "es",
+  offers: [
+    {
+      "@type": "Offer",
+      name: "Gratis",
+      price: "0",
+      priceCurrency: "USD",
+      description: "1 cuenta WhatsApp, 100 conversaciones/mes.",
+    },
+    {
+      "@type": "Offer",
+      name: "Pro",
+      price: "29",
+      priceCurrency: "USD",
+      description: "WhatsApp ilimitados, voz clonada, multi-modelo.",
+    },
+  ],
+};
+
 export default function PaginaLanding() {
   return (
     <main className="min-h-screen bg-black font-sans text-white antialiased [color-scheme:dark]">
@@ -130,11 +165,17 @@ export default function PaginaLanding() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_SCHEMA) }}
       />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(SOFTWARE_SCHEMA) }}
+      />
       <Navegacion />
       <Hero />
+      <LogosClientes />
       <Metricas />
       <ComoFunciona />
       <Funciones />
+      <TestimoniosSociales />
       <CasosDeUso />
       <Precios />
       <PreguntasFrecuentes />
