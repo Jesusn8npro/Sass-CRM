@@ -9,8 +9,90 @@ import {
 } from "@/lib/baseDatos";
 import { verificarSecretWebhook } from "@/lib/vapi";
 import { dispararWebhook } from "@/lib/webhooks";
+import {
+  actualizarRegistroLlamadaPorVapiId,
+  obtenerRegistroLlamadaPorVapiId,
+} from "@/lib/db/outreachLogs";
+import {
+  actualizarEstadoProspeccion,
+  obtenerLead,
+  registrarFalloProspeccion,
+} from "@/lib/db/leadsExtraidos";
 
 export const dynamic = "force-dynamic";
+
+// ============================================================
+// Manejo de llamadas de OUTREACH (no WhatsApp)
+// ============================================================
+
+import type { RegistroLlamadaProspeccion } from "@/lib/db/outreachLogs";
+
+/** Resultados de Vapi que consideramos "completado" (el prospect atendió). */
+const RESULTADOS_COMPLETADO = new Set([
+  "customer-ended-call",
+  "assistant-ended-call",
+  "pipeline-error-openai-voice-failed",
+  "silence-timed-out",
+]);
+
+async function manejarWebhookOutreach(
+  message: VapiWebhookMessage,
+  callId: string,
+  logOutreach: RegistroLlamadaProspeccion,
+  _headerSecret: string | null,
+): Promise<NextResponse> {
+  const tipo = message.type ?? "";
+
+  if (tipo === "end-of-call-report") {
+    const transcript = message.transcript ?? message.artifact?.transcript ?? null;
+    const urlGrabacion = message.recordingUrl ?? message.artifact?.recordingUrl ?? null;
+    const resumen = message.summary ?? message.analysis?.summary ?? null;
+    const endedReason = message.call?.endedReason ?? "";
+
+    const inicio = message.call?.startedAt ? new Date(message.call.startedAt).getTime() : null;
+    const fin = message.call?.endedAt ? new Date(message.call.endedAt).getTime() : null;
+    const duracion = inicio && fin ? Math.max(0, Math.floor((fin - inicio) / 1000)) : null;
+
+    // Actualizar log de la llamada outreach
+    await actualizarRegistroLlamadaPorVapiId(callId, {
+      resultado: endedReason || "completada",
+      transcripcion: transcript,
+      url_grabacion: urlGrabacion,
+      duracion_segundos: duracion,
+      costo_usd: typeof message.call?.cost === "number" ? message.call.cost : null,
+      resumen,
+    });
+
+    // Decidir estado final del lead
+    const lead = await obtenerLead(logOutreach.lead_id);
+    if (lead) {
+      const esCompletado =
+        RESULTADOS_COMPLETADO.has(endedReason) ||
+        (!!transcript && transcript.length > 50); // hubo conversación real
+
+      if (esCompletado) {
+        await actualizarEstadoProspeccion(lead.id, "completado");
+        console.log(`[vapi-webhook] ✓ Outreach completado — lead: ${lead.nombre}`);
+      } else {
+        // Sin respuesta, voicemail, ocupado → reintento o no_contactable
+        await registrarFalloProspeccion(lead.id, lead.intentos_outreach);
+        console.log(
+          `[vapi-webhook] ↺ Outreach sin respuesta (${endedReason}) — ` +
+          `lead: ${lead.nombre} intento ${lead.intentos_outreach + 1}/3`,
+        );
+      }
+    }
+
+    return NextResponse.json({ ok: true, tipo: "outreach" });
+  }
+
+  // status-update: solo logueamos, no cambiamos estado_outreach todavía
+  if (tipo === "status-update") {
+    return NextResponse.json({ ok: true, tipo: "outreach-status" });
+  }
+
+  return NextResponse.json({ ok: true, ignorado: true });
+}
 
 /**
  * Webhook que recibe Vapi cada vez que pasa algo en una llamada.
@@ -101,13 +183,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, ignorado: true });
   }
 
-  // Buscamos la llamada en DB
+  // Buscamos la llamada en DB — primero en llamadas_vapi (WhatsApp),
+  // luego en outreach_call_logs (cold outreach)
   const llamada = await obtenerLlamadaPorCallId(callId);
+
+  // ── Llamada de OUTREACH (no es de WhatsApp) ───────────────────────────
   if (!llamada) {
-    // Llamada que no iniciamos nosotros (ej: inbound directa) — la
-    // guardamos como "huérfana" sería complejo, mejor reportamos.
+    const logOutreach = await obtenerRegistroLlamadaPorVapiId(callId);
+    if (logOutreach) {
+      return manejarWebhookOutreach(message, callId, logOutreach, headerSecret);
+    }
     console.warn(
-      `[vapi-webhook] call_id ${callId} no existe en DB, evento ignorado`,
+      `[vapi-webhook] call_id ${callId} no existe en DB — ignorado`,
     );
     return NextResponse.json({ ok: true, ignorado: true });
   }

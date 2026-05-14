@@ -13,6 +13,7 @@ const API_PUBLICA_ALLOWLIST = [
   "/api/wa-cloud/webhook",
   "/api/vapi/webhook",
   "/api/apify/webhook",
+  "/api/resend/webhook",
   "/api/billing/paypal/webhook",
   "/api/cron/reportes-semanales",
   // API pública v1 — autenticada vía API key en el handler, no por sesión.
@@ -20,6 +21,10 @@ const API_PUBLICA_ALLOWLIST = [
   // Demo público (chat sandbox). Rate-limit por IP en el handler.
   "/api/demo/chat",
 ];
+
+// UUID v4 exacto — solo coincide con IDs reales, no con "nueva" ni slugs
+const RE_CUENTA_UUID =
+  /^\/app\/cuentas\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(\/.*)?$/;
 
 export async function middleware(request: NextRequest) {
   const { supabase, response } = crearClienteMiddleware(request);
@@ -29,6 +34,38 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
+
+  // ── URLs amigables: /app/cuentas/UUID/* → /app/cuenta/* ──────────────────
+  // Guarda la cuenta activa en cookie y redirige a la URL limpia.
+  const matchUUID = RE_CUENTA_UUID.exec(path);
+  if (matchUUID) {
+    const idCuenta = matchUUID[1]!;
+    const resto = matchUUID[2] ?? "";
+    const urlLimpia = request.nextUrl.clone();
+    urlLimpia.pathname = `/app/cuenta${resto}`;
+    const redir = NextResponse.redirect(urlLimpia);
+    redir.cookies.set("cuenta_activa", idCuenta, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 30, // 30 días
+    });
+    return redir;
+  }
+
+  // ── Reescritura: /app/cuenta/* → /app/cuentas/UUID/* internamente ────────
+  // El navegador siempre ve /app/cuenta/... pero Next.js sirve /app/cuentas/UUID/...
+  if (path === "/app/cuenta" || path.startsWith("/app/cuenta/")) {
+    const idActivo = request.cookies.get("cuenta_activa")?.value;
+    if (!idActivo) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/app";
+      return NextResponse.redirect(url);
+    }
+    const urlInterna = request.nextUrl.clone();
+    urlInterna.pathname = path.replace("/app/cuenta", `/app/cuentas/${idActivo}`);
+    return NextResponse.rewrite(urlInterna);
+  }
 
   if (path.startsWith("/api")) {
     const esPublica = API_PUBLICA_ALLOWLIST.some(

@@ -183,32 +183,31 @@ export function SidebarPanel({
           <ItemNav
             icono={<IconoConversaciones />}
             etiqueta="Conversaciones"
-            href={`/app/cuentas/${idCuentaActual}/conversaciones`}
+            href="/app/cuenta/conversaciones"
             actual={pathname}
           />
           <ItemNav
             icono={<IconoClientes />}
             etiqueta="Clientes"
-            href={`/app/cuentas/${idCuentaActual}/clientes`}
+            href="/app/cuenta/clientes"
             actual={pathname}
           />
           <ItemNav
             icono={<IconoReportes />}
             etiqueta="Reportes"
-            href={`/app/cuentas/${idCuentaActual}/dashboard`}
+            href="/app/cuenta/dashboard"
             actual={pathname}
-            matchPaths={["/dashboard", "/reportes"]}
           />
           <ItemNav
             icono={<IconoAgenda />}
             etiqueta="Agenda"
-            href={`/app/cuentas/${idCuentaActual}/agenda`}
+            href="/app/cuenta/agenda"
             actual={pathname}
           />
           <ItemNav
             icono={<IconoPlantillas />}
             etiqueta="Plantillas"
-            href={`/app/cuentas/${idCuentaActual}/plantillas`}
+            href="/app/cuenta/plantillas"
             actual={pathname}
           />
         </SeccionNav>
@@ -217,48 +216,44 @@ export function SidebarPanel({
           <ItemNav
             icono={<IconoWhatsApp />}
             etiqueta="WhatsApp Web"
-            href={`/app/cuentas/${idCuentaActual}/whatsapp`}
+            href="/app/cuenta/whatsapp"
             actual={pathname}
           />
           <ItemNav
             icono={<IconoWhatsAppBusiness />}
             etiqueta="WhatsApp Business"
-            href={`/app/cuentas/${idCuentaActual}/whatsapp-business`}
+            href="/app/cuenta/whatsapp-business"
             actual={pathname}
-            matchPaths={["/whatsapp-business"]}
           />
           <ItemNav
             icono={<IconoAgente />}
             etiqueta="Agente IA"
-            href={`/app/cuentas/${idCuentaActual}/configuracion`}
+            href="/app/cuenta/configuracion"
             actual={pathname}
-            matchPaths={["/configuracion", "/agente-ia"]}
           />
           <ItemNav
             icono={<IconoConocimiento />}
             etiqueta="Conocimiento"
-            href={`/app/cuentas/${idCuentaActual}/conocimiento`}
+            href="/app/cuenta/conocimiento"
             actual={pathname}
           />
           <ItemNav
             icono={<IconoFunnel />}
             etiqueta="Funnel"
-            href={`/app/cuentas/${idCuentaActual}/pipeline`}
+            href="/app/cuenta/pipeline"
             actual={pathname}
-            matchPaths={["/pipeline", "/funnel"]}
           />
           <ItemNav
             icono={<IconoWebhooks />}
             etiqueta="Webhooks"
-            href={`/app/cuentas/${idCuentaActual}/webhooks`}
+            href="/app/cuenta/webhooks"
             actual={pathname}
           />
           <ItemNav
             icono={<IconoWebhooks />}
             etiqueta="API Keys"
-            href={`/app/cuentas/${idCuentaActual}/api-keys`}
+            href="/app/cuenta/api-keys"
             actual={pathname}
-            matchPaths={["/api-keys"]}
           />
         </SeccionNav>
 
@@ -266,25 +261,46 @@ export function SidebarPanel({
           <ItemNav
             icono={<IconoLlamadas />}
             etiqueta="Llamadas"
-            href={`/app/cuentas/${idCuentaActual}/llamadas`}
+            href="/app/cuenta/llamadas"
             actual={pathname}
           />
           <ItemNav
             icono={<IconoProductos />}
             etiqueta="Productos"
-            href={`/app/cuentas/${idCuentaActual}/productos`}
+            href="/app/cuenta/productos"
             actual={pathname}
           />
           <ItemNav
             icono={<IconoSeguimientos />}
             etiqueta="Seguimientos"
-            href={`/app/cuentas/${idCuentaActual}/seguimientos`}
+            href="/app/cuenta/seguimientos"
             actual={pathname}
           />
           <ItemNav
             icono={<IconoInversiones />}
             etiqueta="Inversiones"
-            href={`/app/cuentas/${idCuentaActual}/inversiones`}
+            href="/app/cuenta/inversiones"
+            actual={pathname}
+          />
+        </SeccionNav>
+
+        <SeccionNav titulo="Prospección Automática">
+          <ItemNav
+            icono={<IconoLlamadas />}
+            etiqueta="Pipeline"
+            href="/app/cuenta/prospeccion"
+            actual={pathname}
+          />
+          <ItemNav
+            icono={<IconoReportes />}
+            etiqueta="Llamadas"
+            href="/app/cuenta/prospeccion/llamadas"
+            actual={pathname}
+          />
+          <ItemNav
+            icono={<IconoAgenda />}
+            etiqueta="Correos"
+            href="/app/cuenta/prospeccion/correos"
             actual={pathname}
           />
         </SeccionNav>
@@ -293,19 +309,19 @@ export function SidebarPanel({
           <ItemNav
             icono={<IconoLeads />}
             etiqueta="Buscar leads"
-            href={`/app/cuentas/${idCuentaActual}/leads`}
+            href="/app/cuenta/leads"
             actual={pathname}
           />
           <ItemNav
             icono={<IconoEstudio />}
             etiqueta="Estudio imágenes"
-            href={`/app/cuentas/${idCuentaActual}/estudio`}
+            href="/app/cuenta/estudio"
             actual={pathname}
           />
           <ItemNav
             icono={<IconoCreditos />}
             etiqueta="Créditos"
-            href={`/app/cuentas/${idCuentaActual}/creditos`}
+            href="/app/cuenta/creditos"
             actual={pathname}
           />
         </SeccionNav>
@@ -314,9 +330,8 @@ export function SidebarPanel({
           <ItemNav
             icono={<IconoConocimiento />}
             etiqueta="Soporte"
-            href={`/app/cuentas/${idCuentaActual}/soporte`}
+            href="/app/cuenta/soporte"
             actual={pathname}
-            matchPaths={["/soporte"]}
           />
         </SeccionNav>
 

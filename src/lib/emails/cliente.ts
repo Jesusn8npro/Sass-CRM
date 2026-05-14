@@ -33,6 +33,8 @@ export interface OpcionesEmail {
   to: string;
   subject: string;
   html: string;
+  /** Versión texto plano para cold outreach (mejor deliverability). */
+  text?: string;
   /** Opcional: clave de idempotencia para auditar reenvíos (Resend la
    *  guarda como X-Entity-Ref-ID en headers). */
   idempotencyKey?: string;
@@ -64,6 +66,7 @@ export async function enviarEmail(
       to: opciones.to,
       subject: opciones.subject,
       html: opciones.html,
+      ...(opciones.text ? { text: opciones.text } : {}),
       headers: Object.keys(headers).length > 0 ? headers : undefined,
     });
 

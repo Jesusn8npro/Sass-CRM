@@ -42,6 +42,7 @@ import {
   SeccionVolumenYTops,
 } from "./_secciones";
 import { SeccionCRMyCitas } from "./_secciones-crm";
+import { SeccionProspeccion } from "./_seccion-prospeccion";
 
 export default function PaginaDashboard() {
   const params = useParams<{ idCuenta: string }>();
@@ -375,6 +376,8 @@ export default function PaginaDashboard() {
               llamarTelefono={llamarTelefono}
               llamandoId={llamandoId}
             />
+
+            <SeccionProspeccion idCuenta={idCuenta} />
           </div>
         )}
       </div>

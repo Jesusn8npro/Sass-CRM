@@ -12,6 +12,7 @@ import {
 } from "./procesadores";
 import { procesarAutoSeguimientos } from "./procesarAutoSeguimientos";
 import { procesarReporteDiario } from "@/lib/admin/reporteDiario";
+import { procesarOutreach } from "@/lib/outreach/orquestador";
 
 interface EstadoCicloVida {
   arrancando: boolean;
@@ -23,6 +24,7 @@ interface EstadoCicloVida {
   intervaloAutoSeguimientos: NodeJS.Timeout | null;
   intervaloRecordatoriosCitas: NodeJS.Timeout | null;
   intervaloLlamadasProgramadas: NodeJS.Timeout | null;
+  intervaloOutreach: NodeJS.Timeout | null;
   intervaloReportesSemanales: NodeJS.Timeout | null;
   /** Última semana ISO (YYYY-WW) en la que se disparó el reporte. */
   ultimaSemanaReporte: string | null;
@@ -51,6 +53,7 @@ if (!g[claveGlobal]) {
     intervaloAutoSeguimientos: null,
     intervaloRecordatoriosCitas: null,
     intervaloLlamadasProgramadas: null,
+    intervaloOutreach: null,
     intervaloReportesSemanales: null,
     ultimaSemanaReporte: null,
     intervaloResumenOperador: null,
@@ -207,6 +210,8 @@ function instalarGuardias(): void {
       clearInterval(estado.intervaloRecordatoriosCitas);
     if (estado.intervaloLlamadasProgramadas)
       clearInterval(estado.intervaloLlamadasProgramadas);
+    if (estado.intervaloOutreach)
+      clearInterval(estado.intervaloOutreach);
     if (estado.intervaloReportesSemanales)
       clearInterval(estado.intervaloReportesSemanales);
     if (estado.intervaloResumenOperador)
@@ -329,6 +334,14 @@ export async function arrancarBotEnProceso(): Promise<void> {
         console.error("[bot] error procesando llamadas programadas:", err);
       });
     }, 30_000);
+
+    // Orquestador de cold outreach: cada 5 min busca leads nuevos,
+    // dispara llamadas Vapi o secuencias de email, y despacha follow-ups.
+    estado.intervaloOutreach = setInterval(() => {
+      void procesarOutreach().catch((err) => {
+        console.error("[bot] error en orquestador outreach:", err);
+      });
+    }, 5 * 60_000);
 
     // Reportes semanales: cada hora chequea si es lunes ≥ 9am y dispara
     // el endpoint interno una sola vez por semana ISO. Sólo se activa

@@ -26,8 +26,16 @@ export interface CredencialesVapi {
 }
 
 export function resolverCredencialesVapi(cuenta: Cuenta): CredencialesVapi {
-  const envApi = process.env.VAPI_API_KEY?.trim() || null;
-  const envPub = process.env.VAPI_PUBLIC_KEY?.trim() || null;
+  // Acepta VAPI_API_KEY o VAPI_PRIVATE_KEY (mismo valor, dos nombres posibles)
+  const envApi =
+    process.env.VAPI_API_KEY?.trim() ||
+    process.env.VAPI_PRIVATE_KEY?.trim() ||
+    null;
+  // Acepta VAPI_PUBLIC_KEY o NEXT_PUBLIC_VAPI_PUBLIC_KEY
+  const envPub =
+    process.env.VAPI_PUBLIC_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY?.trim() ||
+    null;
   const envPhone = process.env.VAPI_PHONE_NUMBER_ID?.trim() || null;
 
   const cuentaApi = cuenta.vapi_api_key?.trim() || null;
