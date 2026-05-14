@@ -24,7 +24,6 @@ import {
   existeEmailProspeccionPaso,
   insertarRegistroEmail,
   marcarEmailProspeccionEnviado,
-  type RegistroEmailProspeccion,
 } from "../db/outreachLogs";
 import type { Cuenta } from "../baseDatos";
 

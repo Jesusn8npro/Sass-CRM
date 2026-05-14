@@ -61,8 +61,6 @@ export async function insertarLeadsExtraidos(
   // Deduplicación: salteamos leads cuyo teléfono O nombre ya existe
   // en la cuenta. Igual que el video — evita llamar dos veces al mismo negocio.
   const cuentaId = filas[0]!.cuenta_id;
-  const telefonos = filas.map((f) => f.telefono).filter(Boolean) as string[];
-  const nombres = filas.map((f) => f.nombre.trim().toLowerCase());
 
   const { data: existentes } = await db()
     .from("leads_extraidos")
