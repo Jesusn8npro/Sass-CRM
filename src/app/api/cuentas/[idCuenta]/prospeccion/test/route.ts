@@ -34,7 +34,7 @@ export async function POST(
     .from("leads_extraidos")
     .insert({
       cuenta_id: idCuenta,
-      run_apify_id: null,
+      run_apify_id: crypto.randomUUID(),
       nombre: "Negocio de Prueba S.A.S",
       telefono: process.env.OUTREACH_TEST_PHONE ?? "+573123790071",
       email: process.env.OUTREACH_TEST_EMAIL ?? null,
