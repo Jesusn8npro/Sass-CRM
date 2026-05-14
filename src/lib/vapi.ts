@@ -232,18 +232,9 @@ export async function iniciarLlamada(
   if (opciones.primerMensajeOverride) {
     assistantOverrides.firstMessage = opciones.primerMensajeOverride;
   }
-  if (opciones.contextoAdicional) {
-    // Vapi acepta un array adicional de messages que se injecta al inicio
-    // del system. No reemplaza, agrega.
-    assistantOverrides.model = {
-      messages: [
-        {
-          role: "system" as const,
-          content: opciones.contextoAdicional,
-        },
-      ],
-    };
-  }
+  // contextoAdicional omitido: Vapi exige que assistantOverrides.model incluya
+  // también el campo "provider" (openai, groq, etc.), que no podemos conocer
+  // desde aquí. El contexto del negocio viaja en el firstMessage en su lugar.
 
   const cuerpo: Record<string, unknown> = {
     assistantId: opciones.assistantId,
