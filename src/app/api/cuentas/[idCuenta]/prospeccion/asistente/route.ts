@@ -73,6 +73,8 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
     const assistant = await obtenerAssistant(cred.apiKey, assistantId);
     const systemPrompt = assistant.model?.messages?.find(m => m.role === "system")?.content ?? "";
     const campos = parsearCampos(assistant.analysisPlan?.structuredDataSchema);
+    // Vapi new API usa server.url; el campo legacy serverUrl también puede venir
+    const serverUrl = assistant.server?.url ?? assistant.serverUrl ?? "";
     return NextResponse.json({
       id: assistant.id,
       nombre: assistant.name ?? "",
@@ -80,7 +82,7 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
       systemPrompt,
       modelo: assistant.model?.model ?? "gpt-4o-mini",
       voz: assistant.voice ?? null,
-      serverUrl: assistant.serverUrl ?? "",
+      serverUrl,
       campos,
     });
   } catch (err) {
@@ -120,7 +122,12 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
 
   if (typeof body.nombre === "string") patch.name = body.nombre.trim();
   if (typeof body.primerMensaje === "string") patch.firstMessage = body.primerMensaje.trim();
-  if (typeof body.serverUrl === "string") patch.serverUrl = body.serverUrl.trim();
+  if (typeof body.serverUrl === "string") {
+    const url = body.serverUrl.trim();
+    // Vapi acepta ambos formatos; mandamos el nuevo (server.url) y el legacy
+    patch.server = { url };
+    patch.serverUrl = url;
+  }
 
   if (Array.isArray(body.campos)) {
     const schema = construirSchema(body.campos);
@@ -169,7 +176,11 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     const campos = parsearCampos(
       (actualizado.analysisPlan as { structuredDataSchema?: unknown } | undefined)?.structuredDataSchema
     );
-    return NextResponse.json({ ok: true, id: actualizado.id, systemPrompt, campos });
+    const serverUrlActualizado =
+      (actualizado.server as { url?: string } | undefined)?.url ??
+      (actualizado.serverUrl as string | undefined) ??
+      "";
+    return NextResponse.json({ ok: true, id: actualizado.id, systemPrompt, campos, serverUrl: serverUrlActualizado });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 502 });

@@ -29,6 +29,7 @@ export interface VapiAssistant {
   voice?: { provider: string; voiceId: string };
   firstMessage?: string;
   serverUrl?: string;
+  server?: { url?: string; timeoutSeconds?: number };
   serverUrlSecret?: string;
   analysisPlan?: {
     structuredDataSchema?: Record<string, unknown>;

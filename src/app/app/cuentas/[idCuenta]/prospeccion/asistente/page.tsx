@@ -21,6 +21,14 @@ interface AsistenteConfig {
   campos: CampoExtraccion[];
 }
 
+interface GuardarRespuesta {
+  ok?: boolean;
+  error?: string;
+  serverUrl?: string;
+  campos?: CampoExtraccion[];
+  systemPrompt?: string;
+}
+
 const MODELOS = [
   { value: "gpt-4o", label: "GPT-4o (más capaz)" },
   { value: "gpt-4o-mini", label: "GPT-4o Mini (más rápido)" },
@@ -158,13 +166,25 @@ export default function PaginaAsistenteProspeccion() {
           campos: getCamposParaEnviar(),
         }),
       });
-      const d = await r.json() as { ok?: boolean; error?: string };
+      const d = await r.json() as GuardarRespuesta;
       if (!r.ok || !d.ok) {
         setError(d.error ?? "Error guardando");
         return;
       }
+      // Actualizar estado con los valores confirmados por Vapi
+      if (typeof d.serverUrl === "string") setServerUrl(d.serverUrl);
+      if (Array.isArray(d.campos)) {
+        const activos = new Set<string>();
+        const personalizados: CampoExtraccion[] = [];
+        for (const c of d.campos) {
+          if (NOMBRES_PREDEFINIDOS.has(c.nombre)) activos.add(c.nombre);
+          else personalizados.push(c);
+        }
+        setCamposActivos(activos);
+        setCamposPersonalizados(personalizados);
+      }
       setExito(true);
-      setTimeout(() => setExito(false), 3000);
+      setTimeout(() => setExito(false), 4000);
     } catch {
       setError("Error de conexión");
     } finally {
@@ -205,8 +225,18 @@ export default function PaginaAsistenteProspeccion() {
         )}
 
         {exito && (
-          <div className="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-400">
-            ✓ Asistente actualizado correctamente en Vapi
+          <div className="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 p-4 dark:bg-emerald-900/20 dark:border-emerald-800">
+            <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">✓ Guardado en Vapi correctamente</p>
+            {serverUrl && (
+              <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-0.5 truncate">
+                Webhook: {serverUrl}
+              </p>
+            )}
+            {(camposActivos.size + camposPersonalizados.length) > 0 && (
+              <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-0.5">
+                Extrayendo {camposActivos.size + camposPersonalizados.length} campos de cada llamada
+              </p>
+            )}
           </div>
         )}
 
