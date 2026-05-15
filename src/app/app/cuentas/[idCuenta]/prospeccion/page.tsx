@@ -199,6 +199,13 @@ export default function PaginaProspeccion() {
               >
                 Ver correos →
               </Link>
+              <span className="text-xs text-zinc-300 dark:text-zinc-600">|</span>
+              <Link
+                href={`/app/cuentas/${idCuenta}/prospeccion/asistente`}
+                className="text-xs text-emerald-600 hover:underline dark:text-emerald-400"
+              >
+                ⚙️ Asistente →
+              </Link>
             </div>
           </div>
 
