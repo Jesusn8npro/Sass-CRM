@@ -1,9 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   actualizarLlamadaPorCallId,
+  guardarContactosEmail,
+  guardarContactosTelefono,
   insertarMensaje,
+  marcarLeadImportado,
   obtenerCuenta,
   obtenerLlamadaPorCallId,
+  obtenerOCrearConversacion,
   registrarUso,
   type EstadoLlamada,
 } from "@/lib/baseDatos";
@@ -55,7 +59,7 @@ async function manejarWebhookOutreach(
     const fin = message.call?.endedAt ? new Date(message.call.endedAt).getTime() : null;
     const duracion = inicio && fin ? Math.max(0, Math.floor((fin - inicio) / 1000)) : null;
 
-    // Actualizar log de la llamada outreach
+    // 1. Actualizar log de la llamada outreach
     await actualizarRegistroLlamadaPorVapiId(callId, {
       resultado: endedReason || "completada",
       transcripcion: transcript,
@@ -66,36 +70,94 @@ async function manejarWebhookOutreach(
       datos_capturados: datosCapturados,
     });
 
-    // Decidir estado final del lead
+    // 2. Decidir estado final del lead
     const lead = await obtenerLead(logOutreach.lead_id);
-    if (lead) {
-      const esCompletado =
-        RESULTADOS_COMPLETADO.has(endedReason) ||
-        (!!transcript && transcript.length > 50);
+    if (!lead) return NextResponse.json({ ok: true, tipo: "outreach" });
 
-      if (esCompletado) {
-        await actualizarEstadoProspeccion(lead.id, "completado");
-        // Sincronizar datos capturados al perfil del lead (email principalmente)
-        if (datosCapturados && typeof datosCapturados === "object") {
-          const dc = datosCapturados as Record<string, unknown>;
-          void sincronizarDatosCapturadosAlLead(lead.id, {
-            email: typeof dc.email === "string" ? dc.email : null,
-          });
-        }
-        console.log(`[vapi-webhook] ✓ Outreach completado — lead: ${lead.nombre}`);
-      } else {
-        await registrarFalloProspeccion(lead.id, lead.intentos_outreach);
-        console.log(
-          `[vapi-webhook] ↺ Outreach sin respuesta (${endedReason}) — ` +
-          `lead: ${lead.nombre} intento ${lead.intentos_outreach + 1}/3`,
-        );
+    const esCompletado =
+      RESULTADOS_COMPLETADO.has(endedReason) ||
+      (!!transcript && transcript.length > 50);
+
+    const dc = (datosCapturados && typeof datosCapturados === "object")
+      ? datosCapturados as Record<string, unknown>
+      : null;
+
+    if (esCompletado) {
+      await actualizarEstadoProspeccion(lead.id, "completado");
+
+      // 3. Sincronizar email y nombre capturados de vuelta al lead
+      if (dc) {
+        void sincronizarDatosCapturadosAlLead(lead.id, {
+          email: typeof dc.email === "string" ? dc.email : null,
+          nombre_contacto: typeof dc.nombre_contacto === "string" ? dc.nombre_contacto : null,
+        });
       }
+
+      // 4. Auto-importar al CRM: crear conversación si no existe todavía
+      //    Esto hace que el lead aparezca automáticamente en "Clientes"
+      //    y unifica futuras comunicaciones (WA, email) en ese perfil.
+      if (!lead.importado || !lead.conversacion_id) {
+        try {
+          const emailCapturado = dc && typeof dc.email === "string" ? dc.email : null;
+          const nombreCapturado = dc && typeof dc.nombre_contacto === "string" ? dc.nombre_contacto : null;
+          const emailFinal = emailCapturado ?? lead.email ?? null;
+          const nombreFinal = nombreCapturado ?? lead.nombre;
+
+          const telefono =
+            lead.telefono ||
+            (emailFinal
+              ? `mail_${emailFinal.split("@")[0]}_${lead.id.slice(0, 6)}`
+              : `lead_${lead.id.slice(0, 8)}`);
+
+          const conv = await obtenerOCrearConversacion(
+            lead.cuenta_id,
+            telefono,
+            nombreFinal,
+            null,
+          );
+
+          // Guardar email y teléfono como contactos vinculados a la conversación
+          if (emailFinal) {
+            await guardarContactosEmail(lead.cuenta_id, conv.id, [emailFinal]);
+          }
+          if (lead.telefono) {
+            await guardarContactosTelefono(lead.cuenta_id, conv.id, [lead.telefono], telefono);
+          }
+
+          // Insertar un mensaje sistema con el resumen de la llamada
+          const lineasMsg: string[] = [
+            `📞 Llamada de prospección — ${duracion ? `${duracion}s` : "duración desconocida"}`,
+          ];
+          if (resumen) lineasMsg.push(`Resumen: ${resumen.slice(0, 600)}`);
+          if (urlGrabacion) lineasMsg.push(`🎧 Grabación: ${urlGrabacion}`);
+          await insertarMensaje(lead.cuenta_id, conv.id, "sistema", lineasMsg.join("\n"), { tipo: "sistema" });
+
+          // Marcar el lead como importado y vincular conversacion_id
+          await marcarLeadImportado(lead.id, conv.id);
+
+          console.log(
+            `[vapi-webhook] ✓ Lead auto-importado al CRM — ` +
+            `lead: ${lead.nombre} → conv: ${conv.id}`,
+          );
+        } catch (err) {
+          // Fire-and-forget: no bloqueamos la respuesta si falla la importación
+          console.error("[vapi-webhook] ✗ Error auto-importando lead al CRM:", err);
+        }
+      }
+
+      console.log(`[vapi-webhook] ✓ Outreach completado — lead: ${lead.nombre}`);
+    } else {
+      await registrarFalloProspeccion(lead.id, lead.intentos_outreach);
+      console.log(
+        `[vapi-webhook] ↺ Outreach sin respuesta (${endedReason}) — ` +
+        `lead: ${lead.nombre} intento ${lead.intentos_outreach + 1}/3`,
+      );
     }
 
     return NextResponse.json({ ok: true, tipo: "outreach" });
   }
 
-  // status-update: solo logueamos, no cambiamos estado_outreach todavía
+  // status-update: solo logueamos, no cambiamos estado todavía
   if (tipo === "status-update") {
     return NextResponse.json({ ok: true, tipo: "outreach-status" });
   }

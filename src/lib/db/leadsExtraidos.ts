@@ -172,14 +172,17 @@ export const actualizarEstadoOutreach = actualizarEstadoProspeccion;
 export async function listarLeadsNuevosParaProspeccion(
   cuentaId: string,
   limite = 20,
+  runId?: string,
 ): Promise<LeadExtraido[]> {
-  const { data, error } = await db()
+  let query = db()
     .from("leads_extraidos")
     .select("*")
     .eq("cuenta_id", cuentaId)
     .eq("estado_prospeccion", "nuevo")
     .order("creado_en", { ascending: true })
     .limit(limite);
+  if (runId) query = query.eq("run_apify_id", runId);
+  const { data, error } = await query;
   if (error) lanzar(error, "listarLeadsNuevosParaProspeccion");
   return (data ?? []) as LeadExtraido[];
 }
@@ -238,6 +241,7 @@ export async function sincronizarDatosCapturadosAlLead(
 ): Promise<void> {
   const update: Record<string, unknown> = {};
   if (datos.email) update.email = datos.email;
+  if (datos.nombre_contacto) update.nombre = datos.nombre_contacto;
   if (Object.keys(update).length === 0) return;
   const { error } = await db()
     .from("leads_extraidos")

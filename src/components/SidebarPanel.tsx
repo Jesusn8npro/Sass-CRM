@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import type { Cuenta } from "@/lib/baseDatos";
 import { BadgeNotificaciones } from "./BadgeNotificaciones";
 import { InterruptorTema } from "./InterruptorTema";
+import { PillCreditos } from "./PillCreditos";
+import { SeccionNav, ItemNav } from "./SidebarPanel.helpers";
 import {
   IconoAgenda,
   IconoAgente,
@@ -13,6 +15,7 @@ import {
   IconoConocimiento,
   IconoConversaciones,
   IconoCreditos,
+  IconoEmbudo,
   IconoEstudio,
   IconoFunnel,
   IconoInversiones,
@@ -22,6 +25,7 @@ import {
   IconoProductos,
   IconoReportes,
   IconoSeguimientos,
+  IconoSoporte,
   IconoWebhooks,
   IconoWhatsApp,
   IconoWhatsAppBusiness,
@@ -33,16 +37,6 @@ interface InfoUsuario {
   uso: { cuentas: number; limite_cuentas: number | null };
 }
 
-/**
- * Sidebar persistente del panel (visible en todas las páginas
- * dentro de `/app/cuentas/[idCuenta]/...`).
- *
- * Estructura:
- *  - Header: logo + selector de cuenta (dropdown si tiene > 1)
- *  - PRINCIPAL: Conversaciones, Clientes, Reportes, Agenda, Plantillas
- *  - CONFIGURACION: WhatsApp, Agente IA, Conocimiento, Funnel, Webhooks
- *  - Footer: notificaciones + tema + usuario
- */
 export function SidebarPanel({
   idCuentaActual,
   cuentas,
@@ -51,10 +45,7 @@ export function SidebarPanel({
 }: {
   idCuentaActual: string;
   cuentas: Cuenta[];
-  /** En mobile el sidebar es un drawer controlado por LayoutShellMovil.
-   *  En desktop (lg+) `abierto` se ignora — siempre visible. */
   abierto?: boolean;
-  /** Cierra el drawer cuando se navega a un link (solo aplica en mobile). */
   onCerrar?: () => void;
 }) {
   const pathname = usePathname();
@@ -74,24 +65,24 @@ export function SidebarPanel({
   const planId = info?.plan.id ?? "free";
   const planNombre = info?.plan.nombre ?? "Gratis";
   const esAdmin = info?.usuario.es_admin === true;
+  const b = `/app/cuentas/${idCuentaActual}`;
 
   function cambiarCuenta(idNuevo: string) {
     setDropdownAbierto(false);
     if (idNuevo === idCuentaActual) return;
-    // Reemplazar el idCuenta en la URL actual manteniendo la sub-ruta
     const subRuta = pathname?.split(`/cuentas/${idCuentaActual}`)[1] ?? "";
-    router.push(`/app/cuentas/${idNuevo}${subRuta || "/conversaciones"}`);
+    router.push(`/app/cuentas/${idNuevo}${subRuta || "/dashboard"}`);
     onCerrar?.();
   }
 
   return (
     <aside
+      id="sidebar-principal"
       aria-label="Navegación principal"
       className={`fixed inset-y-0 left-0 z-50 flex h-screen w-[240px] flex-col border-r border-borde bg-superficie transition-transform duration-200 ease-out lg:static lg:z-auto lg:translate-x-0 lg:shrink-0 ${
         abierto ? "translate-x-0" : "-translate-x-full"
       }`}
       onClickCapture={(e) => {
-        // Cerrar drawer al hacer click en un Link interno (mobile only).
         const target = e.target as HTMLElement;
         if (target.closest("a[href]")) onCerrar?.();
       }}
@@ -103,16 +94,11 @@ export function SidebarPanel({
             S
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold tracking-tight text-texto">
-              Sass-CRM
-            </p>
-            <p className="text-[10px] uppercase tracking-wider text-texto-tenue">
-              Panel
-            </p>
+            <p className="truncate text-sm font-semibold tracking-tight text-texto">Sass-CRM</p>
+            <p className="text-[10px] uppercase tracking-wider text-texto-tenue">Panel</p>
           </div>
         </Link>
 
-        {/* Selector cuenta — dropdown si hay > 1 */}
         {cuentaActual && (
           <div className="relative mt-3">
             <button
@@ -130,13 +116,9 @@ export function SidebarPanel({
                 }`}
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold">
-                  {cuentaActual.etiqueta}
-                </p>
+                <p className="truncate text-xs font-semibold">{cuentaActual.etiqueta}</p>
                 {cuentaActual.telefono && (
-                  <p className="truncate font-mono text-[9px] text-zinc-500">
-                    +{cuentaActual.telefono}
-                  </p>
+                  <p className="truncate font-mono text-[9px] text-zinc-500">+{cuentaActual.telefono}</p>
                 )}
               </div>
               <span className="text-zinc-400">▾</span>
@@ -153,17 +135,10 @@ export function SidebarPanel({
                       c.id === idCuentaActual ? "bg-emerald-500/5" : ""
                     }`}
                   >
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        c.estado === "conectado"
-                          ? "bg-emerald-500"
-                          : "bg-zinc-300"
-                      }`}
-                    />
+                    <span className={`h-1.5 w-1.5 rounded-full ${c.estado === "conectado" ? "bg-emerald-500" : "bg-zinc-300"}`} />
                     <span className="truncate">{c.etiqueta}</span>
                   </button>
                 ))}
-                {/* Separador + nueva cuenta — siempre visible */}
                 <div className="my-1 border-t border-zinc-200 dark:border-zinc-700" />
                 <Link
                   href="/app/cuentas/nueva"
@@ -181,197 +156,70 @@ export function SidebarPanel({
 
       {/* Navegación */}
       <nav className="flex-1 overflow-y-auto px-2 py-3">
+
+        {/* ── PRINCIPAL ────────────────────────────────────── */}
         <SeccionNav titulo="Principal">
-          <ItemNav
-            icono={<IconoConversaciones />}
-            etiqueta="Conversaciones"
-            href="/app/cuenta/conversaciones"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoClientes />}
-            etiqueta="Clientes"
-            href="/app/cuenta/clientes"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoReportes />}
-            etiqueta="Reportes"
-            href="/app/cuenta/dashboard"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoAgenda />}
-            etiqueta="Agenda"
-            href="/app/cuenta/agenda"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoPlantillas />}
-            etiqueta="Plantillas"
-            href="/app/cuenta/plantillas"
-            actual={pathname}
-          />
+          <ItemNav icono={<IconoReportes />}      etiqueta="Dashboard"      href={`${b}/dashboard`}      actual={pathname} matchPaths={["dashboard"]} />
+          <ItemNav icono={<IconoConversaciones />} etiqueta="Conversaciones" href={`${b}/conversaciones`} actual={pathname} />
+          <ItemNav icono={<IconoClientes />}       etiqueta="Clientes"       href={`${b}/clientes`}       actual={pathname} />
+          <ItemNav icono={<IconoAgenda />}         etiqueta="Agenda"         href={`${b}/agenda`}         actual={pathname} />
         </SeccionNav>
 
-        <SeccionNav titulo="Configuración">
-          <ItemNav
-            icono={<IconoWhatsApp />}
-            etiqueta="WhatsApp Web"
-            href="/app/cuenta/whatsapp"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoWhatsAppBusiness />}
-            etiqueta="WhatsApp Business"
-            href="/app/cuenta/whatsapp-business"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoAgente />}
-            etiqueta="Agente IA"
-            href="/app/cuenta/configuracion"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoConocimiento />}
-            etiqueta="Conocimiento"
-            href="/app/cuenta/conocimiento"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoFunnel />}
-            etiqueta="Funnel"
-            href="/app/cuenta/pipeline"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoWebhooks />}
-            etiqueta="Webhooks"
-            href="/app/cuenta/webhooks"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoWebhooks />}
-            etiqueta="API Keys"
-            href="/app/cuenta/api-keys"
-            actual={pathname}
-          />
+        {/*
+          ── CAPTACIÓN ────────────────────────────────────────
+          Flujo: Buscar leads (Apify) → Pipeline outreach
+          Las sub-páginas (asistente, llamadas, correos) están
+          accesibles desde la página de Pipeline con sus cards.
+        */}
+        <SeccionNav titulo="Captación">
+          <ItemNav icono={<IconoLeads />}  etiqueta="Buscar leads" href={`${b}/leads`}       actual={pathname} />
+          <ItemNav icono={<IconoFunnel />} etiqueta="Prospección"  href={`${b}/prospeccion`} actual={pathname} matchPaths={["prospeccion"]} />
         </SeccionNav>
 
+        {/* ── VENTAS ───────────────────────────────────────── */}
         <SeccionNav titulo="Ventas">
-          <ItemNav
-            icono={<IconoLlamadas />}
-            etiqueta="Llamadas"
-            href="/app/cuenta/llamadas"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoProductos />}
-            etiqueta="Productos"
-            href="/app/cuenta/productos"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoSeguimientos />}
-            etiqueta="Seguimientos"
-            href="/app/cuenta/seguimientos"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoInversiones />}
-            etiqueta="Inversiones"
-            href="/app/cuenta/inversiones"
-            actual={pathname}
-          />
+          <ItemNav icono={<IconoEmbudo />}       etiqueta="Embudo CRM"   href={`${b}/pipeline`}     actual={pathname} matchPaths={["pipeline"]} />
+          <ItemNav icono={<IconoSeguimientos />} etiqueta="Seguimientos" href={`${b}/seguimientos`} actual={pathname} />
+          <ItemNav icono={<IconoLlamadas />}     etiqueta="Llamadas"     href={`${b}/llamadas`}     actual={pathname} matchPaths={["llamadas"]} />
+          <ItemNav icono={<IconoInversiones />}  etiqueta="Inversiones"  href={`${b}/inversiones`}  actual={pathname} />
         </SeccionNav>
 
-        <SeccionNav titulo="Prospección Automática">
-          <ItemNav
-            icono={<IconoLlamadas />}
-            etiqueta="Pipeline"
-            href="/app/cuenta/prospeccion"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoReportes />}
-            etiqueta="Llamadas"
-            href="/app/cuenta/prospeccion/llamadas"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoAgenda />}
-            etiqueta="Correos"
-            href="/app/cuenta/prospeccion/correos"
-            actual={pathname}
-          />
+        {/* ── CONFIGURACIÓN ────────────────────────────────── */}
+        <SeccionNav titulo="Configuración">
+          <ItemNav icono={<IconoAgente />}           etiqueta="Agente IA"    href={`${b}/configuracion`}     actual={pathname} />
+          <ItemNav icono={<IconoWhatsApp />}          etiqueta="WhatsApp"     href={`${b}/whatsapp`}          actual={pathname} />
+          <ItemNav icono={<IconoWhatsAppBusiness />}  etiqueta="WA Business"  href={`${b}/whatsapp-business`} actual={pathname} />
+          <ItemNav icono={<IconoProductos />}         etiqueta="Catálogo"     href={`${b}/productos`}         actual={pathname} />
+          <ItemNav icono={<IconoConocimiento />}      etiqueta="Conocimiento" href={`${b}/conocimiento`}      actual={pathname} />
+          <ItemNav icono={<IconoPlantillas />}        etiqueta="Plantillas"   href={`${b}/plantillas`}        actual={pathname} />
+          <ItemNav icono={<IconoWebhooks />}          etiqueta="Integraciones" href={`${b}/webhooks`}         actual={pathname} matchPaths={["webhooks", "api-keys"]} />
         </SeccionNav>
 
-        <SeccionNav titulo="IA · Crecimiento">
-          <ItemNav
-            icono={<IconoLeads />}
-            etiqueta="Buscar leads"
-            href="/app/cuenta/leads"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoEstudio />}
-            etiqueta="Estudio imágenes"
-            href="/app/cuenta/estudio"
-            actual={pathname}
-          />
-          <ItemNav
-            icono={<IconoCreditos />}
-            etiqueta="Créditos"
-            href="/app/cuenta/creditos"
-            actual={pathname}
-          />
+        {/* ── MI CUENTA ────────────────────────────────────── */}
+        <SeccionNav titulo="Mi Cuenta">
+          <ItemNav icono={<IconoEstudio />}  etiqueta="Estudio IA" href={`${b}/estudio`}  actual={pathname} />
+          <ItemNav icono={<IconoCreditos />} etiqueta="Créditos"   href={`${b}/creditos`} actual={pathname} />
+          <ItemNav icono={<IconoSoporte />}  etiqueta="Soporte"    href={`${b}/soporte`}  actual={pathname} />
         </SeccionNav>
 
-        <SeccionNav titulo="Ayuda">
-          <ItemNav
-            icono={<IconoConocimiento />}
-            etiqueta="Soporte"
-            href="/app/cuenta/soporte"
-            actual={pathname}
-          />
-        </SeccionNav>
-
-        {/* Sección de admin del SaaS — solo visible para los emails
-            declarados en ADMIN_EMAIL. Si no es admin, nunca renderiza
-            estos links. */}
+        {/* ── ADMIN (solo visible para admins) ─────────────── */}
         {esAdmin && (
           <SeccionNav titulo="Admin · Plataforma">
-            <ItemNav
-              icono={<IconoReportes />}
-              etiqueta="Panel admin"
-              href="/app/admin"
-              actual={pathname}
-              matchPaths={["/app/admin"]}
-            />
-            <ItemNav
-              icono={<IconoClientes />}
-              etiqueta="Usuarios"
-              href="/app/admin/usuarios"
-              actual={pathname}
-              matchPaths={["/admin/usuarios"]}
-            />
-            <ItemNav
-              icono={<IconoInversiones />}
-              etiqueta="Ingresos"
-              href="/app/admin/ingresos"
-              actual={pathname}
-              matchPaths={["/admin/ingresos"]}
-            />
+            <ItemNav icono={<IconoReportes />}    etiqueta="Panel admin" href="/app/admin"          actual={pathname} matchPaths={["/app/admin"]} />
+            <ItemNav icono={<IconoClientes />}    etiqueta="Usuarios"    href="/app/admin/usuarios" actual={pathname} matchPaths={["admin/usuarios"]} />
+            <ItemNav icono={<IconoInversiones />} etiqueta="Ingresos"    href="/app/admin/ingresos" actual={pathname} matchPaths={["admin/ingresos"]} />
           </SeccionNav>
         )}
       </nav>
 
-      {/* Footer: notif + tema + usuario */}
+      {/* Footer */}
       <div className="border-t border-zinc-200 dark:border-zinc-800">
         <div className="flex items-center justify-between px-3 py-2">
           <BadgeNotificaciones />
-          <InterruptorTema />
+          <div className="flex items-center gap-2">
+            <PillCreditos idCuenta={idCuentaActual} />
+            <InterruptorTema />
+          </div>
         </div>
         <Link
           href="/app/mi-cuenta"
@@ -382,9 +230,7 @@ export function SidebarPanel({
               {email ? email.slice(0, 2).toUpperCase() : "··"}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[11px] font-medium">
-                {email || "Cargando…"}
-              </p>
+              <p className="truncate text-[11px] font-medium">{email || "Cargando…"}</p>
               <span
                 className={`mt-0.5 inline-block rounded-full px-1.5 py-px text-[8px] font-bold uppercase tracking-wider ${
                   planId === "free"
@@ -401,68 +247,5 @@ export function SidebarPanel({
         </Link>
       </div>
     </aside>
-  );
-}
-
-// ============================================================
-// Sub-componentes
-// ============================================================
-
-function SeccionNav({
-  titulo,
-  children,
-}: {
-  titulo: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="mb-4">
-      <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-texto-tenue">
-        {titulo}
-      </p>
-      <ul className="flex flex-col gap-0.5">{children}</ul>
-    </div>
-  );
-}
-
-function ItemNav({
-  icono,
-  etiqueta,
-  href,
-  actual,
-  matchPaths,
-}: {
-  icono: React.ReactNode;
-  etiqueta: string;
-  href: string;
-  actual: string | null;
-  matchPaths?: string[];
-}) {
-  const candidatos = matchPaths ?? [href.split("/").pop() ?? ""];
-  const activo = !!actual && candidatos.some((p) => actual.includes(p));
-  return (
-    <li className="relative">
-      {activo && (
-        <span
-          aria-hidden
-          className="absolute inset-y-1 left-0 w-[3px] rounded-r-full bg-gradient-to-b from-emerald-400 to-teal-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"
-        />
-      )}
-      <Link
-        href={href}
-        className={`group flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-xs transition-all ${
-          activo
-            ? "bg-gradient-to-r from-emerald-500/10 to-transparent font-semibold text-emerald-700 dark:text-emerald-300"
-            : "text-zinc-600 hover:translate-x-0.5 hover:bg-zinc-100/70 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/40 dark:hover:text-zinc-100"
-        }`}
-      >
-        <span
-          className={`shrink-0 transition-transform ${activo ? "scale-110" : "group-hover:scale-105"}`}
-        >
-          {icono}
-        </span>
-        <span className="truncate">{etiqueta}</span>
-      </Link>
-    </li>
   );
 }

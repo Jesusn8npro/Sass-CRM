@@ -122,3 +122,18 @@ export const IconoCreditos = () => (
     <path d="M12 6v12M9 9h6M9 15h6" />
   </svg>
 );
+export const IconoSoporte = () => (
+  <svg {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+    <line x1="12" y1="17" x2="12.01" y2="17" strokeWidth={3} strokeLinecap="round" />
+  </svg>
+);
+export const IconoEmbudo = () => (
+  <svg {...props}>
+    <rect x="3" y="4" width="4" height="13" rx="1" />
+    <rect x="10" y="4" width="4" height="8" rx="1" />
+    <rect x="17" y="4" width="4" height="11" rx="1" />
+    <line x1="3" y1="20" x2="21" y2="20" />
+  </svg>
+);
