@@ -245,33 +245,11 @@ export async function iniciarLlamada(
     },
     metadata: opciones.metadata,
   };
-  // Schema de datos estructurados que Vapi extrae al finalizar la llamada.
-  // Vapi lo llena en analysis.structuredData del end-of-call-report.
-  assistantOverrides.analysis = {
-    structuredDataPrompt:
-      "Extrae los datos clave de esta llamada de prospección en frío. " +
-      "Si no se mencionó un campo, déjalo en null.",
-    structuredDataSchema: {
-      type: "object",
-      properties: {
-        nombre_contacto: { type: "string", description: "Nombre de la persona que contestó" },
-        cargo: { type: "string", description: "Cargo o rol dentro de la empresa" },
-        email: { type: "string", description: "Email compartido durante la llamada" },
-        nivel_interes: {
-          type: "string",
-          enum: ["alto", "medio", "bajo", "no_interesado"],
-          description: "Nivel de interés demostrado",
-        },
-        reunion_agendada: { type: "boolean", description: "¿Se agendó una reunión de seguimiento?" },
-        fecha_reunion: { type: "string", description: "Fecha/hora de la reunión si se agendó" },
-        objecion_principal: { type: "string", description: "Principal objeción planteada" },
-        proximo_paso: { type: "string", description: "Próximo paso acordado con el prospecto" },
-        notas: { type: "string", description: "Observaciones adicionales relevantes" },
-      },
-    },
-  };
-
-  cuerpo.assistantOverrides = assistantOverrides;
+  // analysis va en el assistant, no en assistantOverrides (Vapi no lo permite aquí).
+  // Configurar structuredDataSchema directamente en el assistant desde Vapi dashboard.
+  if (Object.keys(assistantOverrides).length > 0) {
+    cuerpo.assistantOverrides = assistantOverrides;
+  }
   return requestVapi<VapiCall>(apiKey, "POST", "/call", cuerpo);
 }
 
