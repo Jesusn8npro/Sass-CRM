@@ -224,6 +224,29 @@ export async function listarLeadsProspeccion(
 }
 
 /**
+ * Sincroniza datos capturados en una llamada de vuelta al perfil del lead.
+ * Solo actualiza campos que vengan con valor (no sobreescribe con null).
+ */
+export async function sincronizarDatosCapturadosAlLead(
+  leadId: string,
+  datos: {
+    nombre_contacto?: string | null;
+    email?: string | null;
+    nivel_interes?: string | null;
+    notas_llamada?: string | null;
+  },
+): Promise<void> {
+  const update: Record<string, unknown> = {};
+  if (datos.email) update.email = datos.email;
+  if (Object.keys(update).length === 0) return;
+  const { error } = await db()
+    .from("leads_extraidos")
+    .update(update)
+    .eq("id", leadId);
+  if (error) lanzar(error, "sincronizarDatosCapturadosAlLead");
+}
+
+/**
  * Lista todos los leads extraidos de una cuenta para export CSV.
  * Tope `limite` para no fundir el server con cuentas gigantes.
  */

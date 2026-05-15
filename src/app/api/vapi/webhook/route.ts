@@ -17,6 +17,7 @@ import {
   actualizarEstadoProspeccion,
   obtenerLead,
   registrarFalloProspeccion,
+  sincronizarDatosCapturadosAlLead,
 } from "@/lib/db/leadsExtraidos";
 
 export const dynamic = "force-dynamic";
@@ -70,13 +71,19 @@ async function manejarWebhookOutreach(
     if (lead) {
       const esCompletado =
         RESULTADOS_COMPLETADO.has(endedReason) ||
-        (!!transcript && transcript.length > 50); // hubo conversación real
+        (!!transcript && transcript.length > 50);
 
       if (esCompletado) {
         await actualizarEstadoProspeccion(lead.id, "completado");
+        // Sincronizar datos capturados al perfil del lead (email principalmente)
+        if (datosCapturados && typeof datosCapturados === "object") {
+          const dc = datosCapturados as Record<string, unknown>;
+          void sincronizarDatosCapturadosAlLead(lead.id, {
+            email: typeof dc.email === "string" ? dc.email : null,
+          });
+        }
         console.log(`[vapi-webhook] ✓ Outreach completado — lead: ${lead.nombre}`);
       } else {
-        // Sin respuesta, voicemail, ocupado → reintento o no_contactable
         await registrarFalloProspeccion(lead.id, lead.intentos_outreach);
         console.log(
           `[vapi-webhook] ↺ Outreach sin respuesta (${endedReason}) — ` +
