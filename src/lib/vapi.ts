@@ -30,6 +30,12 @@ export interface VapiAssistant {
   firstMessage?: string;
   serverUrl?: string;
   serverUrlSecret?: string;
+  analysis?: {
+    structuredDataSchema?: Record<string, unknown>;
+    structuredDataPrompt?: string;
+    summaryPrompt?: string;
+    successEvaluationPrompt?: string;
+  };
 }
 
 export interface VapiPhoneNumber {

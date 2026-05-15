@@ -11,6 +11,7 @@ interface AsistenteConfig {
   systemPrompt: string;
   modelo: string;
   serverUrl: string;
+  schemaActivo: boolean;
 }
 
 const MODELOS = [
@@ -34,6 +35,7 @@ export default function PaginaAsistenteProspeccion() {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [modelo, setModelo] = useState("gpt-4o-mini");
   const [serverUrl, setServerUrl] = useState("");
+  const [schemaActivo, setSchemaActivo] = useState(false);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -52,6 +54,7 @@ export default function PaginaAsistenteProspeccion() {
       setSystemPrompt(d.systemPrompt);
       setModelo(d.modelo);
       setServerUrl(d.serverUrl);
+      setSchemaActivo(d.schemaActivo);
     } catch {
       setError("No se pudo conectar con Vapi");
     } finally {
@@ -70,7 +73,7 @@ export default function PaginaAsistenteProspeccion() {
       const r = await fetch(`/api/cuentas/${idCuenta}/prospeccion/asistente`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre, primerMensaje, systemPrompt, modelo, serverUrl }),
+        body: JSON.stringify({ nombre, primerMensaje, systemPrompt, modelo, serverUrl, activarExtraccion: schemaActivo }),
       });
       const d = await r.json() as { ok?: boolean; error?: string };
       if (!r.ok || !d.ok) {
@@ -196,6 +199,42 @@ export default function PaginaAsistenteProspeccion() {
                   className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   placeholder="https://tu-app.com/api/vapi/webhook"
                 />
+              </div>
+            </div>
+
+            {/* Extracción de datos */}
+            <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                    Extracción automática de datos
+                  </p>
+                  <p className="mt-0.5 text-xs text-zinc-400">
+                    Al terminar cada llamada, Vapi extrae automáticamente estos campos del transcript y los guarda en tu base de datos.
+                  </p>
+                  {schemaActivo && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {["Nombre contacto", "Cargo", "Email", "Nivel interés", "Reunión agendada", "Fecha reunión", "Objeción", "Próximo paso", "Notas"].map(campo => (
+                        <span key={campo} className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+                          {campo}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSchemaActivo(v => !v)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                    schemaActivo ? "bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-600"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                      schemaActivo ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
               </div>
             </div>
 
