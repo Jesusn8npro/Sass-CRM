@@ -30,11 +30,12 @@ export interface VapiAssistant {
   firstMessage?: string;
   serverUrl?: string;
   serverUrlSecret?: string;
-  analysis?: {
+  analysisPlan?: {
     structuredDataSchema?: Record<string, unknown>;
     structuredDataPrompt?: string;
     summaryPrompt?: string;
     successEvaluationPrompt?: string;
+    successEvaluationRubric?: string;
   };
 }
 

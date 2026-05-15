@@ -7,25 +7,6 @@ export const dynamic = "force-dynamic";
 
 const VAPI_API = "https://api.vapi.ai";
 
-const SCHEMA_EXTRACCION = {
-  type: "object",
-  properties: {
-    nombre_contacto: { type: "string", description: "Nombre completo de la persona con quien habló el agente" },
-    cargo: { type: "string", description: "Cargo o puesto de la persona contactada" },
-    email: { type: "string", description: "Email mencionado o proporcionado durante la llamada" },
-    nivel_interes: {
-      type: "string",
-      enum: ["alto", "medio", "bajo", "no_interesado"],
-      description: "Nivel de interés del prospecto en el servicio ofrecido",
-    },
-    reunion_agendada: { type: "boolean", description: "Si se agendó una reunión al final de la llamada" },
-    fecha_reunion: { type: "string", description: "Fecha y hora de la reunión si fue agendada" },
-    objecion_principal: { type: "string", description: "Principal objeción o rechazo expresado por el prospecto" },
-    proximo_paso: { type: "string", description: "Próximo paso acordado al finalizar la llamada" },
-    notas: { type: "string", description: "Observaciones adicionales relevantes de la llamada" },
-  },
-};
-
 function obtenerAssistantId(cuenta: { vapi_assistant_id?: string | null }): string | null {
   return (
     process.env.OUTREACH_ASSISTANT_ID?.trim() ||
@@ -36,6 +17,39 @@ function obtenerAssistantId(cuenta: { vapi_assistant_id?: string | null }): stri
 
 interface Contexto {
   params: Promise<{ idCuenta: string }>;
+}
+
+export interface CampoExtraccion {
+  nombre: string;
+  descripcion: string;
+  tipo: "string" | "boolean" | "number";
+  opciones?: string[];
+}
+
+function construirSchema(campos: CampoExtraccion[]): Record<string, unknown> | null {
+  if (campos.length === 0) return null;
+  const properties: Record<string, unknown> = {};
+  for (const c of campos) {
+    const def: Record<string, unknown> = { type: c.tipo, description: c.descripcion };
+    if (c.opciones && c.opciones.length > 0) def.enum = c.opciones;
+    properties[c.nombre] = def;
+  }
+  return { type: "object", properties };
+}
+
+function parsearCampos(schema: unknown): CampoExtraccion[] {
+  if (!schema || typeof schema !== "object") return [];
+  const props = (schema as Record<string, unknown>).properties;
+  if (!props || typeof props !== "object") return [];
+  return Object.entries(props as Record<string, unknown>).map(([nombre, def]) => {
+    const d = (def ?? {}) as Record<string, unknown>;
+    return {
+      nombre,
+      descripcion: typeof d.description === "string" ? d.description : "",
+      tipo: (["string", "boolean", "number"].includes(d.type as string) ? d.type : "string") as CampoExtraccion["tipo"],
+      opciones: Array.isArray(d.enum) ? (d.enum as string[]) : undefined,
+    };
+  });
 }
 
 /** GET — devuelve la configuración actual del asistente de outreach desde Vapi */
@@ -58,8 +72,7 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
   try {
     const assistant = await obtenerAssistant(cred.apiKey, assistantId);
     const systemPrompt = assistant.model?.messages?.find(m => m.role === "system")?.content ?? "";
-    const schemaActivo = !!(assistant.analysis?.structuredDataSchema &&
-      Object.keys(assistant.analysis.structuredDataSchema).length > 0);
+    const campos = parsearCampos(assistant.analysisPlan?.structuredDataSchema);
     return NextResponse.json({
       id: assistant.id,
       nombre: assistant.name ?? "",
@@ -68,7 +81,7 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
       modelo: assistant.model?.model ?? "gpt-4o-mini",
       voz: assistant.voice ?? null,
       serverUrl: assistant.serverUrl ?? "",
-      schemaActivo,
+      campos,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -99,25 +112,23 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     modelo?: string;
     nombre?: string;
     serverUrl?: string;
-    activarExtraccion?: boolean;
+    campos?: CampoExtraccion[];
   }>(req);
   if (body instanceof NextResponse) return body;
 
-  // Construir payload parcial para Vapi PATCH
   const patch: Record<string, unknown> = {};
 
   if (typeof body.nombre === "string") patch.name = body.nombre.trim();
   if (typeof body.primerMensaje === "string") patch.firstMessage = body.primerMensaje.trim();
   if (typeof body.serverUrl === "string") patch.serverUrl = body.serverUrl.trim();
-  if (typeof body.activarExtraccion === "boolean") {
-    patch.analysis = body.activarExtraccion
-      ? { structuredDataSchema: SCHEMA_EXTRACCION }
-      : { structuredDataSchema: null };
+
+  if (Array.isArray(body.campos)) {
+    const schema = construirSchema(body.campos);
+    patch.analysisPlan = schema ? { structuredDataSchema: schema } : {};
   }
 
   // Para actualizar el systemPrompt hay que mandar el model completo
   if (typeof body.systemPrompt === "string" || typeof body.modelo === "string") {
-    // Primero traemos el assistant actual para no perder sus settings
     const actual = await obtenerAssistant(cred.apiKey, assistantId);
     const mensajesActuales = actual.model?.messages ?? [];
     const nuevosMensajes = mensajesActuales.map(m =>
@@ -125,7 +136,6 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
         ? { ...m, content: body.systemPrompt ?? m.content }
         : m
     );
-    // Si no había system message, lo agregamos
     if (!nuevosMensajes.find(m => m.role === "system") && body.systemPrompt) {
       nuevosMensajes.unshift({ role: "system", content: body.systemPrompt });
     }
@@ -153,14 +163,13 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
       const detalle = await res.text().catch(() => "");
       return NextResponse.json({ error: `Vapi ${res.status}: ${detalle.slice(0, 300)}` }, { status: 502 });
     }
-    const actualizado = await res.json();
-    const systemPrompt = (actualizado as { model?: { messages?: Array<{ role: string; content: string }> } }).model?.messages?.find((m: { role: string }) => m.role === "system")?.content ?? "";
-    return NextResponse.json({
-      ok: true,
-      id: (actualizado as { id: string }).id,
-      primerMensaje: (actualizado as { firstMessage?: string }).firstMessage ?? "",
-      systemPrompt,
-    });
+    const actualizado = await res.json() as Record<string, unknown>;
+    const systemPrompt = (actualizado.model as { messages?: Array<{ role: string; content: string }> })
+      ?.messages?.find(m => m.role === "system")?.content ?? "";
+    const campos = parsearCampos(
+      (actualizado.analysisPlan as { structuredDataSchema?: unknown } | undefined)?.structuredDataSchema
+    );
+    return NextResponse.json({ ok: true, id: actualizado.id, systemPrompt, campos });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 502 });
