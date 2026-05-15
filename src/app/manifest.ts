@@ -1,5 +1,10 @@
 import type { MetadataRoute } from "next";
 
+/**
+ * PWA manifest. Cuando agregues íconos reales en /public (icon-192.png,
+ * icon-512.png), descomentá el array `icons` para habilitar "Add to home
+ * screen" en mobile.
+ */
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Sass-CRM",
@@ -10,17 +15,5 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     background_color: "#000000",
     theme_color: "#10b981",
-    icons: [
-      {
-        src: "/icon-192.png",
-        sizes: "192x192",
-        type: "image/png",
-      },
-      {
-        src: "/icon-512.png",
-        sizes: "512x512",
-        type: "image/png",
-      },
-    ],
   };
 }
