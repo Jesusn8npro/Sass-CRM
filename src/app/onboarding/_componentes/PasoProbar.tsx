@@ -60,7 +60,16 @@ export function PasoProbar({ idCuenta }: { idCuenta: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-10 sm:px-6 sm:py-14">
+    <div
+      className="mx-auto max-w-3xl px-5 py-10 sm:px-6 sm:py-14"
+      style={{ animation: "fade-in-up 280ms ease-out both" }}
+    >
+      <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-1.5">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20 font-mono text-[10px] font-bold text-emerald-400">
+          4
+        </span>
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-400/80">Paso 4 de 4</span>
+      </div>
       <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-400/80">
         04 — Probar
       </p>
@@ -134,7 +143,7 @@ export function PasoProbar({ idCuenta }: { idCuenta: string }) {
           type="button"
           onClick={() => ir(idCuenta)}
           disabled={finalizando}
-          className="rounded-full bg-emerald-400 px-6 py-3.5 text-base font-semibold text-black shadow-lg shadow-emerald-500/30 transition-all hover:bg-emerald-300 disabled:opacity-50"
+          className="rounded-full bg-emerald-500 px-6 py-3.5 text-base font-semibold text-black shadow-lg shadow-emerald-500/30 transition-all hover:bg-emerald-400 disabled:opacity-50"
         >
           {finalizando ? "Yendo…" : "Listo, ir al panel"}
         </button>

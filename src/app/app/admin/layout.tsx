@@ -46,6 +46,9 @@ function SidebarAdmin({ emailAdmin }: { emailAdmin: string }) {
     { href: "/app/admin/agente-admin", label: "Agente Admin", clave: "agente" },
     { href: "/app/admin/ingresos", label: "Ingresos", clave: "ingresos" },
     { href: "/app/admin/logs", label: "Logs", clave: "logs" },
+    { href: "/app/admin/blog/suscriptores", label: "Suscriptores blog", clave: "suscriptores" },
+    { href: "/app/admin/salud", label: "Salud sistema", clave: "salud" },
+    { href: "/app/admin/impersonar", label: "Ver cuentas", clave: "impersonar" },
   ];
   return (
     <aside className="sticky top-0 hidden h-screen w-60 shrink-0 border-r border-zinc-200 px-6 py-10 dark:border-white/[0.06] md:block">

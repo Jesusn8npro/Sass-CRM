@@ -92,7 +92,16 @@ export function PasoPlantilla({ idCuenta }: { idCuenta: string }) {
   // -------- Pantalla A: industrias --------
   if (vista === "industrias") {
     return (
-      <div className="mx-auto max-w-4xl px-5 py-10 sm:px-6 sm:py-14">
+      <div
+        className="mx-auto max-w-4xl px-5 py-10 sm:px-6 sm:py-14"
+        style={{ animation: "fade-in-up 280ms ease-out both" }}
+      >
+        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-1.5">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20 font-mono text-[10px] font-bold text-emerald-400">
+            2
+          </span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-400/80">Paso 2 de 4</span>
+        </div>
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-400/80">
           02 — Industria
         </p>
@@ -170,7 +179,10 @@ export function PasoPlantilla({ idCuenta }: { idCuenta: string }) {
 
   // -------- Pantalla B: funnels (modo "empezar de cero") --------
   return (
-    <div className="mx-auto max-w-3xl px-5 py-10 sm:px-6 sm:py-14">
+    <div
+      className="mx-auto max-w-3xl px-5 py-10 sm:px-6 sm:py-14"
+      style={{ animation: "fade-in-up 280ms ease-out both" }}
+    >
       <button
         type="button"
         onClick={() => setVista("industrias")}

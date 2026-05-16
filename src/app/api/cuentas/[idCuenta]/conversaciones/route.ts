@@ -6,6 +6,7 @@ import {
   obtenerOCrearConversacion,
 } from "@/lib/baseDatos";
 import { parsearJSON, verificarAccesoCuenta } from "@/lib/auth/sesion";
+import { verificarRateLimit } from "@/lib/auth/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,12 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
   const { idCuenta } = await params;
   const acceso = await verificarAccesoCuenta(idCuenta);
   if (acceso instanceof NextResponse) return acceso;
-  const conversaciones = await listarConversaciones(idCuenta);
+  const rl = verificarRateLimit(`${acceso.auth.id}:conversaciones-get`, 30, 60);
+  if (rl) return rl;
+  const url = new URL(_req.url);
+  const limite = Math.min(500, Math.max(10, Number(url.searchParams.get("limite") ?? "200")));
+  const offset = Math.max(0, Number(url.searchParams.get("offset") ?? "0"));
+  const conversaciones = await listarConversaciones(idCuenta, { limite, offset });
   return NextResponse.json({ conversaciones });
 }
 

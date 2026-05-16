@@ -12,6 +12,20 @@ import {
 import { leerDataset } from "./cliente";
 import { mapearItem } from "./actors";
 
+function normalizarTelefono(t: string | null | undefined): string | null {
+  if (!t) return null;
+  const digits = t.replace(/[^\d]/g, "");
+  if (digits.length < 7 || digits.length > 15) return null;
+  return digits;
+}
+
+function normalizarEmail(e: string | null | undefined): string | null {
+  if (!e) return null;
+  const normalizado = e.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizado)) return null;
+  return normalizado;
+}
+
 export interface ResumenImportacion {
   items_recibidos: number;
   leads_guardados: number;
@@ -47,16 +61,15 @@ export async function importarResultadosRun(input: {
       if (!m) continue;
       // Limpieza de telefono: WhatsApp espera digitos puros (sin "+",
       // sin espacios). El "+" lo agrega la UI al mostrar.
-      const telLimpio = m.telefono
-        ? m.telefono.replace(/[^\d]/g, "").slice(0, 32)
-        : null;
+      const telLimpio = normalizarTelefono(m.telefono);
+      const emailLimpio = normalizarEmail(m.email);
 
       filas.push({
         cuenta_id: input.cuentaId,
         run_apify_id: input.runApifyId,
         nombre: m.nombre,
-        telefono: telLimpio || null,
-        email: m.email,
+        telefono: telLimpio,
+        email: emailLimpio,
         direccion: m.direccion,
         sitio_web: m.sitio_web,
         categoria: m.categoria,
@@ -64,7 +77,7 @@ export async function importarResultadosRun(input: {
       });
 
       if (telLimpio) resumen.con_telefono += 1;
-      if (m.email) resumen.con_email += 1;
+      if (emailLimpio) resumen.con_email += 1;
       if (m.sitio_web) resumen.con_web += 1;
     } catch (err) {
       resumen.errores += 1;

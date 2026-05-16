@@ -377,6 +377,12 @@ export function SeccionVapi({ cuenta, onActualizada }: PropsSeccionBase) {
           setGrabar={setGrabar}
         />
 
+        {tieneAssistant && !cuenta.vapi_webhook_secret && (
+          <div className="rounded-xl border border-amber-400/40 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+            ⚠ El Webhook Secret es requerido para guardar transcripciones, grabaciones y duración de llamadas. Sin él, las llamadas quedan como &quot;Iniciando&quot; permanentemente. Hacé click en <strong>Resincronizar assistant</strong> para generarlo.
+          </div>
+        )}
+
         <EstadoSincronizarVapi
           cuenta={cuenta}
           estadoVapi={estadoVapi}

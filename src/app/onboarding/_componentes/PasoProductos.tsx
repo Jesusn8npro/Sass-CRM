@@ -86,7 +86,16 @@ export function PasoProductos({ idCuenta }: { idCuenta: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-10 sm:px-6 sm:py-14">
+    <div
+      className="mx-auto max-w-3xl px-5 py-10 sm:px-6 sm:py-14"
+      style={{ animation: "fade-in-up 280ms ease-out both" }}
+    >
+      <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-1.5">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20 font-mono text-[10px] font-bold text-emerald-400">
+          3
+        </span>
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-400/80">Paso 3 de 4</span>
+      </div>
       <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-400/80">
         03 — Productos
       </p>
@@ -114,7 +123,7 @@ export function PasoProductos({ idCuenta }: { idCuenta: string }) {
                 placeholder="Nombre"
                 value={fila.nombre}
                 onChange={(e) => actualizar(i, "nombre", e.target.value)}
-                className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white placeholder-white/30 focus:border-emerald-400/60 focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
+                className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
               <input
                 type="text"
@@ -122,7 +131,7 @@ export function PasoProductos({ idCuenta }: { idCuenta: string }) {
                 placeholder="Precio"
                 value={fila.precio}
                 onChange={(e) => actualizar(i, "precio", e.target.value)}
-                className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white placeholder-white/30 focus:border-emerald-400/60 focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
+                className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
               <input
                 type="text"
@@ -131,7 +140,7 @@ export function PasoProductos({ idCuenta }: { idCuenta: string }) {
                 onChange={(e) =>
                   actualizar(i, "descripcion", e.target.value)
                 }
-                className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white placeholder-white/30 focus:border-emerald-400/60 focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
+                className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
           </div>
@@ -151,7 +160,7 @@ export function PasoProductos({ idCuenta }: { idCuenta: string }) {
           type="button"
           onClick={guardar}
           disabled={guardando}
-          className="rounded-full bg-emerald-400 px-6 py-3.5 text-base font-semibold text-black shadow-lg shadow-emerald-500/30 transition-all hover:bg-emerald-300 disabled:opacity-50"
+          className="rounded-full bg-emerald-500 px-6 py-3.5 text-base font-semibold text-black shadow-lg shadow-emerald-500/30 transition-all hover:bg-emerald-400 disabled:opacity-50"
         >
           {guardando ? "Guardando…" : "Guardar y continuar"}
         </button>

@@ -26,8 +26,13 @@ yarn-error.log*
 # logs de deploy / errores locales — pueden contener API keys
 # (Easy Panel imprime el `docker buildx --build-arg` con secrets)
 error_deploy.md
+error_deploys.md
+aplicacion_video.md
 deploy.log
 build.log
+
+# Archivos de lanzamiento / planeación — pueden tener keys
+Lanzamiento/
 
 # editor / sistema
 .vscode/

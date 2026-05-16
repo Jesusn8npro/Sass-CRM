@@ -162,6 +162,19 @@ export default function PaginaLlamadas() {
       </header>
 
       <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
+        {cuenta && (cuenta.vapi_assistant_id || cuenta.vapi_phone_id) && !cuenta.vapi_webhook_secret && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-400/40 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+            <span>
+              ⚠ Configurá el Webhook Secret en Ajustes → Llamadas para que las transcripciones y grabaciones se guarden correctamente.
+            </span>
+            <Link
+              href={`/app/cuentas/${idCuenta}/configuracion`}
+              className="shrink-0 font-semibold underline"
+            >
+              Ir a ajustes →
+            </Link>
+          </div>
+        )}
         <LlamadasProgramadas idCuenta={idCuenta} />
         {llamadas.length === 0 ? (
           <EstadoVacio

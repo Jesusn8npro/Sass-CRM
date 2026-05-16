@@ -9,7 +9,7 @@
  * default hardcoded.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { requerirAdmin } from "@/lib/auth/sesion";
+import { parsearJSON, requerirAdmin } from "@/lib/auth/sesion";
 import {
   obtenerCuentaPanelAdmin,
   actualizarCuenta,
@@ -51,12 +51,8 @@ export async function POST(req: NextRequest) {
   const auth = await requerirAdmin();
   if (auth instanceof NextResponse) return auth;
 
-  let body: { prompt?: unknown };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Body no es JSON" }, { status: 400 });
-  }
+  const body = await parsearJSON<{ prompt?: unknown }>(req);
+  if (body instanceof NextResponse) return body;
 
   const promptNuevo = typeof body.prompt === "string" ? body.prompt.trim() : "";
 

@@ -11,6 +11,7 @@ import { SeccionNav, ItemNav } from "./SidebarPanel.helpers";
 import {
   IconoAgenda,
   IconoAgente,
+  IconoBroadcast,
   IconoClientes,
   IconoConocimiento,
   IconoConversaciones,
@@ -28,7 +29,6 @@ import {
   IconoSoporte,
   IconoWebhooks,
   IconoWhatsApp,
-  IconoWhatsAppBusiness,
 } from "./SidebarPanel.iconos";
 
 interface InfoUsuario {
@@ -172,7 +172,7 @@ export function SidebarPanel({
           accesibles desde la página de Pipeline con sus cards.
         */}
         <SeccionNav titulo="Captación">
-          <ItemNav icono={<IconoLeads />}  etiqueta="Buscar leads" href={`${b}/leads`}       actual={pathname} />
+          <ItemNav icono={<IconoLeads />}  etiqueta="Importar leads" href={`${b}/leads`}       actual={pathname} />
           <ItemNav icono={<IconoFunnel />} etiqueta="Prospección"  href={`${b}/prospeccion`} actual={pathname} matchPaths={["prospeccion"]} />
         </SeccionNav>
 
@@ -182,13 +182,13 @@ export function SidebarPanel({
           <ItemNav icono={<IconoSeguimientos />} etiqueta="Seguimientos" href={`${b}/seguimientos`} actual={pathname} />
           <ItemNav icono={<IconoLlamadas />}     etiqueta="Llamadas"     href={`${b}/llamadas`}     actual={pathname} matchPaths={["llamadas"]} />
           <ItemNav icono={<IconoInversiones />}  etiqueta="Inversiones"  href={`${b}/inversiones`}  actual={pathname} />
+          <ItemNav icono={<IconoBroadcast />}    etiqueta="Broadcast"    href={`${b}/broadcast`}    actual={pathname} />
         </SeccionNav>
 
         {/* ── CONFIGURACIÓN ────────────────────────────────── */}
         <SeccionNav titulo="Configuración">
           <ItemNav icono={<IconoAgente />}           etiqueta="Agente IA"    href={`${b}/configuracion`}     actual={pathname} />
           <ItemNav icono={<IconoWhatsApp />}          etiqueta="WhatsApp"     href={`${b}/whatsapp`}          actual={pathname} />
-          <ItemNav icono={<IconoWhatsAppBusiness />}  etiqueta="WA Business"  href={`${b}/whatsapp-business`} actual={pathname} />
           <ItemNav icono={<IconoProductos />}         etiqueta="Catálogo"     href={`${b}/productos`}         actual={pathname} />
           <ItemNav icono={<IconoConocimiento />}      etiqueta="Conocimiento" href={`${b}/conocimiento`}      actual={pathname} />
           <ItemNav icono={<IconoPlantillas />}        etiqueta="Plantillas"   href={`${b}/plantillas`}        actual={pathname} />
@@ -197,7 +197,7 @@ export function SidebarPanel({
 
         {/* ── MI CUENTA ────────────────────────────────────── */}
         <SeccionNav titulo="Mi Cuenta">
-          <ItemNav icono={<IconoEstudio />}  etiqueta="Estudio IA" href={`${b}/estudio`}  actual={pathname} />
+          <ItemNav icono={<IconoEstudio />}  etiqueta="Imágenes IA" href={`${b}/estudio`}  actual={pathname} />
           <ItemNav icono={<IconoCreditos />} etiqueta="Créditos"   href={`${b}/creditos`} actual={pathname} />
           <ItemNav icono={<IconoSoporte />}  etiqueta="Soporte"    href={`${b}/soporte`}  actual={pathname} />
         </SeccionNav>

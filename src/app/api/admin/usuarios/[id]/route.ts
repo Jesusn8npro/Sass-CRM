@@ -6,6 +6,8 @@ import {
   marcarBillingUsuario,
   obtenerSaldo,
   obtenerUsuarioApp,
+  obtenerSuperAdminPorEmail,
+  registrarAccionAdmin,
 } from "@/lib/baseDatos";
 import { parsearJSON, requerirAdmin } from "@/lib/auth/sesion";
 
@@ -76,10 +78,28 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
 
   if (cuerpo.accion === "suspender") {
     await marcarBillingUsuario(id, "suspendido");
+    const sa = await obtenerSuperAdminPorEmail(auth.email);
+    if (sa) {
+      void registrarAccionAdmin({
+        superAdminId: sa.id,
+        origen: "panel",
+        accion: "usuario_suspender",
+        payload: { usuario_id: id },
+      });
+    }
     return NextResponse.json({ ok: true });
   }
   if (cuerpo.accion === "reactivar") {
     await marcarBillingUsuario(id, "activo");
+    const sa = await obtenerSuperAdminPorEmail(auth.email);
+    if (sa) {
+      void registrarAccionAdmin({
+        superAdminId: sa.id,
+        origen: "panel",
+        accion: "usuario_reactivar",
+        payload: { usuario_id: id },
+      });
+    }
     return NextResponse.json({ ok: true });
   }
   if (cuerpo.accion === "dar_saldo") {
@@ -99,6 +119,15 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
       );
     }
     await agregarCreditos(cuerpo.cuentaId, cantidad);
+    const sa = await obtenerSuperAdminPorEmail(auth.email);
+    if (sa) {
+      void registrarAccionAdmin({
+        superAdminId: sa.id,
+        origen: "panel",
+        accion: "usuario_dar_saldo",
+        payload: { usuario_id: id, cuenta_id: cuerpo.cuentaId, cantidad },
+      });
+    }
     return NextResponse.json({ ok: true });
   }
   if (cuerpo.accion === "set_cuentas_extra") {
@@ -111,6 +140,15 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     }
     const { setCuentasExtraAdmin } = await import("@/lib/db/usuarios");
     const actualizado = await setCuentasExtraAdmin(id, Math.floor(extra));
+    const sa = await obtenerSuperAdminPorEmail(auth.email);
+    if (sa) {
+      void registrarAccionAdmin({
+        superAdminId: sa.id,
+        origen: "panel",
+        accion: "usuario_set_cuentas_extra",
+        payload: { usuario_id: id, cuentas_extra: Math.floor(extra) },
+      });
+    }
     return NextResponse.json({ ok: true, usuario: actualizado });
   }
 

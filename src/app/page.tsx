@@ -14,6 +14,7 @@ import {
 } from "./_componentes-landing/Comercial";
 import { LogosClientes } from "./_componentes-landing/LogosClientes";
 import { TestimoniosSociales } from "./_componentes-landing/TestimoniosSociales";
+import { CalculadoraROI } from "./_componentes-landing/CalculadoraROI";
 import { urlAbsoluta } from "@/lib/blog/siteUrl";
 
 const TITULO = "Agente de WhatsApp con IA para PYMEs — Sass-CRM";
@@ -176,6 +177,7 @@ export default function PaginaLanding() {
       <ComoFunciona />
       <Funciones />
       <TestimoniosSociales />
+      <CalculadoraROI />
       <CasosDeUso />
       <Precios />
       <PreguntasFrecuentes />

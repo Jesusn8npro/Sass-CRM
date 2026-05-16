@@ -41,7 +41,7 @@ export function SeccionProspeccion({ idCuenta }: { idCuenta: string }) {
           </p>
         </div>
         <Link
-          href="/app/cuenta/prospeccion"
+          href={`/app/cuentas/${idCuenta}/prospeccion`}
           className="text-xs text-emerald-600 hover:underline dark:text-emerald-400"
         >
           Ver pipeline completo →
@@ -91,21 +91,21 @@ export function SeccionProspeccion({ idCuenta }: { idCuenta: string }) {
 
       <div className="mt-4 flex gap-3">
         <Link
-          href="/app/cuenta/prospeccion/llamadas"
+          href={`/app/cuentas/${idCuenta}/prospeccion/llamadas`}
           className="text-[11px] text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
         >
           📞 Ver llamadas ({(stats.conteos.llamado ?? 0) + (stats.conteos.completado ?? 0)})
         </Link>
         <span className="text-zinc-200 dark:text-zinc-700">|</span>
         <Link
-          href="/app/cuenta/prospeccion/correos"
+          href={`/app/cuentas/${idCuenta}/prospeccion/correos`}
           className="text-[11px] text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
         >
           ✉️ Ver correos ({stats.conteos.emaileado ?? 0})
         </Link>
         <span className="text-zinc-200 dark:text-zinc-700">|</span>
         <Link
-          href="/app/cuenta/leads"
+          href={`/app/cuentas/${idCuenta}/leads`}
           className="text-[11px] text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
         >
           🔍 Buscar más leads

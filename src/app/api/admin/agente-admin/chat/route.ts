@@ -15,7 +15,7 @@
  * SIEMPRE funciona porque no depende del bot — solo de la API.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { requerirAdmin } from "@/lib/auth/sesion";
+import { parsearJSON, requerirAdmin } from "@/lib/auth/sesion";
 import {
   obtenerCuentaPanelAdmin,
   obtenerOCrearConversacion,
@@ -72,12 +72,8 @@ export async function POST(req: NextRequest) {
   const auth = await requerirAdmin();
   if (auth instanceof NextResponse) return auth;
 
-  let body: { mensaje?: unknown };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Body no es JSON" }, { status: 400 });
-  }
+  const body = await parsearJSON<{ mensaje?: unknown }>(req);
+  if (body instanceof NextResponse) return body;
 
   const mensaje =
     typeof body.mensaje === "string" ? body.mensaje.trim() : "";

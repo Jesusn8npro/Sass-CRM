@@ -7,6 +7,7 @@ import {
 import { obtenerDefinicionActor } from "@/lib/apify/actors";
 import { verificarFirmaWebhook } from "@/lib/apify/cliente";
 import { importarResultadosRun } from "@/lib/apify/importador";
+import { log } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   const firma = req.headers.get("apify-webhook-signature");
 
   if (!verificarFirmaWebhook(rawBody, firma)) {
-    console.warn("[apify:webhook] firma inválida");
+    log.warn({}, "[apify:webhook] firma inválida");
     return NextResponse.json({ error: "firma_invalida" }, { status: 401 });
   }
 
@@ -50,9 +51,7 @@ export async function POST(req: NextRequest) {
 
   const fila = await obtenerRunApifyPorApifyId(payload.apifyRunId);
   if (!fila) {
-    console.warn(
-      `[apify:webhook] run ${payload.apifyRunId} no existe en runs_apify (posible delay) — ack OK igual`,
-    );
+    log.warn({ apifyRunId: payload.apifyRunId }, "[apify:webhook] run no existe en runs_apify — ack OK");
     return NextResponse.json({ ok: true });
   }
   if (fila.estado !== "corriendo") {
@@ -93,7 +92,7 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json({ ok: true, resumen });
     } catch (err) {
-      console.error("[apify:webhook] error importando:", err);
+      log.error({ err }, "[apify:webhook] error importando");
       await actualizarRunApify(fila.id, {
         estado: "fallido",
         error: err instanceof Error ? err.message : String(err),

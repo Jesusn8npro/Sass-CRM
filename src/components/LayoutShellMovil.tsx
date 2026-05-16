@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 import type { Cuenta } from "@/lib/baseDatos";
 import { PillCreditos } from "./PillCreditos";
 import { SidebarPanel } from "./SidebarPanel";
+import { BottomNavMovil } from "./BottomNavMovil";
 
 export function LayoutShellMovil({
   idCuenta,
@@ -100,8 +101,10 @@ export function LayoutShellMovil({
           </div>
         </div>
 
-        <main className="flex-1 overflow-x-hidden overflow-y-auto">{children}</main>
+        <main className="flex-1 overflow-x-hidden overflow-y-auto pb-16 lg:pb-0">{children}</main>
       </div>
+
+      <BottomNavMovil idCuenta={idCuenta} onAbrirMenu={() => setAbierto(true)} />
     </div>
   );
 }

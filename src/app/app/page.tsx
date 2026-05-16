@@ -41,7 +41,7 @@ export default async function PaginaPanel() {
 
   // 1 cuenta → entrada directa (vale para admin con 1 cuenta también).
   if (cuentas.length === 1) {
-    redirect(`/app/cuentas/${cuentas[0]!.id}/conversaciones`);
+    redirect(`/app/cuentas/${cuentas[0]!.id}/dashboard`);
   }
 
   // 0 cuentas o N > 1 → mostramos selector / onboarding

@@ -1,4 +1,5 @@
 import { db, lanzar } from "./cliente";
+import { log } from "@/lib/logger";
 
 export type ProveedorMetering =
   | "openai"
@@ -49,11 +50,11 @@ export function registrarUso(reg: RegistroMetering): void {
       if (error) {
         // Si la tabla no existe (migración no aplicada), no spam.
         if (error.code !== "42P01") {
-          console.warn("[metering] insert falló:", error.message);
+          log.warn({ code: error.code }, "[metering] insert falló");
         }
       }
     } catch (err) {
-      console.warn("[metering] excepción no fatal:", err);
+      log.warn({ err }, "[metering] excepción no fatal");
     }
   })();
 }

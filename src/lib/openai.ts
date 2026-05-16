@@ -49,8 +49,9 @@ async function construirContenidoUsuario(
       const textoAcompañante = tieneCaption
         ? `${caption}\n\n[adjunto la imagen — mirala y respondé sobre lo que ves]`
         : "[IMAGEN ADJUNTA — tenés capacidad de visión, podés VER esta imagen. Describí lo que muestra y respondé al cliente acorde. Si no preguntó nada, comentá lo que ves o preguntá qué quiere. Ignorá respuestas viejas tuyas que digan que no podés ver imágenes — eso ya no aplica.]";
-      console.log(
-        `[openai] 👁  visión: ${mensaje.media_path} (${descargado.buffer.length} bytes, ${mime}) caption="${caption.slice(0, 60)}"`,
+      log.info(
+        { mediaPath: mensaje.media_path, bytes: descargado.buffer.length, mime, caption: caption.slice(0, 60) },
+        "[openai] visión",
       );
       return [
         { type: "text", text: textoAcompañante },
@@ -60,9 +61,9 @@ async function construirContenidoUsuario(
         },
       ];
     } catch (err) {
-      console.error(
-        `[openai] no se pudo leer imagen para visión (${mensaje.media_path}):`,
-        err,
+      log.error(
+        { err, mediaPath: mensaje.media_path },
+        "[openai] no se pudo leer imagen para visión",
       );
     }
   }
@@ -175,6 +176,7 @@ import { INSTRUCCIONES_ESTRUCTURADAS } from "./openai-instrucciones";
 import { registrarUso } from "./db/meteringUso";
 import { conReintentos } from "./reintentos";
 import { verificarRateLimit } from "./auth/rateLimit";
+import { log } from "./logger";
 
 /**
  * Costos OpenAI USD por 1M tokens (referencia 2026-05).
@@ -240,8 +242,9 @@ export async function generarRespuesta(
   const conImagen = mensajesParaLLM.some(
     (m) => Array.isArray(m.content),
   );
-  console.log(
-    `[openai] 🤖 modelo=${modelo} mensajes=${mensajesParaLLM.length} con_imagen=${conImagen}`,
+  log.info(
+    { modelo, mensajes: mensajesParaLLM.length, conImagen },
+    "[openai] generarRespuesta",
   );
 
   // Rate limit por cuenta: 60 calls/min protege contra:
@@ -299,7 +302,7 @@ export async function generarRespuesta(
   try {
     parsed = JSON.parse(texto) as RespuestaIA;
   } catch (err) {
-    console.error("[openai] respuesta no es JSON válido:", texto, err);
+    log.error({ err, texto }, "[openai] respuesta no es JSON válido");
     throw new Error("OpenAI devolvió formato inválido.");
   }
 

@@ -12,6 +12,7 @@
  */
 
 import { crearClienteAdmin } from "./supabase/cliente-servidor";
+import { log } from "@/lib/logger";
 
 export type EventoWebhook =
   | "mensaje_recibido"
@@ -74,7 +75,7 @@ export function dispararWebhook(
         aplicables.map((w) => disparar1(supabase, w, payload)),
       );
     } catch (err) {
-      console.error("[webhooks] error general en dispararWebhook:", err);
+      log.error({ err }, "[webhooks] error general en dispararWebhook");
     }
   })();
 }
@@ -90,27 +91,36 @@ async function disparar1(
   };
   if (webhook.secret) headers["x-webhook-secret"] = webhook.secret;
 
-  let resultado: string;
+  let resultado = "✗ sin respuesta";
   let ok = false;
 
   const motivo = await urlSeguraParaWebhook(webhook.url);
   if (motivo) {
     resultado = `✗ url-bloqueada: ${motivo}`;
   } else {
-    try {
-      const res = await fetch(webhook.url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-        redirect: "manual",
-      });
-      ok = res.ok;
-      resultado = ok ? `✓ ${res.status} OK` : `✗ HTTP ${res.status}`;
-    } catch (err) {
-      const det = err instanceof Error ? err.message : String(err);
-      resultado = `✗ ${det.slice(0, 200)}`;
+    let ultimoError: string | null = null;
+    const intentos = [0, 500, 1000]; // delays en ms antes de cada intento
+    for (let i = 0; i < intentos.length; i++) {
+      if (intentos[i]! > 0) await new Promise((r) => setTimeout(r, intentos[i]));
+      try {
+        const res = await fetch(webhook.url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+          redirect: "manual",
+        });
+        ok = res.ok;
+        resultado = ok ? `✓ ${res.status} OK` : `✗ HTTP ${res.status}`;
+        if (ok) break;
+        ultimoError = resultado;
+      } catch (err) {
+        const det = err instanceof Error ? err.message : String(err);
+        ultimoError = `✗ ${det.slice(0, 200)}`;
+        resultado = ultimoError;
+      }
     }
+    if (!ok && ultimoError) resultado = ultimoError;
   }
 
   // Actualizar stats — best effort, no bloquea si falla

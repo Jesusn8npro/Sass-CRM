@@ -4,46 +4,18 @@ import { useCallback, useState } from "react";
 import { usePollingVisible } from "@/components/usePollingVisible";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import type {
-  ContactoEmail,
-  ContactoTelefono,
-  Cuenta,
-  MetricasCuenta,
-} from "@/lib/baseDatos";
+import type { Cuenta, MetricasCuenta } from "@/lib/baseDatos";
 import { InterruptorTema } from "@/components/InterruptorTema";
-import { useToast } from "@/components/Toaster";
-import { useConfirm } from "@/components/ConfirmDialog";
+import { Kpi } from "./_componentes";
+import { SeccionVolumenYTops } from "./_secciones";
+import { SeccionContactosCapturados } from "./_seccion-contactos";
+import { SeccionCRMyCitas } from "./_secciones-crm";
+import { SeccionProspeccion } from "./_seccion-prospeccion";
+import { BannerPushNotificaciones } from "./_banner-push";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
 }
-
-interface RespuestaContactos {
-  contactos: Array<
-    ContactoEmail & {
-      nombre_contacto: string | null;
-      telefono: string | null;
-    }
-  >;
-}
-
-interface RespuestaTelefonos {
-  contactos: Array<
-    ContactoTelefono & {
-      nombre_contacto: string | null;
-      telefono_conv: string | null;
-    }
-  >;
-}
-
-import { Kpi } from "./_componentes";
-import {
-  SeccionContactosCapturados,
-  SeccionVolumenYTops,
-} from "./_secciones";
-import { SeccionCRMyCitas } from "./_secciones-crm";
-import { SeccionProspeccion } from "./_seccion-prospeccion";
-import { SkeletonTarjetaKpi } from "@/components/ui";
 
 export default function PaginaDashboard() {
   const params = useParams<{ idCuenta: string }>();
@@ -51,31 +23,16 @@ export default function PaginaDashboard() {
 
   const [cuenta, setCuenta] = useState<Cuenta | null>(null);
   const [metricas, setMetricas] = useState<MetricasCuenta | null>(null);
-  const [contactos, setContactos] = useState<
-    RespuestaContactos["contactos"]
-  >([]);
-  const [telefonos, setTelefonos] = useState<
-    RespuestaTelefonos["contactos"]
-  >([]);
-  const [llamandoId, setLlamandoId] = useState<string | null>(null);
-  const toast = useToast();
-  const { confirmar } = useConfirm();
 
+  // Solo carga cuenta + métricas en el polling principal.
+  // Los contactos (pesados) los carga SeccionContactosCapturados por su cuenta.
   const cargarTodo = useCallback(async () => {
     if (!idCuenta) return;
     try {
-      const [resCuenta, resMetricas, resContactos, resTels] = await Promise.all(
-        [
-          fetch(`/api/cuentas/${idCuenta}`, { cache: "no-store" }),
-          fetch(`/api/cuentas/${idCuenta}/metricas`, { cache: "no-store" }),
-          fetch(`/api/cuentas/${idCuenta}/contactos-email`, {
-            cache: "no-store",
-          }),
-          fetch(`/api/cuentas/${idCuenta}/contactos-telefono`, {
-            cache: "no-store",
-          }),
-        ],
-      );
+      const [resCuenta, resMetricas] = await Promise.all([
+        fetch(`/api/cuentas/${idCuenta}`, { cache: "no-store" }),
+        fetch(`/api/cuentas/${idCuenta}/metricas`, { cache: "no-store" }),
+      ]);
       if (resCuenta.ok) {
         const d = (await resCuenta.json()) as RespuestaCuenta;
         setCuenta(d.cuenta);
@@ -84,50 +41,10 @@ export default function PaginaDashboard() {
         const d = (await resMetricas.json()) as MetricasCuenta;
         setMetricas(d);
       }
-      if (resContactos.ok) {
-        const d = (await resContactos.json()) as RespuestaContactos;
-        setContactos(d.contactos);
-      }
-      if (resTels.ok) {
-        const d = (await resTels.json()) as RespuestaTelefonos;
-        setTelefonos(d.contactos);
-      }
     } catch (err) {
       console.error("[dashboard] error cargando:", err);
     }
   }, [idCuenta]);
-
-  async function llamarTelefono(idContacto: string, tel: string) {
-    if (llamandoId !== null) return;
-    const ok = await confirmar({ mensaje: `¿Llamar a +${tel}?` });
-    if (!ok) return;
-    setLlamandoId(idContacto);
-    try {
-      const res = await fetch(`/api/cuentas/${idCuenta}/llamadas`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ telefono: tel }),
-      });
-      const data = (await res.json().catch(() => ({}))) as
-        | { llamada: { vapi_call_id: string } }
-        | { error: string };
-      if (res.ok && "llamada" in data) {
-        toast.exito(`Llamada disparada (${data.llamada.vapi_call_id.slice(0, 10)}…)`);
-      } else {
-        toast.error(
-          "Error: " +
-            (("error" in data && data.error) || `HTTP ${res.status}`),
-        );
-      }
-    } catch (err) {
-      toast.error(
-        "Error de red: " +
-          (err instanceof Error ? err.message : "desconocido"),
-      );
-    } finally {
-      setLlamandoId(null);
-    }
-  }
 
   usePollingVisible(cargarTodo, 30000);
 
@@ -145,33 +62,29 @@ export default function PaginaDashboard() {
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
               aria-label="Volver"
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-              >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                 <path d="m15 18-6-6 6-6" />
               </svg>
             </Link>
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                Dashboard
-              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Dashboard</p>
               <h1 className="truncate text-base font-semibold tracking-tight text-zinc-900 md:text-lg dark:text-zinc-100">
                 {cuenta?.etiqueta ?? "—"}
               </h1>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-2">
+            <Link
+              href={`/app/cuentas/${idCuenta}/prospeccion`}
+              className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+            >
+              Prospección
+            </Link>
             <Link
               href={`/app/cuentas/${idCuenta}/pipeline`}
               className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
             >
-              Pipeline
+              Pipeline CRM
             </Link>
             <Link
               href={`/app/cuentas/${idCuenta}/configuracion`}
@@ -179,29 +92,28 @@ export default function PaginaDashboard() {
             >
               Ajustes
             </Link>
+            <a
+              href={`/api/cuentas/${idCuenta}/exports/conversaciones`}
+              className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+              download
+            >
+              Exportar leads CSV
+            </a>
+            <InterruptorTema />
+          </div>
+          <div className="flex sm:hidden items-center gap-2">
             <InterruptorTema />
           </div>
         </div>
       </header>
 
+      <BannerPushNotificaciones idCuenta={idCuenta} />
+
       <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
         {!metricas ? (
-          <div className="flex flex-col gap-6">
-            <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <SkeletonTarjetaKpi key={i} />
-              ))}
-            </section>
-            <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <SkeletonTarjetaKpi key={i} />
-              ))}
-            </section>
-            <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <SkeletonTarjetaKpi key={i} />
-              ))}
-            </section>
+          <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+            <p className="text-sm text-zinc-500">Cargando métricas…</p>
           </div>
         ) : (
           <div className="flex flex-col gap-6">
@@ -214,25 +126,13 @@ export default function PaginaDashboard() {
               />
               <a
                 href="#atencion"
-                className={
-                  metricas.conversaciones_necesitan_humano > 0
-                    ? "block transition-transform hover:-translate-y-0.5"
-                    : "block"
-                }
+                className={metricas.conversaciones_necesitan_humano > 0 ? "block transition-transform hover:-translate-y-0.5" : "block"}
               >
                 <Kpi
                   titulo="Necesitan atención"
                   valor={metricas.conversaciones_necesitan_humano}
-                  detalle={
-                    metricas.conversaciones_necesitan_humano > 0
-                      ? "Tocá para ver la lista ↓"
-                      : "Sin pendientes"
-                  }
-                  acento={
-                    metricas.conversaciones_necesitan_humano > 0
-                      ? "rojo"
-                      : undefined
-                  }
+                  detalle={metricas.conversaciones_necesitan_humano > 0 ? "Tocá para ver la lista ↓" : "Sin pendientes"}
+                  acento={metricas.conversaciones_necesitan_humano > 0 ? "rojo" : undefined}
                 />
               </a>
               <Kpi
@@ -243,33 +143,22 @@ export default function PaginaDashboard() {
               <Kpi
                 titulo="Productos activos"
                 valor={metricas.productos_total}
-                detalle={
-                  metricas.productos_sin_stock > 0
-                    ? `${metricas.productos_sin_stock} sin stock`
-                    : "Catálogo configurado"
-                }
-                acento={
-                  metricas.productos_sin_stock > 0 ? "rojo" : undefined
-                }
+                detalle={metricas.productos_sin_stock > 0 ? `${metricas.productos_sin_stock} sin stock` : "Catálogo configurado"}
+                acento={metricas.productos_sin_stock > 0 ? "rojo" : undefined}
               />
             </section>
 
             <SeccionCRMyCitas metricas={metricas} />
 
-            {/* Conversaciones que necesitan atención — cards clickeables */}
+            {/* Conversaciones que necesitan atención */}
             {metricas.conversaciones_atencion.length > 0 && (
-              <section
-                id="atencion"
-                className="rounded-2xl border border-red-200 bg-red-50/40 p-4 dark:border-red-500/30 dark:bg-red-950/20"
-              >
+              <section id="atencion" className="rounded-2xl border border-red-200 bg-red-50/40 p-4 dark:border-red-500/30 dark:bg-red-950/20">
                 <div className="mb-3 flex items-center justify-between">
                   <div>
                     <h2 className="text-sm font-semibold text-red-700 dark:text-red-300">
                       ⚠ Conversaciones que necesitan atención
                     </h2>
-                    <p className="text-[11px] text-zinc-500">
-                      Tocá una para abrirla directamente
-                    </p>
+                    <p className="text-[11px] text-zinc-500">Tocá una para abrirla directamente</p>
                   </div>
                   <span className="rounded-full bg-red-500 px-2.5 py-0.5 font-mono text-xs font-bold text-white">
                     {metricas.conversaciones_atencion.length}
@@ -287,22 +176,9 @@ export default function PaginaDashboard() {
                             {(c.nombre[0] ?? "?").toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold">
-                              {c.nombre}
-                            </p>
+                            <p className="truncate text-sm font-semibold">{c.nombre}</p>
                             <p className="truncate font-mono text-[10px] text-zinc-500">
-                              +{c.telefono} ·{" "}
-                              {c.ultimo_mensaje_en
-                                ? new Date(c.ultimo_mensaje_en).toLocaleString(
-                                    "es-AR",
-                                    {
-                                      day: "2-digit",
-                                      month: "short",
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    },
-                                  )
-                                : "—"}
+                              +{c.telefono} · {c.ultimo_mensaje_en ? new Date(c.ultimo_mensaje_en).toLocaleString("es-AR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}
                             </p>
                           </div>
                         </div>
@@ -310,12 +186,8 @@ export default function PaginaDashboard() {
                           <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
                             {c.estado_lead}
                           </span>
-                          <span className="font-mono text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                            {c.lead_score}%
-                          </span>
-                          <span className="text-zinc-400 transition-transform group-hover:translate-x-1">
-                            →
-                          </span>
+                          <span className="font-mono text-xs font-bold text-zinc-700 dark:text-zinc-300">{c.lead_score}%</span>
+                          <span className="text-zinc-400 transition-transform group-hover:translate-x-1">→</span>
                         </div>
                       </Link>
                     </li>
@@ -324,15 +196,13 @@ export default function PaginaDashboard() {
               </section>
             )}
 
-            {/* KPIs de captura + dinero */}
+            {/* KPIs de captura */}
             <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
               <Kpi
                 titulo="Emails capturados"
                 valor={metricas.emails_capturados}
                 detalle="Detectados en mensajes"
-                acento={
-                  metricas.emails_capturados > 0 ? "esmeralda" : undefined
-                }
+                acento={metricas.emails_capturados > 0 ? "esmeralda" : undefined}
               />
               <Kpi
                 titulo="Teléfonos capturados"
@@ -340,39 +210,23 @@ export default function PaginaDashboard() {
                 detalle="Mencionados en chats"
               />
               <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                  Inversión total
-                </p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Inversión total</p>
                 {metricas.inversiones_por_moneda.length === 0 ? (
                   <>
-                    <p className="mt-1 text-3xl font-bold text-zinc-400">
-                      —
-                    </p>
-                    <p className="mt-1 text-[11px] text-zinc-500">
-                      Sin gastos registrados
-                    </p>
+                    <p className="mt-1 text-3xl font-bold text-zinc-400">—</p>
+                    <p className="mt-1 text-[11px] text-zinc-500">Sin gastos registrados</p>
                   </>
                 ) : (
                   <>
                     <ul className="mt-1 flex flex-col gap-0.5">
                       {metricas.inversiones_por_moneda.map((m) => (
-                        <li
-                          key={m.moneda}
-                          className="text-lg font-bold text-zinc-900 dark:text-zinc-100"
-                        >
-                          {m.total.toLocaleString("es-CO", {
-                            maximumFractionDigits: 0,
-                          })}{" "}
-                          <span className="text-xs font-normal text-zinc-500">
-                            {m.moneda}
-                          </span>
+                        <li key={m.moneda} className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                          {m.total.toLocaleString("es-CO", { maximumFractionDigits: 0 })}{" "}
+                          <span className="text-xs font-normal text-zinc-500">{m.moneda}</span>
                         </li>
                       ))}
                     </ul>
-                    <Link
-                      href={`/app/cuentas/${idCuenta}/inversiones`}
-                      className="mt-1 inline-block text-[11px] text-emerald-700 underline dark:text-emerald-400"
-                    >
+                    <Link href={`/app/cuentas/${idCuenta}/inversiones`} className="mt-1 inline-block text-[11px] text-emerald-700 underline dark:text-emerald-400">
                       Ver detalle →
                     </Link>
                   </>
@@ -380,21 +234,12 @@ export default function PaginaDashboard() {
               </div>
             </section>
 
-            <SeccionVolumenYTops
-              metricas={metricas}
-              idCuenta={idCuenta}
-              maxBarra={maxBarra}
-            />
-
-            <SeccionContactosCapturados
-              contactos={contactos}
-              telefonos={telefonos}
-              idCuenta={idCuenta}
-              llamarTelefono={llamarTelefono}
-              llamandoId={llamandoId}
-            />
+            <SeccionVolumenYTops metricas={metricas} idCuenta={idCuenta} maxBarra={maxBarra} />
 
             <SeccionProspeccion idCuenta={idCuenta} />
+
+            {/* Contactos capturados — se cargan independientemente, no bloquean los KPIs */}
+            <SeccionContactosCapturados idCuenta={idCuenta} />
           </div>
         )}
       </div>

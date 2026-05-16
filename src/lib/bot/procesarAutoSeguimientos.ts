@@ -22,6 +22,7 @@
  * la conv antes de crear.
  */
 import OpenAI from "openai";
+import { log } from "@/lib/logger";
 import {
   avanzarPasoAutoSeguimiento,
   crearSeguimiento,
@@ -119,10 +120,7 @@ export async function procesarAutoSeguimientos(): Promise<void> {
 
       await tratarConversacion(conv, pasosPorCuenta.get(conv.cuenta_id)!);
     } catch (err) {
-      console.error(
-        `[autoSeg] error procesando conv ${conv.id}:`,
-        err,
-      );
+      log.error({ err, convId: conv.id }, "[autoSeg] error procesando conv");
     }
   }
 }
@@ -193,8 +191,9 @@ async function tratarConversacion(
     conv.auto_seg_paso_enviado + 1,
   );
 
-  console.log(
-    `[autoSeg] ⏰→ paso ${proximoPaso.orden}/${pasos.length} (IA, ${textoSeguimiento.length} chars) agendado para conv ${conv.id}`,
+  log.info(
+    { convId: conv.id, orden: proximoPaso.orden, total: pasos.length, chars: textoSeguimiento.length },
+    "[autoSeg] paso agendado",
   );
 }
 
@@ -292,10 +291,7 @@ ${transcripcion}
     // Cap defensivo + sanitizar comillas dobles que la IA a veces agrega
     return texto.replace(/^["']|["']$/g, "").slice(0, 800);
   } catch (err) {
-    console.warn(
-      `[autoSeg] IA falló para conv ${conv.id}, usando texto literal del paso:`,
-      err instanceof Error ? err.message : err,
-    );
+    log.warn({ err, convId: conv.id }, "[autoSeg] IA falló, usando texto literal del paso");
     return paso.mensaje;
   }
 }

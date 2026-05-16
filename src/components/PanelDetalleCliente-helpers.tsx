@@ -1,10 +1,6 @@
 "use client";
 
-/**
- * Helpers + sub-componentes de PanelDetalleCliente extraídos para
- * mantener el archivo principal bajo 450 líneas. Solo se usa desde ahí.
- */
-
+import { useState } from "react";
 import type { Etiqueta } from "@/lib/baseDatos";
 
 export const COLORES_ETIQUETA = [
@@ -17,6 +13,23 @@ export const COLORES_ETIQUETA = [
   { id: "violeta", clase: "bg-violet-500" },
   { id: "rosa", clase: "bg-pink-500" },
 ];
+
+const COLORES_TAGS = [
+  "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-500/30",
+  "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-500/30",
+  "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-500/30",
+  "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-500/30",
+  "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-500/30",
+  "bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-500/30",
+  "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-500/30",
+  "bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-950/40 dark:text-pink-300 dark:border-pink-500/30",
+];
+
+export function colorTag(nombre: string): string {
+  let h = 0;
+  for (let i = 0; i < nombre.length; i++) h = (h * 31 + nombre.charCodeAt(i)) | 0;
+  return COLORES_TAGS[Math.abs(h) % COLORES_TAGS.length]!;
+}
 
 export function clasesPillEtiqueta(color: string): string {
   switch (color) {
@@ -102,95 +115,113 @@ export function GestionEtiquetas({
   creandoEtiqueta: boolean;
   crearEtiqueta: () => Promise<void> | void;
 }) {
+  const [agregandoInline, setAgregandoInline] = useState(false);
+
   return (
     <Seccion titulo="Etiquetas">
-      {asignadas.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {asignadas.map((e) => (
+      <div className="flex flex-wrap items-center gap-1.5">
+        {asignadas.map((e) => (
+          <span
+            key={e.id}
+            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${colorTag(e.nombre)}`}
+          >
+            {e.nombre}
             <button
-              key={e.id}
               type="button"
               onClick={() => alternarEtiqueta(e)}
               title="Quitar etiqueta"
-              className={`group inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${clasesPillEtiqueta(e.color)}`}
+              className="ml-0.5 rounded-full opacity-60 hover:opacity-100 focus:outline-none"
+              aria-label={`Quitar ${e.nombre}`}
             >
-              {e.nombre}
-              <span className="opacity-0 group-hover:opacity-100">×</span>
+              ×
             </button>
-          ))}
-        </div>
-      )}
-      <details className="rounded-xl border border-zinc-200 bg-white open:bg-zinc-50/40 dark:border-zinc-800 dark:bg-zinc-900 dark:open:bg-zinc-950/40">
-        <summary className="cursor-pointer rounded-xl px-3 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800/40">
-          + Agregar etiqueta
-        </summary>
-        <div className="border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
-          {todasEtiquetas.length > 0 && (
-            <>
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-                Existentes
-              </p>
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                {todasEtiquetas
-                  .filter((e) => !idsAsignadas.has(e.id))
-                  .map((e) => (
-                    <button
-                      key={e.id}
-                      type="button"
-                      onClick={() => alternarEtiqueta(e)}
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider opacity-70 transition-opacity hover:opacity-100 ${clasesPillEtiqueta(e.color)}`}
-                    >
-                      + {e.nombre}
-                    </button>
-                  ))}
-                {todasEtiquetas.filter((e) => !idsAsignadas.has(e.id)).length === 0 && (
-                  <span className="text-[10px] text-zinc-400">
-                    (Todas las etiquetas existentes ya están asignadas)
-                  </span>
-                )}
-              </div>
-            </>
+          </span>
+        ))}
+        {!agregandoInline && (
+          <button
+            type="button"
+            onClick={() => setAgregandoInline(true)}
+            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-zinc-300 text-zinc-400 hover:border-emerald-500 hover:text-emerald-600 dark:border-zinc-700 dark:hover:border-emerald-500 dark:hover:text-emerald-400"
+            title="Agregar etiqueta"
+          >
+            <span className="text-xs leading-none">+</span>
+          </button>
+        )}
+      </div>
+
+      {agregandoInline && (
+        <div className="mt-2 space-y-2 rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+          {todasEtiquetas.filter((e) => !idsAsignadas.has(e.id)).length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {todasEtiquetas
+                .filter((e) => !idsAsignadas.has(e.id))
+                .map((e) => (
+                  <button
+                    key={e.id}
+                    type="button"
+                    onClick={() => {
+                      void alternarEtiqueta(e);
+                      setAgregandoInline(false);
+                    }}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider opacity-75 transition-opacity hover:opacity-100 ${colorTag(e.nombre)}`}
+                  >
+                    + {e.nombre}
+                  </button>
+                ))}
+            </div>
           )}
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-            Crear nueva
-          </p>
-          <div className="space-y-2">
+          <div className="flex gap-1.5">
             <input
               type="text"
               value={nombreNuevaEt}
               onChange={(e) => setNombreNuevaEt(e.target.value)}
-              placeholder="Nombre de la etiqueta…"
-              className="w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-900"
+              placeholder="Nueva etiqueta…"
+              autoFocus
+              className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-900"
               onKeyDown={(e) => {
-                if (e.key === "Enter") void crearEtiqueta();
+                if (e.key === "Enter") {
+                  void crearEtiqueta();
+                  setAgregandoInline(false);
+                }
+                if (e.key === "Escape") setAgregandoInline(false);
               }}
             />
-            <div className="flex flex-wrap gap-1.5">
-              {COLORES_ETIQUETA.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setColorNuevaEt(c.id)}
-                  className={`h-5 w-5 rounded-full ${c.clase} ${
-                    colorNuevaEt === c.id
-                      ? "ring-2 ring-zinc-900 ring-offset-1 dark:ring-zinc-200"
-                      : ""
-                  }`}
-                  title={c.id}
-                />
-              ))}
-            </div>
             <button
               type="button"
-              onClick={crearEtiqueta}
+              onClick={() => {
+                void crearEtiqueta();
+                setAgregandoInline(false);
+              }}
               disabled={!nombreNuevaEt.trim() || creandoEtiqueta}
-              className="w-full rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
             >
-              {creandoEtiqueta ? "Creando…" : "+ Crear y asignar"}
+              {creandoEtiqueta ? "…" : "Agregar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAgregandoInline(false)}
+              className="rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            >
+              ✕
             </button>
           </div>
+          <div className="flex flex-wrap gap-1.5">
+            {COLORES_ETIQUETA.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setColorNuevaEt(c.id)}
+                className={`h-4 w-4 rounded-full ${c.clase} ${
+                  colorNuevaEt === c.id
+                    ? "ring-2 ring-zinc-900 ring-offset-1 dark:ring-zinc-200"
+                    : ""
+                }`}
+                title={c.id}
+              />
+            ))}
+          </div>
         </div>
-      </details>
+      )}
     </Seccion>
   );
 }

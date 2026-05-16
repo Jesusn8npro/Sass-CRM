@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { requerirSesion } from "@/lib/auth/sesion";
+import { parsearJSON, requerirSesion } from "@/lib/auth/sesion";
 import { paypalFetch } from "@/lib/paypal/cliente";
 import { PLANES, planIdPayPal } from "@/lib/paypal/planes";
 
@@ -27,12 +27,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "no_autorizado" }, { status: 403 });
   }
 
-  let body: { plan?: "pro" | "business" };
-  try {
-    body = (await req.json()) as { plan?: "pro" | "business" };
-  } catch {
-    return NextResponse.json({ error: "json_invalido" }, { status: 400 });
-  }
+  const body = await parsearJSON<{ plan?: "pro" | "business" }>(req);
+  if (body instanceof NextResponse) return body;
   if (body.plan !== "pro" && body.plan !== "business") {
     return NextResponse.json({ error: "plan_invalido" }, { status: 400 });
   }

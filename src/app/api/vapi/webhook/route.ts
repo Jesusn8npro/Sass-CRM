@@ -370,8 +370,11 @@ export async function POST(req: NextRequest) {
 
   // Manejo de status-update (cambios de estado durante la llamada)
   if (tipo === "status-update") {
+    const estadoMapeado = mapearEstado(message.call?.status, message.call?.endedReason);
+    const esTerminal = ["completada", "sin_respuesta", "fallida", "finalizada"].includes(estadoMapeado);
     await actualizarLlamadaPorCallId(callId, {
-      estado: mapearEstado(message.call?.status, message.call?.endedReason),
+      estado: estadoMapeado,
+      ...(esTerminal && !llamada.terminada_en ? { terminada_en: new Date().toISOString() } : {}),
     });
     return NextResponse.json({ ok: true });
   }

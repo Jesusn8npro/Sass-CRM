@@ -94,6 +94,14 @@ export async function verificarAccesoCuenta(
   if (!cuenta || cuenta.usuario_id !== auth.id) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
+  const { obtenerUsuarioApp } = await import("@/lib/db/usuarios");
+  const usuario = await obtenerUsuarioApp(auth.id);
+  if (usuario?.estado_billing === "suspendido") {
+    return NextResponse.json(
+      { error: "Cuenta suspendida. Regularizá tu pago para continuar." },
+      { status: 402 },
+    );
+  }
   return { auth, cuenta };
 }
 

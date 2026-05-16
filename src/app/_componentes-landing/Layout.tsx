@@ -125,6 +125,7 @@ export function PieDePagina() {
             links: [
               { t: "Términos", h: "/terminos" },
               { t: "Privacidad", h: "/privacidad" },
+              { t: "Documentación", h: "/docs" },
             ],
           },
         ].map((col) => (

@@ -61,7 +61,7 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     }
   }
   if (typeof payload.lead_score === "number" && Number.isFinite(payload.lead_score)) {
-    cambios.lead_score = payload.lead_score;
+    cambios.lead_score = Math.max(0, Math.min(100, Math.round(payload.lead_score)));
   }
   if (typeof payload.paso_actual === "string") {
     cambios.paso_actual = payload.paso_actual.trim().slice(0, 60);
