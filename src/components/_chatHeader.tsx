@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Conversacion, Cuenta, ModoConversacion } from "@/lib/baseDatos";
 import { BotonLlamar } from "./BotonLlamar";
@@ -15,6 +16,155 @@ const COLOR_ESTADO: Record<string, string> = {
   perdido: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
 };
 
+interface Miembro {
+  id: string;
+  usuario_id: string;
+  rol: "agente" | "admin";
+  email?: string;
+  nombre?: string | null;
+}
+
+function inicialMiembro(m: Miembro) {
+  const base = m.nombre?.trim() || m.email || "";
+  return base ? base[0]!.toUpperCase() : "?";
+}
+
+function SelectorAsignacion({
+  idCuenta,
+  idConversacion,
+  asignadoA,
+  onAsignar,
+}: {
+  idCuenta: string;
+  idConversacion: string;
+  asignadoA: string | null;
+  onAsignar: (id: string | null) => void;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [miembros, setMiembros] = useState<Miembro[]>([]);
+  const [guardando, setGuardando] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!abierto || miembros.length > 0) return;
+    fetch(`/api/cuentas/${idCuenta}/miembros`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { miembros: Miembro[] } | null) => {
+        if (d?.miembros) setMiembros(d.miembros);
+      })
+      .catch(() => {});
+  }, [abierto, idCuenta, miembros.length]);
+
+  useEffect(() => {
+    if (!abierto) return;
+    function cerrar(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setAbierto(false);
+      }
+    }
+    document.addEventListener("mousedown", cerrar);
+    return () => document.removeEventListener("mousedown", cerrar);
+  }, [abierto]);
+
+  async function asignar(id: string | null) {
+    setGuardando(true);
+    try {
+      const r = await fetch(
+        `/api/cuentas/${idCuenta}/conversaciones/${idConversacion}/asignar`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ asignadoA: id }),
+        },
+      );
+      if (r.ok) onAsignar(id);
+    } finally {
+      setGuardando(false);
+      setAbierto(false);
+    }
+  }
+
+  const asignado = miembros.find((m) => m.usuario_id === asignadoA);
+
+  return (
+    <div ref={ref} className="relative hidden sm:block">
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        disabled={guardando}
+        title={asignado ? `Asignado a ${asignado.nombre ?? asignado.email}` : "Asignar agente"}
+        className={`flex h-9 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors disabled:opacity-60 ${
+          asignado
+            ? "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-700/50 dark:bg-violet-950/30 dark:text-violet-300"
+            : "border-zinc-200 bg-zinc-50 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+        }`}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <line x1="19" y1="8" x2="19" y2="14" />
+          <line x1="22" y1="11" x2="16" y2="11" />
+        </svg>
+        <span className="hidden max-w-[80px] truncate lg:inline">
+          {asignado ? (asignado.nombre ?? asignado.email ?? "Asignado") : "Asignar"}
+        </span>
+      </button>
+
+      {abierto && (
+        <div className="absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+            Asignar a
+          </p>
+          <button
+            type="button"
+            onClick={() => void asignar(null)}
+            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 ${
+              !asignadoA ? "text-zinc-400" : "text-zinc-600 dark:text-zinc-300"
+            }`}
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-[9px] font-bold text-zinc-500 dark:bg-zinc-700">
+              —
+            </span>
+            Sin asignar
+          </button>
+          {miembros.map((m) => (
+            <button
+              key={m.usuario_id}
+              type="button"
+              onClick={() => void asignar(m.usuario_id)}
+              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 ${
+                asignadoA === m.usuario_id
+                  ? "bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300"
+                  : "text-zinc-700 dark:text-zinc-200"
+              }`}
+            >
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[9px] font-bold text-violet-700 dark:bg-violet-900/30">
+                {inicialMiembro(m)}
+              </span>
+              <span className="min-w-0 truncate">
+                {m.nombre ?? m.email ?? m.usuario_id}
+              </span>
+              {asignadoA === m.usuario_id && (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="ml-auto h-3.5 w-3.5 shrink-0">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+            </button>
+          ))}
+          {miembros.length === 0 && (
+            <p className="px-3 py-3 text-xs text-zinc-400">
+              Sin agentes en el equipo.{" "}
+              <Link href={`/app/cuentas/${idCuenta}/configuracion`} className="text-emerald-600 underline" onClick={() => setAbierto(false)}>
+                Agregar
+              </Link>
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ChatHeader({
   idCuenta,
   cuenta,
@@ -27,6 +177,7 @@ export function ChatHeader({
   score,
   abrirDetalle,
   actualizarModo,
+  onAsignar,
   onVolver,
 }: {
   idCuenta: string;
@@ -40,6 +191,7 @@ export function ChatHeader({
   score: number;
   abrirDetalle: () => void;
   actualizarModo: (m: ModoConversacion) => void;
+  onAsignar?: (id: string | null) => void;
   onVolver?: () => void;
 }) {
   return (
@@ -107,6 +259,13 @@ export function ChatHeader({
           </svg>
           <span className="font-mono text-xs font-bold">{score}</span>
         </div>
+
+        <SelectorAsignacion
+          idCuenta={idCuenta}
+          idConversacion={conversacion.id}
+          asignadoA={conversacion.asignado_a}
+          onAsignar={(id) => onAsignar?.(id)}
+        />
 
         <button
           type="button"

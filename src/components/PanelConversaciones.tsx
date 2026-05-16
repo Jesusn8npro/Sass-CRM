@@ -44,6 +44,15 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
   const [borrando, setBorrando] = useState(false);
   const [confirmarAbierto, setConfirmarAbierto] = useState(false);
   const refDeepLinkAplicado = useRef(false);
+  const [filtroAgente, setFiltroAgente] = useState<"todas" | "mias" | "sin">("todas");
+  const [miUsuarioId, setMiUsuarioId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/yo", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { id: string } | null) => { if (d?.id) setMiUsuarioId(d.id); })
+      .catch(() => {});
+  }, []);
 
   // Polling de cuenta (estado de conexión, etc) cada 15s
   const cargarCuenta = useCallback(async () => {
@@ -225,8 +234,33 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
             </>
           )}
         </div>
+
+        {/* Filtros de asignación */}
+        {!modoSeleccion && (
+          <div className="flex gap-1 border-b border-zinc-100 px-3 py-2 dark:border-zinc-800">
+            {(["todas", "mias", "sin"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFiltroAgente(f)}
+                className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+                  filtroAgente === f
+                    ? "bg-emerald-500 text-white"
+                    : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                }`}
+              >
+                {f === "todas" ? "Todas" : f === "mias" ? "Mis chats" : "Sin asignar"}
+              </button>
+            ))}
+          </div>
+        )}
+
         <ListaConversaciones
-          conversaciones={conversaciones}
+          conversaciones={conversaciones.filter((c) => {
+            if (filtroAgente === "mias") return miUsuarioId ? c.asignado_a === miUsuarioId : true;
+            if (filtroAgente === "sin") return c.asignado_a === null;
+            return true;
+          })}
           idSeleccionada={idConvSeleccionada}
           modoSeleccion={modoSeleccion}
           seleccionadas={seleccionadas}

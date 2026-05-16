@@ -213,6 +213,10 @@ export function PanelConversacion({
     setConversacion((prev) => (prev ? { ...prev, modo: nuevo } : prev));
   }
 
+  function actualizarAsignacion(id: string | null) {
+    setConversacion((prev) => (prev ? { ...prev, asignado_a: id } : prev));
+  }
+
   async function enviarMensajeHumano() {
     const texto = borrador.trim();
     if (!texto || enviando) return;
@@ -328,6 +332,7 @@ export function PanelConversacion({
         score={score}
         abrirDetalle={() => setDetalleAbierto(true)}
         actualizarModo={actualizarModo}
+        onAsignar={actualizarAsignacion}
         onVolver={onVolver}
       />
 

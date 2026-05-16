@@ -34,6 +34,8 @@ export interface Conversacion {
   /** Fecha del último mensaje que ya fue incorporado al resumen_contexto.
    *  Sirve para tomar sólo los mensajes nuevos cuando se actualiza el resumen. */
   resumido_hasta_en: string | null;
+  /** ID del miembro del equipo al que está asignada esta conversación. */
+  asignado_a: string | null;
 }
 
 export interface ConversacionConPreview extends Conversacion {

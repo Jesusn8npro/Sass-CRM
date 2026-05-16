@@ -119,9 +119,9 @@ export default function PaginaCliente360() {
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <Link
-              href="/app"
+              href={`/app?cuenta=${idCuenta}&conv=${idConv}`}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
-              aria-label="Volver"
+              aria-label="Volver al chat"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                 <path d="m15 18-6-6 6-6" />
@@ -233,8 +233,48 @@ export default function PaginaCliente360() {
                 </p>
               </div>
             </div>
+            <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+              <div className="flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 ring-1 ring-emerald-500/20 dark:bg-emerald-950/30 dark:text-emerald-300">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3 w-3">
+                  <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+                  <polyline points="16 7 22 7 22 13" />
+                </svg>
+                <span className="font-mono text-xs font-bold">{c.lead_score}</span>
+              </div>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                { nuevo: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+                  contactado: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+                  calificado: "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300",
+                  interesado: "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+                  negociacion: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
+                  cerrado: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+                  perdido: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+                }[c.estado_lead] ?? "bg-zinc-100 text-zinc-700"}`}
+              >
+                {c.estado_lead}
+              </span>
+            </div>
           </div>
         </section>
+
+        {/* Datos capturados */}
+        {c.datos_capturados && Object.keys(c.datos_capturados).length > 0 && (
+          <section className="mb-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              Datos capturados
+            </h2>
+            <dl className="grid gap-2 sm:grid-cols-2">
+              {Object.entries(c.datos_capturados).map(([clave, valor]) =>
+                valor ? (
+                  <div key={clave} className="rounded-xl bg-zinc-50 px-3 py-2 dark:bg-zinc-800/50">
+                    <dt className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">{clave}</dt>
+                    <dd className="mt-0.5 text-sm text-zinc-800 dark:text-zinc-200">{String(valor)}</dd>
+                  </div>
+                ) : null,
+              )}
+            </dl>
+          </section>
+        )}
 
         {/* Productos de interés */}
         <section className="mb-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">

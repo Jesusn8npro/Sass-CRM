@@ -12,6 +12,28 @@ interface Contexto {
   params: Promise<{ idCuenta: string }>;
 }
 
+interface BroadcastPayload {
+  conversacionIds?: unknown;
+  texto?: unknown;
+  programadoPara?: unknown;
+}
+
+export async function GET(_req: NextRequest, { params }: Contexto) {
+  const { idCuenta } = await params;
+  const acceso = await verificarAccesoCuenta(idCuenta);
+  if (acceso instanceof NextResponse) return acceso;
+
+  const { data, error } = await db()
+    .from("broadcast_logs")
+    .select("id, texto, total_destinatarios, total_enviados, total_fallos, estado, programado_para, creado_en")
+    .eq("cuenta_id", idCuenta)
+    .order("creado_en", { ascending: false })
+    .limit(50);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ logs: data ?? [] });
+}
+
 export async function POST(req: NextRequest, { params }: Contexto) {
   const { idCuenta } = await params;
   const acceso = await verificarAccesoCuenta(idCuenta);
@@ -21,7 +43,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   const limite = verificarRateLimit(`${auth.id}:broadcast`, 3, 3600);
   if (limite) return limite;
 
-  const payload = await parsearJSON<{ conversacionIds?: unknown; texto?: unknown }>(req);
+  const payload = await parsearJSON<BroadcastPayload>(req);
   if (payload instanceof NextResponse) return payload;
 
   const texto = typeof payload.texto === "string" ? payload.texto.trim() : "";
@@ -40,6 +62,31 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   }
 
   const conversacionIds = payload.conversacionIds as string[];
+
+  // Si viene programadoPara, guardar como pendiente sin enviar ahora.
+  const programadoParaRaw = payload.programadoPara;
+  if (programadoParaRaw && typeof programadoParaRaw === "string") {
+    const fechaProgramada = new Date(programadoParaRaw);
+    if (isNaN(fechaProgramada.getTime()) || fechaProgramada <= new Date()) {
+      return NextResponse.json({ error: "La fecha programada debe ser futura" }, { status: 400 });
+    }
+    await db()
+      .from("broadcast_logs")
+      .insert({
+        cuenta_id: idCuenta,
+        usuario_id: auth.id,
+        texto,
+        total_destinatarios: conversacionIds.length,
+        total_enviados: 0,
+        total_fallos: 0,
+        estado: "pendiente",
+        programado_para: fechaProgramada.toISOString(),
+        conversacion_ids: conversacionIds,
+      });
+    return NextResponse.json({ ok: true, programado: true, programadoPara: fechaProgramada.toISOString() });
+  }
+
+  // Envío inmediato
   let enviados = 0;
   let fallos = 0;
 
@@ -67,6 +114,8 @@ export async function POST(req: NextRequest, { params }: Contexto) {
       total_destinatarios: conversacionIds.length,
       total_enviados: enviados,
       total_fallos: fallos,
+      estado: "completado",
+      conversacion_ids: conversacionIds,
     })
     .then(() => {});
 
