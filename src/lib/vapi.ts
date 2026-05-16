@@ -273,6 +273,54 @@ export async function obtenerLlamada(
 }
 
 // ============================================================
+// Analysis Plan universal — se configura directamente en el
+// assistant de Vapi para que CUALQUIER llamada (dashboard,
+// outreach, WhatsApp) extraiga datos estructurados post-call.
+// ============================================================
+
+export const SCHEMA_DATOS_LLAMADA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    nombre_contacto: { type: "string", description: "Nombre de quien atendió la llamada" },
+    email: { type: "string", description: "Email del contacto si fue mencionado" },
+    nivel_interes: {
+      type: "string",
+      enum: ["alto", "medio", "bajo", "sin_interes"],
+      description: "Nivel de interés: alto=quiere reunión o info activamente; medio=escuchó sin comprometerse; bajo=rechazó levemente; sin_interes=rechazó claramente",
+    },
+    reunion_agendada: { type: "boolean", description: "true si se logró agendar una reunión o demo" },
+    fecha_reunion: { type: "string", description: "Fecha y hora ISO de la reunión agendada (si aplica)" },
+    objecion_principal: { type: "string", description: "Principal objeción o duda expresada por el contacto" },
+    proximo_paso: { type: "string", description: "Siguiente acción acordada al finalizar la llamada" },
+    notas: { type: "string", description: "Observaciones relevantes adicionales" },
+  },
+};
+
+export const PROMPT_DATOS_LLAMADA =
+  "Al finalizar la conversación, extrae los campos pedidos basándote exactamente en lo que se habló. Omite campos que no fueron mencionados — no inventes datos. " +
+  "Para nivel_interes: alto si pidió información o quiere reunión; medio si escuchó sin comprometerse; bajo si rechazó levemente; sin_interes si rechazó claramente.";
+
+/**
+ * Parcha el analysisPlan directamente en el assistant de Vapi.
+ * Llamar una vez desde configuración para garantizar que TODAS las
+ * llamadas (dashboard, outreach, WhatsApp) extraigan datos estructurados,
+ * sin depender de que se inyecten los overrides por llamada.
+ */
+export async function sincronizarAnalysisPlanAssistant(
+  apiKey: string,
+  assistantId: string,
+): Promise<void> {
+  await requestVapi(apiKey, "PATCH", `/assistant/${encodeURIComponent(assistantId)}`, {
+    analysisPlan: {
+      structuredDataSchema: SCHEMA_DATOS_LLAMADA,
+      structuredDataPrompt: PROMPT_DATOS_LLAMADA,
+      summaryPrompt:
+        "Resume la conversación en 2-3 oraciones en español: qué se discutió, si hubo interés, y cuál es el próximo paso acordado.",
+    },
+  });
+}
+
+// ============================================================
 // Verificación del webhook (Vapi manda x-vapi-secret en headers
 // si configuraste serverUrlSecret en el assistant).
 // ============================================================

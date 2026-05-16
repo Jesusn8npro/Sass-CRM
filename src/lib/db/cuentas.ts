@@ -29,6 +29,16 @@ export async function obtenerCuenta(id: string): Promise<Cuenta | null> {
   return (data as Cuenta) ?? null;
 }
 
+export async function obtenerCuentaPorAssistantId(assistantId: string): Promise<Cuenta | null> {
+  const { data, error } = await db()
+    .from("cuentas")
+    .select("*")
+    .eq("vapi_assistant_id", assistantId)
+    .maybeSingle();
+  if (error) lanzar(error, "obtenerCuentaPorAssistantId");
+  return (data as Cuenta) ?? null;
+}
+
 export async function crearCuenta(
   usuarioId: string,
   etiqueta: string,
