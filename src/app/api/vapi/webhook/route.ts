@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
+  actualizarLead,
   actualizarLlamadaPorCallId,
   guardarContactosEmail,
   guardarContactosTelefono,
@@ -9,6 +10,7 @@ import {
   obtenerLlamadaPorCallId,
   obtenerOCrearConversacion,
   registrarUso,
+  type EstadoLead,
   type EstadoLlamada,
 } from "@/lib/baseDatos";
 import { verificarSecretWebhook } from "@/lib/vapi";
@@ -39,6 +41,18 @@ const RESULTADOS_COMPLETADO = new Set([
   "pipeline-error-openai-voice-failed",
   "silence-timed-out",
 ]);
+
+/** Mapea el nivel_interes capturado por Vapi al estado_lead del CRM. */
+function nivelInteresAEstadoLead(
+  nivel: unknown,
+  reunionAgendada: unknown,
+): EstadoLead {
+  if (reunionAgendada === true) return "negociacion";
+  if (nivel === "alto") return "interesado";
+  if (nivel === "medio" || nivel === "bajo") return "contactado";
+  if (nivel === "sin_interes") return "perdido";
+  return "contactado";
+}
 
 async function manejarWebhookOutreach(
   message: VapiWebhookMessage,
@@ -85,63 +99,103 @@ async function manejarWebhookOutreach(
     if (esCompletado) {
       await actualizarEstadoProspeccion(lead.id, "completado");
 
-      // 3. Sincronizar email y nombre capturados de vuelta al lead
+      // Resolver datos capturados por Vapi
+      const nombreCapturado = dc && typeof dc.nombre_contacto === "string" ? dc.nombre_contacto : null;
+      const emailCapturado = dc && typeof dc.email === "string" ? dc.email : null;
+      const emailFinal = emailCapturado ?? lead.email ?? null;
+      const nombreFinal = nombreCapturado ?? lead.nombre;
+
+      // Sincronizar nombre/email de vuelta al lead (fire-and-forget)
       if (dc) {
         void sincronizarDatosCapturadosAlLead(lead.id, {
-          email: typeof dc.email === "string" ? dc.email : null,
-          nombre_contacto: typeof dc.nombre_contacto === "string" ? dc.nombre_contacto : null,
+          email: emailFinal,
+          nombre_contacto: nombreCapturado,
         });
       }
 
-      // 4. Auto-importar al CRM: crear conversación si no existe todavía
-      //    Esto hace que el lead aparezca automáticamente en "Clientes"
-      //    y unifica futuras comunicaciones (WA, email) en ese perfil.
-      if (!lead.importado || !lead.conversacion_id) {
+      // Obtener o crear conversación en el CRM
+      // (normalmente ya existe porque disparadorVapi la pre-creó al iniciar la llamada)
+      let convId = lead.conversacion_id ?? null;
+      try {
+        const telefono =
+          lead.telefono ||
+          (emailFinal
+            ? `mail_${emailFinal.split("@")[0]}_${lead.id.slice(0, 6)}`
+            : `lead_${lead.id.slice(0, 8)}`);
+
+        const conv = await obtenerOCrearConversacion(
+          lead.cuenta_id,
+          telefono,
+          nombreFinal,
+          null,
+        );
+        convId = conv.id;
+
+        // Guardar contactos vinculados si no estaban
+        if (emailFinal) {
+          await guardarContactosEmail(lead.cuenta_id, conv.id, [emailFinal]);
+        }
+        if (lead.telefono) {
+          await guardarContactosTelefono(lead.cuenta_id, conv.id, [lead.telefono], telefono);
+        }
+
+        // Marcar como importado si todavía no
+        if (!lead.importado || !lead.conversacion_id) {
+          await marcarLeadImportado(lead.id, conv.id);
+        }
+      } catch (err) {
+        console.error("[vapi-webhook] ✗ Error resolviendo conversación CRM:", err);
+      }
+
+      // Poblar campos del lead en el CRM con los datos extraídos por Vapi
+      if (convId && dc) {
         try {
-          const emailCapturado = dc && typeof dc.email === "string" ? dc.email : null;
-          const nombreCapturado = dc && typeof dc.nombre_contacto === "string" ? dc.nombre_contacto : null;
-          const emailFinal = emailCapturado ?? lead.email ?? null;
-          const nombreFinal = nombreCapturado ?? lead.nombre;
+          const estadoLead = nivelInteresAEstadoLead(dc.nivel_interes, dc.reunion_agendada);
 
-          const telefono =
-            lead.telefono ||
-            (emailFinal
-              ? `mail_${emailFinal.split("@")[0]}_${lead.id.slice(0, 6)}`
-              : `lead_${lead.id.slice(0, 8)}`);
+          const otrosCampos: Record<string, string> = {};
+          if (typeof dc.objecion_principal === "string" && dc.objecion_principal)
+            otrosCampos.objecion = dc.objecion_principal;
+          if (typeof dc.proximo_paso === "string" && dc.proximo_paso)
+            otrosCampos.proximo_paso = dc.proximo_paso;
+          if (typeof dc.notas === "string" && dc.notas)
+            otrosCampos.notas = dc.notas;
+          if (typeof dc.fecha_reunion === "string" && dc.fecha_reunion)
+            otrosCampos.fecha_reunion = dc.fecha_reunion;
+          if (dc.reunion_agendada !== undefined)
+            otrosCampos.reunion_agendada = String(dc.reunion_agendada);
 
-          const conv = await obtenerOCrearConversacion(
-            lead.cuenta_id,
-            telefono,
-            nombreFinal,
-            null,
+          await actualizarLead(convId, {
+            nombre: nombreCapturado ?? undefined,
+            estado_lead: estadoLead,
+            datos_capturados_merge: {
+              nombre: nombreCapturado ?? null,
+              email: emailFinal ?? null,
+              interes: typeof dc.nivel_interes === "string" ? dc.nivel_interes : null,
+              miedos: typeof dc.objecion_principal === "string" ? dc.objecion_principal : null,
+              ...(Object.keys(otrosCampos).length > 0 ? { otros: otrosCampos } : {}),
+            },
+          });
+
+          console.log(
+            `[vapi-webhook] ✓ CRM actualizado — conv: ${convId} ` +
+            `estado: ${estadoLead} interés: ${String(dc.nivel_interes ?? "?")}`,
           );
+        } catch (err) {
+          console.error("[vapi-webhook] ✗ Error actualizando lead en CRM:", err);
+        }
+      }
 
-          // Guardar email y teléfono como contactos vinculados a la conversación
-          if (emailFinal) {
-            await guardarContactosEmail(lead.cuenta_id, conv.id, [emailFinal]);
-          }
-          if (lead.telefono) {
-            await guardarContactosTelefono(lead.cuenta_id, conv.id, [lead.telefono], telefono);
-          }
-
-          // Insertar un mensaje sistema con el resumen de la llamada
+      // Insertar mensaje sistema con resumen y grabación
+      if (convId) {
+        try {
           const lineasMsg: string[] = [
             `📞 Llamada de prospección — ${duracion ? `${duracion}s` : "duración desconocida"}`,
           ];
           if (resumen) lineasMsg.push(`Resumen: ${resumen.slice(0, 600)}`);
           if (urlGrabacion) lineasMsg.push(`🎧 Grabación: ${urlGrabacion}`);
-          await insertarMensaje(lead.cuenta_id, conv.id, "sistema", lineasMsg.join("\n"), { tipo: "sistema" });
-
-          // Marcar el lead como importado y vincular conversacion_id
-          await marcarLeadImportado(lead.id, conv.id);
-
-          console.log(
-            `[vapi-webhook] ✓ Lead auto-importado al CRM — ` +
-            `lead: ${lead.nombre} → conv: ${conv.id}`,
-          );
+          await insertarMensaje(lead.cuenta_id, convId, "sistema", lineasMsg.join("\n"), { tipo: "sistema" });
         } catch (err) {
-          // Fire-and-forget: no bloqueamos la respuesta si falla la importación
-          console.error("[vapi-webhook] ✗ Error auto-importando lead al CRM:", err);
+          console.error("[vapi-webhook] ✗ Error insertando msg sistema:", err);
         }
       }
 

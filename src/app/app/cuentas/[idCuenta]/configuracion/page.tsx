@@ -17,6 +17,7 @@ import { TabMensajes } from "./_componentes/TabMensajes";
 import { TabCaptura } from "./_componentes/TabCaptura";
 import { TabIA } from "./_componentes/TabIA";
 import { TabLlamadas } from "./_componentes/TabLlamadas";
+import { TabEquipo } from "./_componentes/TabEquipo";
 
 interface RespuestaCuenta {
   cuenta: Cuenta;
@@ -186,7 +187,7 @@ export default function PaginaConfiguracion() {
   );
 }
 
-type TabId = "general" | "mensajes" | "captura" | "ia" | "llamadas";
+type TabId = "general" | "mensajes" | "captura" | "ia" | "llamadas" | "equipo";
 
 const TABS: { id: TabId; label: string; icono: string }[] = [
   { id: "general", label: "General", icono: "👤" },
@@ -194,6 +195,7 @@ const TABS: { id: TabId; label: string; icono: string }[] = [
   { id: "captura", label: "Captura de Datos", icono: "📋" },
   { id: "ia", label: "Configuración IA", icono: "⚙" },
   { id: "llamadas", label: "Llamadas Vapi", icono: "📞" },
+  { id: "equipo", label: "Equipo", icono: "👥" },
 ];
 
 function ContenidoConTabs({
@@ -276,6 +278,7 @@ function ContenidoConTabs({
         {tab === "llamadas" && (
           <TabLlamadas cuenta={cuenta} onActualizada={setCuentaSimple} />
         )}
+        {tab === "equipo" && <TabEquipo cuenta={cuenta} />}
       </div>
     </>
   );

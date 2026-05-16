@@ -19,8 +19,7 @@ import { obtenerMetricasGlobales } from "./reportes";
 import { formatearReporteDiario } from "./reportesFormato";
 import {
   encolarBandejaSalida,
-  listarSuperAdminsPendientesReporte,
-  marcarReporteDiarioEnviado,
+  reclamarSuperAdminsPendientesReporte,
   obtenerOCrearConversacion,
   registrarAccionAdmin,
 } from "@/lib/baseDatos";
@@ -73,8 +72,14 @@ export async function procesarReporteDiario(): Promise<void> {
   // Fuera de ventana horaria → skip silencioso
   if (hora < HORA_INICIO_ENVIO || hora >= HORA_FIN_ENVIO) return;
 
-  const pendientes = await listarSuperAdminsPendientesReporte();
-  if (pendientes.length === 0) return; // Ya recibieron todos
+  // Medianoche local del servidor — referencia para "¿ya recibió hoy?"
+  const inicioDia = new Date(ahora);
+  inicioDia.setHours(0, 0, 0, 0);
+
+  // Reclamar atómicamente (UPDATE…RETURNING): solo un proceso por admin
+  // gana la fila; si otro cron corre en paralelo no recibirá duplicados.
+  const pendientes = await reclamarSuperAdminsPendientesReporte(inicioDia);
+  if (pendientes.length === 0) return;
 
   const remitente = await obtenerCuentaRemitente();
   if (!remitente) {
@@ -109,8 +114,6 @@ export async function procesarReporteDiario(): Promise<void> {
         texto,
         { tipo: "texto", media_path: null },
       );
-
-      await marcarReporteDiarioEnviado(admin.id);
 
       void registrarAccionAdmin({
         superAdminId: admin.id,

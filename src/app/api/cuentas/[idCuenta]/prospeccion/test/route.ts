@@ -10,25 +10,35 @@ export const runtime = "nodejs";
 /**
  * POST /api/cuentas/[idCuenta]/prospeccion/test
  *
- * Inserta un lead de prueba y dispara el orquestador para esa cuenta.
- * Con OUTREACH_TEST_MODE=true la llamada va a OUTREACH_TEST_PHONE.
- * Útil para verificar que el pipeline funciona sin leads reales.
+ * Inserta un lead de prueba y dispara una llamada Vapi al número indicado.
+ * Body (JSON): { telefonoPrueba?: string }
+ * Si no se pasa telefonoPrueba, usa OUTREACH_TEST_PHONE del ENV
+ * (en ese caso requiere OUTREACH_TEST_MODE=true).
  */
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ idCuenta: string }> },
 ) {
   const { idCuenta } = await params;
   const acceso = await verificarAccesoCuenta(idCuenta);
   if (acceso instanceof NextResponse) return acceso;
 
+  const body = await req.json().catch(() => ({})) as { telefonoPrueba?: unknown };
+  const telefonoPruebaUI =
+    typeof body.telefonoPrueba === "string" && body.telefonoPrueba.trim()
+      ? body.telefonoPrueba.trim()
+      : null;
+
+  // Si no se provee teléfono en la UI, requerir TEST_MODE para evitar llamadas accidentales
   const modoTest = process.env.OUTREACH_TEST_MODE === "true";
-  if (!modoTest) {
+  if (!telefonoPruebaUI && !modoTest) {
     return NextResponse.json(
-      { error: "Este endpoint solo funciona con OUTREACH_TEST_MODE=true para evitar llamadas reales accidentales." },
+      { error: "Ingresá un número de prueba en el campo o activá OUTREACH_TEST_MODE=true en las variables de entorno." },
       { status: 400 },
     );
   }
+
+  const telefonoPrueba = telefonoPruebaUI ?? process.env.OUTREACH_TEST_PHONE ?? "+573123790071";
 
   // Crear run_apify de prueba (requerido por FK de leads_extraidos)
   const { data: runPrueba, error: errRun } = await db()
@@ -56,7 +66,7 @@ export async function POST(
       cuenta_id: idCuenta,
       run_apify_id: runPrueba.id,
       nombre: "Negocio de Prueba S.A.S",
-      telefono: process.env.OUTREACH_TEST_PHONE ?? "+573123790071",
+      telefono: telefonoPrueba,
       email: process.env.OUTREACH_TEST_EMAIL ?? null,
       direccion: "Calle Ficticia 123, Bogotá",
       sitio_web: null,
@@ -83,11 +93,11 @@ export async function POST(
 
   // Llamar directamente a dispararLlamadaOutreach para ver el error exacto
   const resultado = await dispararLlamadaOutreach(
-    {
+    /* lead = */ {
       id: leadPrueba!.id,
       cuenta_id: idCuenta,
       nombre: "Negocio de Prueba S.A.S",
-      telefono: process.env.OUTREACH_TEST_PHONE ?? "+573123790071",
+      telefono: telefonoPrueba,
       email: process.env.OUTREACH_TEST_EMAIL ?? null,
       categoria: "Servicios de prueba",
       direccion: "Calle Ficticia 123, Bogotá",
@@ -103,7 +113,8 @@ export async function POST(
       importado: false,
       conversacion_id: null,
     },
-    cuenta,
+    /* cuenta = */ cuenta,
+    /* overrides = */ { telefonoPrueba },
   );
 
   if (!resultado.ok) {
@@ -120,7 +131,7 @@ export async function POST(
 
   return NextResponse.json({
     ok: true,
-    mensaje: `Llamada disparada. Revisá tu teléfono ${process.env.OUTREACH_TEST_PHONE}.`,
+    mensaje: `Llamada disparada. Revisá el teléfono ${telefonoPrueba}.`,
     vapi_call_id: resultado.vapiCallId,
     lead: leadPrueba,
     modo_prueba: true,

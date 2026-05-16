@@ -48,6 +48,7 @@ export default function PaginaProspeccion() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [disparando, setDisparando] = useState(false);
   const [mensajePrueba, setMensajePrueba] = useState<string | null>(null);
+  const [telefonoPrueba, setTelefonoPrueba] = useState("");
 
   const cargarStats = useCallback(async () => {
     const r = await fetch(`/api/cuentas/${idCuenta}/prospeccion/stats`);
@@ -70,7 +71,11 @@ export default function PaginaProspeccion() {
   async function dispararPrueba() {
     setDisparando(true);
     setMensajePrueba(null);
-    const r = await fetch(`/api/cuentas/${idCuenta}/prospeccion/test`, { method: "POST" });
+    const r = await fetch(`/api/cuentas/${idCuenta}/prospeccion/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ telefonoPrueba: telefonoPrueba.trim() || undefined }),
+    });
     const data = await r.json() as { mensaje?: string; error?: string };
     setMensajePrueba(data.mensaje ?? data.error ?? "Error desconocido");
     setDisparando(false);
@@ -93,16 +98,21 @@ export default function PaginaProspeccion() {
               El orquestador procesa leads nuevos cada 5 minutos de forma automática.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {s?.modo_prueba && (
-              <button
-                onClick={() => void dispararPrueba()}
-                disabled={disparando}
-                className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
-              >
-                {disparando ? "Disparando…" : "🧪 Probar con 1 lead"}
-              </button>
-            )}
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="tel"
+              value={telefonoPrueba}
+              onChange={(e) => setTelefonoPrueba(e.target.value)}
+              placeholder="+5491112345678"
+              className="h-9 w-44 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            />
+            <button
+              onClick={() => void dispararPrueba()}
+              disabled={disparando}
+              className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+            >
+              {disparando ? "Disparando…" : "🧪 Probar llamada"}
+            </button>
             <Link
               href={`/app/cuentas/${idCuenta}/leads`}
               className="rounded-lg border border-emerald-500/40 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/[0.08] dark:text-emerald-300"

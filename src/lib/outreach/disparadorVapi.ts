@@ -12,14 +12,16 @@
 
 import { iniciarLlamada } from "../vapi";
 import { resolverCredencialesVapi } from "../vapi-credenciales";
-import { obtenerAssistantDefault } from "../baseDatos";
+import { obtenerAssistantDefault, obtenerOCrearConversacion } from "../baseDatos";
 import {
   actualizarEstadoProspeccion,
+  marcarLeadImportado,
   type LeadExtraido,
 } from "../db/leadsExtraidos";
 import {
   insertarRegistroLlamada,
 } from "../db/outreachLogs";
+import { listarUsoMes } from "../db/meteringUso";
 import type { Cuenta } from "../baseDatos";
 
 // ============================================================
@@ -29,6 +31,30 @@ import type { Cuenta } from "../baseDatos";
 /** Cuando es true, TODAS las llamadas van al número de prueba. */
 const MODO_PRUEBA = process.env.OUTREACH_TEST_MODE === "true";
 const TELEFONO_PRUEBA = process.env.OUTREACH_TEST_PHONE?.trim() ?? null;
+
+// ============================================================
+// Schema de extracción de datos post-llamada (análisis Vapi)
+// ============================================================
+
+const SCHEMA_DATOS_OUTREACH = {
+  type: "object",
+  properties: {
+    nombre_contacto: { type: "string", description: "Nombre de quien atendió la llamada" },
+    nivel_interes: {
+      type: "string",
+      enum: ["alto", "medio", "bajo", "sin_interes"],
+      description: "Nivel de interés detectado durante la conversación",
+    },
+    reunion_agendada: { type: "boolean", description: "true si se logró agendar una reunión o demo" },
+    fecha_reunion: { type: "string", description: "Fecha y hora ISO de la reunión agendada (si aplica)" },
+    objecion_principal: { type: "string", description: "Principal objeción expresada por el prospecto" },
+    proximo_paso: { type: "string", description: "Siguiente acción acordada" },
+    notas: { type: "string", description: "Observaciones adicionales relevantes" },
+  },
+};
+
+const PROMPT_DATOS_OUTREACH =
+  "Al finalizar la llamada de prospección, extrae los campos pedidos. Si un campo no fue mencionado, omítelo — no inventes datos. Para nivel_interes: si pidió info o quiere reunión = 'alto'; si escuchó sin comprometerse = 'medio'; si rechazó levemente = 'bajo'; si rechazó claramente = 'sin_interes'.";
 
 // ============================================================
 // Construcción del primer mensaje (dynamic variable injection)
@@ -75,7 +101,6 @@ function construirContextoLlamada(lead: LeadExtraido, cuenta: Cuenta): string {
 // ============================================================
 
 function validar(
-  lead: LeadExtraido,
   apiKey: string | null,
   phoneNumberId: string | null,
   assistantId: string | null,
@@ -83,8 +108,6 @@ function validar(
   if (!apiKey) return "Falta VAPI_API_KEY (ni en la cuenta ni en el env).";
   if (!phoneNumberId) return "Falta VAPI_PHONE_NUMBER_ID (ni en la cuenta ni en el env).";
   if (!assistantId) return "No hay assistant Vapi configurado para outreach. Seteá OUTREACH_ASSISTANT_ID o creá un assistant en Configuración.";
-  if (!lead.telefono && MODO_PRUEBA === false) return "El lead no tiene número de teléfono.";
-  if (MODO_PRUEBA && !TELEFONO_PRUEBA) return "OUTREACH_TEST_MODE=true pero OUTREACH_TEST_PHONE no está configurado.";
   return null;
 }
 
@@ -102,6 +125,7 @@ export interface ResultadoLlamadaOutreach {
 export async function dispararLlamadaOutreach(
   lead: LeadExtraido,
   cuenta: Cuenta,
+  overrides?: { telefonoPrueba?: string },
 ): Promise<ResultadoLlamadaOutreach> {
   // Resolver credenciales (cuenta tiene prioridad sobre env)
   const cred = resolverCredencialesVapi(cuenta);
@@ -113,16 +137,40 @@ export async function dispararLlamadaOutreach(
     assistantId = defAss?.vapi_assistant_id?.trim() || cuenta.vapi_assistant_id?.trim() || null;
   }
 
+  // Si se pasa un teléfono de prueba explícito, tiene prioridad sobre el ENV
+  const telefonoPruebaEfectivo = overrides?.telefonoPrueba ?? (MODO_PRUEBA ? TELEFONO_PRUEBA : null);
+  const esModoPrueba = !!telefonoPruebaEfectivo;
+
+  // Verificar límite mensual de gasto en Vapi
+  const limiteVapi = cuenta.limites_gasto?.vapi ?? 0;
+  if (limiteVapi > 0) {
+    const inicioDeMes = new Date();
+    inicioDeMes.setDate(1);
+    inicioDeMes.setHours(0, 0, 0, 0);
+    const usoMes = await listarUsoMes(cuenta.id, inicioDeMes.toISOString());
+    const gastoVapi = usoMes.find((u) => u.proveedor === "vapi")?.costo_usd ?? 0;
+    if (gastoVapi >= limiteVapi) {
+      console.warn(`[outreach:vapi] ✗ Límite mensual Vapi alcanzado — gasto: $${gastoVapi.toFixed(2)} / límite: $${limiteVapi.toFixed(2)}`);
+      return { ok: false, error: `Límite mensual de Vapi alcanzado ($${gastoVapi.toFixed(2)} / $${limiteVapi.toFixed(2)}). Ajustá el límite en Créditos.` };
+    }
+  }
+
   // Validar todo antes de hacer el fetch
-  const errorValidacion = validar(lead, cred.apiKey, cred.phoneNumberId, assistantId);
+  const errorValidacion = validar(cred.apiKey, cred.phoneNumberId, assistantId);
   if (errorValidacion) {
     console.warn(`[outreach:vapi] ✗ validación fallida — ${errorValidacion}`);
     return { ok: false, error: errorValidacion };
   }
+  if (esModoPrueba && !telefonoPruebaEfectivo) {
+    return { ok: false, error: "Modo prueba activo pero no hay teléfono de prueba configurado." };
+  }
+  if (!esModoPrueba && !lead.telefono) {
+    return { ok: false, error: "El lead no tiene número de teléfono." };
+  }
 
-  // Decidir número destino según TEST_MODE
-  const telefonoDestino = MODO_PRUEBA
-    ? TELEFONO_PRUEBA!
+  // Decidir número destino
+  const telefonoDestino = esModoPrueba
+    ? telefonoPruebaEfectivo!
     : `+${lead.telefono!.replace(/[^\d]/g, "")}`;
 
   // Log claro en consola (igual que el video lo pide)
@@ -130,7 +178,7 @@ export async function dispararLlamadaOutreach(
     `[outreach:vapi] 📞 Disparando llamada`,
     `\n  Negocio  : ${lead.nombre}`,
     `\n  Número   : ${telefonoDestino}`,
-    `\n  TEST MODE: ${MODO_PRUEBA ? "✓ ACTIVO — llamando a número de prueba" : "✗ inactivo — llamada real"}`,
+    `\n  TEST MODE: ${esModoPrueba ? "✓ ACTIVO — llamando a número de prueba" : "✗ inactivo — llamada real"}`,
     `\n  Assistant: ${assistantId}`,
   );
 
@@ -144,12 +192,16 @@ export async function dispararLlamadaOutreach(
       numeroCliente: telefonoDestino,
       nombreCliente: lead.nombre,
       metadata: {
-        tipo: "outreach",          // el webhook usa esto para diferenciarlo
+        tipo: "outreach",
         lead_id: lead.id,
         cuenta_id: cuenta.id,
       },
       primerMensajeOverride: construirPrimerMensaje(lead.nombre),
       contextoAdicional: construirContextoLlamada(lead, cuenta),
+      analysisPlan: {
+        structuredDataSchema: SCHEMA_DATOS_OUTREACH,
+        structuredDataPrompt: PROMPT_DATOS_OUTREACH,
+      },
     });
 
     if (!respuesta.id) {
@@ -166,6 +218,28 @@ export async function dispararLlamadaOutreach(
 
     // Estado → llamado (el webhook lo pondrá en completado con el resultado)
     await actualizarEstadoProspeccion(lead.id, "llamado");
+
+    // Pre-importar al CRM inmediatamente: el cliente aparece en la página
+    // de Clientes con teléfono y nombre del negocio desde el primer momento,
+    // sin esperar a que la llamada termine.
+    if (!lead.importado || !lead.conversacion_id) {
+      try {
+        const telefonoReal = lead.telefono ?? `lead_${lead.id.slice(0, 8)}`;
+        const conv = await obtenerOCrearConversacion(
+          cuenta.id,
+          telefonoReal,
+          lead.nombre,
+          null,
+        );
+        await marcarLeadImportado(lead.id, conv.id);
+        console.log(
+          `[outreach:vapi] ✓ Lead pre-importado al CRM — conv: ${conv.id}`,
+        );
+      } catch (err) {
+        // No-fatal: el webhook reintentará la importación al terminar la llamada
+        console.warn("[outreach:vapi] No se pudo pre-importar al CRM:", err);
+      }
+    }
 
     console.log(
       `[outreach:vapi] ✓ Llamada iniciada — vapi_call_id: ${respuesta.id}`,

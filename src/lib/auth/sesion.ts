@@ -74,8 +74,8 @@ export async function requerirAdmin(): Promise<
 }
 
 /**
- * Sesión + cuenta + ownership en una sola llamada. Reemplaza el bloque
- * repetido en ~65 handlers de /api/cuentas/[idCuenta]/**.
+ * Sesión + cuenta + ownership en una sola llamada. También acepta
+ * miembros del equipo (cuenta_miembros) además del owner.
  *
  * Uso:
  *   const acceso = await verificarAccesoCuenta(idCuenta);
@@ -84,16 +84,27 @@ export async function requerirAdmin(): Promise<
  */
 export async function verificarAccesoCuenta(
   idCuenta: string | undefined,
-): Promise<{ auth: { id: string; email: string }; cuenta: Cuenta } | NextResponse> {
+): Promise<{ auth: { id: string; email: string }; cuenta: Cuenta; esMiembro: boolean } | NextResponse> {
   const auth = await requerirSesion();
   if (auth instanceof NextResponse) return auth;
   if (!idCuenta) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
   const cuenta = await obtenerCuenta(idCuenta);
-  if (!cuenta || cuenta.usuario_id !== auth.id) {
+  if (!cuenta) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   }
+
+  const esOwner = cuenta.usuario_id === auth.id;
+  let esMiembro = false;
+  if (!esOwner) {
+    const { esMiembroActivo } = await import("@/lib/db/cuentaMiembros");
+    esMiembro = await esMiembroActivo(idCuenta, auth.id);
+    if (!esMiembro) {
+      return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+    }
+  }
+
   const { obtenerUsuarioApp } = await import("@/lib/db/usuarios");
   const usuario = await obtenerUsuarioApp(auth.id);
   if (usuario?.estado_billing === "suspendido") {
@@ -102,7 +113,7 @@ export async function verificarAccesoCuenta(
       { status: 402 },
     );
   }
-  return { auth, cuenta };
+  return { auth, cuenta, esMiembro };
 }
 
 /**

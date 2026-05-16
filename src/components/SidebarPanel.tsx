@@ -199,6 +199,7 @@ export function SidebarPanel({
         <SeccionNav titulo="Mi Cuenta">
           <ItemNav icono={<IconoEstudio />}  etiqueta="Imágenes IA" href={`${b}/estudio`}  actual={pathname} />
           <ItemNav icono={<IconoCreditos />} etiqueta="Créditos"   href={`${b}/creditos`} actual={pathname} />
+          <ItemNav icono={<IconoReportes />} etiqueta="Reportes"   href={`${b}/reportes`} actual={pathname} />
           <ItemNav icono={<IconoSoporte />}  etiqueta="Soporte"    href={`${b}/soporte`}  actual={pathname} />
         </SeccionNav>
 

@@ -33,6 +33,39 @@ interface RespuestaApi {
   uso: FilaUso[];
 }
 
+interface UsoProveedor {
+  proveedor: string;
+  costo_usd: number;
+  eventos: number;
+}
+
+const LABEL_PROVEEDOR: Record<string, string> = {
+  openai: "OpenAI (IA)",
+  vapi: "Vapi (Llamadas)",
+  elevenlabs: "ElevenLabs (Voz)",
+  apify: "Apify (Leads)",
+  whisper: "Whisper (Transcripción)",
+  anthropic: "Anthropic",
+  gemini: "Gemini",
+};
+
+const PROVEEDORES_ORDEN = ["vapi", "openai", "elevenlabs", "whisper", "apify", "anthropic", "gemini"];
+
+function fmt(n: number) {
+  return n.toLocaleString("es", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function BarraGasto({ gasto, limite }: { gasto: number; limite: number }) {
+  if (limite === 0) return null;
+  const pct = Math.min((gasto / limite) * 100, 100);
+  const color = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+  return (
+    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+      <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
 export default function PaginaCreditos() {
   const { idCuenta } = useParams<{ idCuenta: string }>();
   const [saldo, setSaldo] = useState<Saldo | null>(null);
@@ -42,15 +75,34 @@ export default function PaginaCreditos() {
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const [cargando, setCargando] = useState(true);
 
+  // Provider usage this month
+  const [usoProveedores, setUsoProveedores] = useState<UsoProveedor[]>([]);
+  const [limites, setLimites] = useState<Record<string, number>>({});
+  const [limitesEdit, setLimitesEdit] = useState<Record<string, string>>({});
+  const [guardandoLimites, setGuardandoLimites] = useState(false);
+  const [msgLimites, setMsgLimites] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
+
   async function cargarTodo() {
     if (!idCuenta) return;
-    const [creditos, paqs] = await Promise.all([
+    const [creditos, paqs, usoMes] = await Promise.all([
       fetch(`/api/cuentas/${idCuenta}/creditos`, { cache: "no-store" }).then((r) => r.json() as Promise<RespuestaApi>),
       fetch(`/api/billing/paquetes`, { cache: "no-store" }).then((r) => r.json() as Promise<{ paquetes: Paquete[] }>),
+      fetch(`/api/cuentas/${idCuenta}/creditos/uso-mes`, { cache: "no-store" }).then((r) =>
+        r.json() as Promise<{ uso: UsoProveedor[]; limites_gasto?: Record<string, number> }>
+      ),
     ]);
     setSaldo(creditos.saldo);
     setUso(creditos.uso);
     setPaquetes(paqs.paquetes);
+    setUsoProveedores(usoMes.uso ?? []);
+    const lim = usoMes.limites_gasto ?? {};
+    setLimites(lim);
+    // Init edit fields from saved limits
+    const editInit: Record<string, string> = {};
+    for (const p of PROVEEDORES_ORDEN) {
+      editInit[p] = lim[p] != null ? String(lim[p]) : "";
+    }
+    setLimitesEdit(editInit);
     setCargando(false);
   }
 
@@ -58,6 +110,34 @@ export default function PaginaCreditos() {
     void cargarTodo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idCuenta]);
+
+  async function guardarLimites(e: React.FormEvent) {
+    e.preventDefault();
+    setGuardandoLimites(true);
+    setMsgLimites(null);
+    const payload: Record<string, number> = {};
+    for (const [k, v] of Object.entries(limitesEdit)) {
+      const n = parseFloat(v);
+      if (!isNaN(n) && n >= 0) payload[k] = n;
+      else payload[k] = 0;
+    }
+    const r = await fetch(`/api/cuentas/${idCuenta}/creditos/limites`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ limites: payload }),
+    });
+    const d = await r.json() as { ok?: boolean; error?: string; limites?: Record<string, number> };
+    if (r.ok && d.ok) {
+      setLimites(d.limites ?? payload);
+      setMsgLimites({ tipo: "ok", texto: "Límites guardados" });
+    } else {
+      setMsgLimites({ tipo: "error", texto: d.error ?? "Error al guardar" });
+    }
+    setGuardandoLimites(false);
+  }
+
+  const totalUsdMes = usoProveedores.reduce((s, u) => s + u.costo_usd, 0);
+  const usoMap = Object.fromEntries(usoProveedores.map((u) => [u.proveedor, u]));
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-8">
@@ -105,6 +185,112 @@ export default function PaginaCreditos() {
           {mensaje.texto}
         </div>
       )}
+
+      {/* ── GASTO POR PLATAFORMA ESTE MES ── */}
+      <section className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 md:p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="mb-4 flex items-baseline justify-between gap-2">
+          <h2 className="text-sm font-semibold">Gasto en plataformas IA — este mes</h2>
+          {totalUsdMes > 0 && (
+            <span className="font-mono text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              Total: ${fmt(totalUsdMes)}
+            </span>
+          )}
+        </div>
+
+        {cargando ? (
+          <p className="text-xs text-zinc-500">Cargando…</p>
+        ) : usoProveedores.length === 0 ? (
+          <p className="text-xs text-zinc-500">Sin consumo registrado este mes.</p>
+        ) : (
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {PROVEEDORES_ORDEN.filter((p) => usoMap[p]).map((p) => {
+              const u = usoMap[p]!;
+              const lim = limites[p] ?? 0;
+              return (
+                <div key={p} className="flex items-center gap-3 py-2.5">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                      {LABEL_PROVEEDOR[p] ?? p}
+                    </p>
+                    <p className="text-xs text-zinc-400">{u.eventos} eventos</p>
+                    {lim > 0 && (
+                      <BarraGasto gasto={u.costo_usd} limite={lim} />
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="font-mono text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                      ${fmt(u.costo_usd)}
+                    </span>
+                    {lim > 0 && (
+                      <p className={`text-xs ${u.costo_usd >= lim ? "text-red-500 font-semibold" : "text-zinc-400"}`}>
+                        límite: ${fmt(lim)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {/* Proveedores sin orden predefinido */}
+            {usoProveedores.filter((u) => !PROVEEDORES_ORDEN.includes(u.proveedor)).map((u) => (
+              <div key={u.proveedor} className="flex items-center gap-3 py-2.5">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{u.proveedor}</p>
+                  <p className="text-xs text-zinc-400">{u.eventos} eventos</p>
+                </div>
+                <span className="font-mono text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                  ${fmt(u.costo_usd)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── LÍMITES DE GASTO ── */}
+      <section className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 md:p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="mb-1 text-sm font-semibold">Límites de gasto mensuales</h2>
+        <p className="mb-4 text-xs text-zinc-500">
+          Cuando el gasto de un proveedor supere el límite, las llamadas/acciones se bloquean automáticamente.
+          Dejá en 0 para sin límite.
+        </p>
+        <form onSubmit={(e) => void guardarLimites(e)} className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {PROVEEDORES_ORDEN.map((p) => (
+              <label key={p} className="flex items-center gap-3">
+                <span className="w-40 shrink-0 text-xs text-zinc-600 dark:text-zinc-400">
+                  {LABEL_PROVEEDOR[p] ?? p}
+                </span>
+                <div className="relative flex-1">
+                  <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-zinc-400">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={limitesEdit[p] ?? ""}
+                    onChange={(e) => setLimitesEdit((prev) => ({ ...prev, [p]: e.target.value }))}
+                    placeholder="0"
+                    className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-1.5 pl-6 pr-3 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                  />
+                </div>
+              </label>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              type="submit"
+              disabled={guardandoLimites}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+            >
+              {guardandoLimites ? "Guardando…" : "Guardar límites"}
+            </button>
+            {msgLimites && (
+              <p className={`text-sm ${msgLimites.tipo === "ok" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600"}`}>
+                {msgLimites.texto}
+              </p>
+            )}
+          </div>
+        </form>
+      </section>
 
       <section className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 md:p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mb-4 flex items-baseline justify-between gap-2">

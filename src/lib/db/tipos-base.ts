@@ -203,6 +203,9 @@ export interface Cuenta {
    *  tener un número WhatsApp dedicado al patrón sin exponer el bot a
    *  desconocidos. Migración 21. */
   es_panel_admin: boolean;
+  /** Límites mensuales de gasto en USD por proveedor externo.
+   *  Ej: { vapi: 50, openai: 30 }. 0 = sin límite. */
+  limites_gasto: Record<string, number>;
   creada_en: string;
   actualizada_en: string;
 }

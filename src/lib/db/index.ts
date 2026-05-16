@@ -51,3 +51,4 @@ export * from "./superAdmins";
 export * from "./adminAcciones";
 export * from "./blog";
 export * from "./blogTaxonomia";
+export * from "./cuentaMiembros";

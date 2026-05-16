@@ -220,29 +220,31 @@ export interface OpcionesIniciarLlamada {
   /** Metadata libre que vuelve en los webhooks. La usamos para
    *  vincular la llamada con la conversación local. */
   metadata?: Record<string, unknown>;
-  /** Override del firstMessage del assistant solo para esta llamada
-   *  (ej: "Hola Juan, te llamo de Lapeira como te dije por WhatsApp"). */
+  /** Override del firstMessage del assistant solo para esta llamada. */
   primerMensajeOverride?: string;
-  /** Contexto adicional que se inyecta como mensaje system extra,
-   *  por encima del prompt base del assistant. Sirve para pasarle a
-   *  Vapi el resumen de la conversación previa de WhatsApp. */
+  /** Contexto adicional (no usado — Vapi exige provider en model overrides). */
   contextoAdicional?: string;
+  /** Plan de análisis post-llamada inyectado por encima del assistant.
+   *  Usar para forzar structuredDataSchema en llamadas de outreach sin
+   *  depender de que el assistant lo tenga configurado en Vapi. */
+  analysisPlan?: {
+    structuredDataSchema?: Record<string, unknown>;
+    structuredDataPrompt?: string;
+    summaryPrompt?: string;
+  };
 }
 
 export async function iniciarLlamada(
   apiKey: string,
   opciones: OpcionesIniciarLlamada,
 ): Promise<VapiCall> {
-  // Vapi acepta assistantOverrides para personalizar parte del assistant
-  // SOLO para esta llamada sin tocar el assistant compartido.
-  // Doc: https://docs.vapi.ai/api-reference/calls/create
   const assistantOverrides: Record<string, unknown> = {};
   if (opciones.primerMensajeOverride) {
     assistantOverrides.firstMessage = opciones.primerMensajeOverride;
   }
-  // contextoAdicional omitido: Vapi exige que assistantOverrides.model incluya
-  // también el campo "provider" (openai, groq, etc.), que no podemos conocer
-  // desde aquí. El contexto del negocio viaja en el firstMessage en su lugar.
+  if (opciones.analysisPlan) {
+    assistantOverrides.analysisPlan = opciones.analysisPlan;
+  }
 
   const cuerpo: Record<string, unknown> = {
     assistantId: opciones.assistantId,
@@ -253,8 +255,6 @@ export async function iniciarLlamada(
     },
     metadata: opciones.metadata,
   };
-  // analysis va en el assistant, no en assistantOverrides (Vapi no lo permite aquí).
-  // Configurar structuredDataSchema directamente en el assistant desde Vapi dashboard.
   if (Object.keys(assistantOverrides).length > 0) {
     cuerpo.assistantOverrides = assistantOverrides;
   }

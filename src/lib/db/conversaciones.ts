@@ -360,10 +360,20 @@ export async function cambiarEtapaConversacion(
   if (error) lanzar(error, "cambiarEtapaConversacion");
 }
 
+function scoreAEstadoLead(score: number): EstadoLead {
+  if (score >= 100) return "cerrado";
+  if (score >= 80) return "negociacion";
+  if (score >= 60) return "interesado";
+  if (score >= 40) return "calificado";
+  if (score >= 25) return "contactado";
+  return "nuevo";
+}
+
 /**
  * Actualiza lead tracking. Recibe parches parciales — solo se aplican
  * los campos provistos. Para `datos_capturados` hace MERGE con lo
- * existente (no reemplaza).
+ * existente (no reemplaza). Cuando solo se actualiza `lead_score`,
+ * el estado_lead se deriva automáticamente (excepto si ya es cerrado/perdido).
  */
 export async function actualizarLead(
   conversacionId: string,
@@ -377,18 +387,25 @@ export async function actualizarLead(
 ): Promise<Conversacion | null> {
   const upd: Record<string, unknown> = {};
   if (cambios.nombre !== undefined) upd.nombre = cambios.nombre;
+
+  const SCORE_POR_ESTADO: Record<string, number> = {
+    nuevo: 10, contactado: 25, calificado: 40,
+    interesado: 60, negociacion: 80, cerrado: 100, perdido: 5,
+  };
+
   if (cambios.lead_score !== undefined) {
-    upd.lead_score = Math.max(0, Math.min(100, Math.round(cambios.lead_score)));
+    const score = Math.max(0, Math.min(100, Math.round(cambios.lead_score)));
+    upd.lead_score = score;
+    // Auto-deriva estado_lead del score cuando no se especifica uno explícito.
+    // Lee el estado actual para no pisar estados terminales (cerrado/perdido).
+    if (cambios.estado_lead === undefined) {
+      const actual = await obtenerConversacionPorId(conversacionId);
+      const estadoActual = actual?.estado_lead ?? "nuevo";
+      if (estadoActual !== "cerrado" && estadoActual !== "perdido") {
+        upd.estado_lead = scoreAEstadoLead(score);
+      }
+    }
   } else if (cambios.estado_lead !== undefined) {
-    const SCORE_POR_ESTADO: Record<string, number> = {
-      nuevo: 10,
-      contactado: 25,
-      calificado: 40,
-      interesado: 60,
-      negociacion: 80,
-      cerrado: 100,
-      perdido: 5,
-    };
     const autoScore = SCORE_POR_ESTADO[cambios.estado_lead];
     if (autoScore !== undefined) upd.lead_score = autoScore;
   }

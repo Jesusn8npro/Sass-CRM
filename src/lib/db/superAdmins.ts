@@ -86,19 +86,25 @@ export async function marcarReporteDiarioEnviado(
 }
 
 /**
- * Devuelve los super-admins que TODAVÍA no recibieron el reporte
- * de hoy. Usado por el cron diario para idempotencia.
+ * Marca atómicamente como enviados los super-admins que todavía
+ * no recibieron el reporte de hoy, y los devuelve para procesar.
+ *
+ * Al hacer UPDATE…RETURNING en una sola sentencia PostgreSQL,
+ * se elimina la ventana de race condition que existía con el patrón
+ * SELECT…luego UPDATE: si dos procesos corren en paralelo, solo uno
+ * ganará la fila (el segundo no encontrará filas que cumplan el WHERE).
  */
-export async function listarSuperAdminsPendientesReporte(): Promise<SuperAdmin[]> {
-  const inicioDia = new Date();
-  inicioDia.setHours(0, 0, 0, 0);
+export async function reclamarSuperAdminsPendientesReporte(
+  inicioDia: Date,
+): Promise<SuperAdmin[]> {
   const { data, error } = await db()
     .from("super_admins")
-    .select("*")
+    .update({ ultimo_reporte_diario_en: new Date().toISOString() })
     .eq("activo", true)
     .or(
       `ultimo_reporte_diario_en.is.null,ultimo_reporte_diario_en.lt.${inicioDia.toISOString()}`,
-    );
-  if (error) lanzar(error, "listarSuperAdminsPendientesReporte");
+    )
+    .select("*");
+  if (error) lanzar(error, "reclamarSuperAdminsPendientesReporte");
   return (data ?? []) as SuperAdmin[];
 }
