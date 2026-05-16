@@ -162,22 +162,51 @@ async function emitirHeartbeats(): Promise<void> {
  * con "Timed Out" o "Connection Closed". No rompen nada — el gestor
  * detecta el close y reconecta — pero ensucian los logs.
  *
- * Match patterns: stack frames internos de Baileys.
+ * Maneja tanto Error normales como objetos boom (isBoom:true)
+ * que Baileys lanza internamente con statusCode 408/428.
  */
 function esRechazoBenignoBaileys(razon: unknown): boolean {
   if (!razon || typeof razon !== "object") return false;
-  const msg = (razon as { message?: string }).message;
-  const stack = (razon as { stack?: string }).stack ?? "";
-  if (!msg) return false;
+  const r = razon as Record<string, unknown>;
+
+  // Mensaje: puede estar en .message o en .output.payload.message (boom)
+  const msg =
+    (typeof r.message === "string" ? r.message : "") ||
+    (typeof (r.output as Record<string, unknown> | undefined)?.payload === "object"
+      ? String(((r.output as Record<string, unknown>).payload as Record<string, unknown>).message ?? "")
+      : "");
+
+  // Stack: puede estar en .stack o en .data.stack (boom)
+  const stack =
+    (typeof r.stack === "string" ? r.stack : "") ||
+    (typeof (r.data as Record<string, unknown> | undefined)?.stack === "string"
+      ? (r.data as Record<string, unknown>).stack as string
+      : "");
+
+  // Los boom 408/428 de Baileys son siempre benignos aunque no tengamos msg
+  const esBoomBaileys =
+    r.isBoom === true &&
+    typeof r.output === "object" &&
+    ([408, 428].includes(
+      Number((r.output as Record<string, unknown>).statusCode),
+    )) &&
+    (stack.includes("@whiskeysockets") || stack.includes("baileys"));
+
+  if (esBoomBaileys) return true;
+
   const esTimedOutOClosed =
     msg.includes("Timed Out") ||
     msg.includes("Connection Closed") ||
-    msg.includes("Connection Terminated");
-  const vienedeBaileys =
+    msg.includes("Connection Terminated") ||
+    msg.includes("Precondition Required") ||
+    msg.includes("Stream Errored");
+
+  const vieneDeBaileys =
     stack.includes("@whiskeysockets/baileys") ||
     stack.includes("baileys/lib/Socket") ||
     stack.includes("baileys/lib/Utils");
-  return esTimedOutOClosed && vienedeBaileys;
+
+  return esTimedOutOClosed && vieneDeBaileys;
 }
 
 function instalarGuardias(): void {

@@ -18,13 +18,30 @@ export const log = pino({
   base: { app: "agente-whatsapp" },
   redact: {
     paths: [
+      // Credenciales y secretos
       "*.api_key",
+      "*.apiKey",
       "*.password",
       "*.secret",
       "*.token",
       "*.access_token",
+      "*.accessToken",
+      "*.service_role_key",
+      "*.private_key",
+      "*.privateKey",
+      // HTTP headers sensibles
       "headers.authorization",
       "headers.cookie",
+      "headers.x-vapi-secret",
+      "req.headers.authorization",
+      "req.headers.cookie",
+      // Datos de contacto (privacidad)
+      "*.telefono",
+      "*.phone",
+      "*.email",
+      "*.jid_wa",
+      "*.jid",
+      "*.numero",
     ],
     censor: "[REDACTED]",
   },
