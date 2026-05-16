@@ -1,5 +1,6 @@
 import { db, lanzar } from "./cliente";
 import { insertarMensaje } from "./mensajes";
+import { enviarPushHandoff } from "@/lib/push/enviarPush";
 import type {
   Conversacion,
   ConversacionConPreview,
@@ -104,12 +105,19 @@ export async function actualizarJidWaConversacion(
 
 export async function listarConversaciones(
   cuentaId: string,
+  opciones?: { limite?: number; offset?: number },
 ): Promise<ConversacionConPreview[]> {
-  const { data: convs, error: errC } = await db()
+  let query = db()
     .from("conversaciones")
     .select("*")
     .eq("cuenta_id", cuentaId)
     .order("ultimo_mensaje_en", { ascending: false, nullsFirst: false });
+
+  const limite = opciones?.limite ?? 200;
+  const offset = opciones?.offset ?? 0;
+  query = query.range(offset, offset + limite - 1);
+
+  const { data: convs, error: errC } = await query;
   if (errC) lanzar(errC, "listarConversaciones");
   if (!convs || convs.length === 0) return [];
 
@@ -241,13 +249,15 @@ export async function marcarConversacionNecesitaHumano(
     .eq("id", conversacionId)
     .single();
   if (conv) {
+    const cuentaId = (conv as { cuenta_id: string }).cuenta_id;
     await insertarMensaje(
-      (conv as { cuenta_id: string }).cuenta_id,
+      cuentaId,
       conversacionId,
       "sistema",
       `[Handoff a humano] ${razon}`,
       { tipo: "sistema" },
     );
+    void enviarPushHandoff(cuentaId, conversacionId, "Cliente");
   }
 }
 
@@ -369,6 +379,18 @@ export async function actualizarLead(
   if (cambios.nombre !== undefined) upd.nombre = cambios.nombre;
   if (cambios.lead_score !== undefined) {
     upd.lead_score = Math.max(0, Math.min(100, Math.round(cambios.lead_score)));
+  } else if (cambios.estado_lead !== undefined) {
+    const SCORE_POR_ESTADO: Record<string, number> = {
+      nuevo: 10,
+      contactado: 25,
+      calificado: 40,
+      interesado: 60,
+      negociacion: 80,
+      cerrado: 100,
+      perdido: 5,
+    };
+    const autoScore = SCORE_POR_ESTADO[cambios.estado_lead];
+    if (autoScore !== undefined) upd.lead_score = autoScore;
   }
   if (cambios.estado_lead !== undefined) upd.estado_lead = cambios.estado_lead;
   if (cambios.paso_actual !== undefined) upd.paso_actual = cambios.paso_actual;

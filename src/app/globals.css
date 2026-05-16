@@ -142,6 +142,40 @@ body {
   background-clip: content-box;
   border: 2px solid transparent;
 }
+
+/* ============================================================
+   Animaciones motion graphics — landing hero y blog
+   ============================================================ */
+@keyframes mesh-drift-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.7; }
+  33%       { transform: translate(40px, -30px) scale(1.08); opacity: 1; }
+  66%       { transform: translate(-20px, 20px) scale(0.95); opacity: 0.6; }
+}
+@keyframes mesh-drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.6; }
+  33%       { transform: translate(-50px, 25px) scale(1.12); opacity: 0.9; }
+  66%       { transform: translate(30px, -15px) scale(0.93); opacity: 0.7; }
+}
+@keyframes float-card {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
+@keyframes float-card-inv {
+  0%, 100% { transform: translateY(0px) translateX(-50%); }
+  50%       { transform: translateY(-6px) translateX(-50%); }
+}
+@keyframes shimmer-line {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(32px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes reveal-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 .dark *::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
   background-clip: content-box;
@@ -177,6 +211,20 @@ body {
 }
 .animate-aparecer {
   animation: aparecer 200ms ease-out both;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 280ms ease-out both;
 }
 
 @keyframes brillo-skeleton {

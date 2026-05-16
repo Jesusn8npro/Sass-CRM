@@ -49,6 +49,7 @@ const SECCIONES = [
   {
     n: "01",
     t: "Datos que recolectamos",
+    clave: "recopilacion",
     body: (
       <>
         <p>
@@ -88,6 +89,7 @@ const SECCIONES = [
   {
     n: "02",
     t: "Por qué los recolectamos",
+    clave: "finalidad",
     body: (
       <>
         <ul>
@@ -103,6 +105,7 @@ const SECCIONES = [
   {
     n: "03",
     t: "Con quién compartimos",
+    clave: "compartir",
     body: (
       <>
         <p>
@@ -140,6 +143,7 @@ const SECCIONES = [
   {
     n: "04",
     t: "Tiempo de retención",
+    clave: "retencion",
     body: (
       <>
         <ul>
@@ -170,6 +174,7 @@ const SECCIONES = [
   {
     n: "05",
     t: "Derechos del titular",
+    clave: "derechos",
     body: (
       <>
         <p>
@@ -200,6 +205,7 @@ const SECCIONES = [
   {
     n: "06",
     t: "Cookies",
+    clave: "cookies",
     body: (
       <>
         <p>
@@ -216,6 +222,7 @@ const SECCIONES = [
   {
     n: "07",
     t: "Transferencias internacionales",
+    clave: "transferencias",
     body: (
       <>
         <p>
@@ -235,6 +242,7 @@ const SECCIONES = [
   {
     n: "08",
     t: "Menores de edad",
+    clave: "menores",
     body: (
       <>
         <p>
@@ -255,6 +263,7 @@ const SECCIONES = [
   {
     n: "09",
     t: "Seguridad",
+    clave: "seguridad",
     body: (
       <>
         <ul>
@@ -290,6 +299,7 @@ const SECCIONES = [
   {
     n: "10",
     t: "Cambios a esta política",
+    clave: "cambios",
     body: (
       <>
         <p>
@@ -304,6 +314,7 @@ const SECCIONES = [
   {
     n: "11",
     t: "Contacto · DPO",
+    clave: "contacto",
     body: (
       <>
         <p>
@@ -324,40 +335,71 @@ const SECCIONES = [
 
 export default function PaginaPrivacidad() {
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <Navegacion />
-      <main className="mx-auto max-w-3xl px-6 py-16 md:py-24">
-        <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-400">
-          // legal / privacidad
+
+      {/* Page header */}
+      <div className="mx-auto max-w-6xl px-6 pt-16 pb-10 md:pt-24 md:pb-14">
+        <p className="mb-3 inline-block rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+          Última actualización: 2026-05-04
         </p>
-        <h1 className="font-display text-5xl leading-[1.05] tracking-[-0.02em] text-white md:text-6xl">
-          Política de <span className="italic text-white/70">Privacidad</span>.
+        <h1 className="font-bold tracking-tight text-4xl text-zinc-100 md:text-5xl">
+          Política de Privacidad
         </h1>
-        <p className="mt-6 max-w-2xl text-base leading-relaxed text-white/55">
+        <p className="mt-4 max-w-xl text-sm leading-relaxed text-zinc-400">
           Qué datos guardamos, por qué, con quién los compartimos y cómo los
           protegemos. Sin letra chica.
         </p>
-        <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-white/40">
-          última actualización · <span className="text-emerald-300">2026-05-04</span>
-        </p>
+      </div>
 
-        <div className="mt-16 space-y-14">
+      {/* 2-column layout */}
+      <div className="mx-auto max-w-6xl px-6 pb-24 lg:flex lg:gap-16">
+
+        {/* LEFT sidebar — sticky anchor nav */}
+        <aside className="hidden lg:block w-56 shrink-0">
+          <nav className="sticky top-24 space-y-1">
+            <a
+              href="#"
+              className="mb-4 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-600 hover:text-emerald-300 transition-colors"
+            >
+              ↑ Volver al inicio
+            </a>
+            {SECCIONES.map((s) => (
+              <a
+                key={s.clave}
+                href={`#${s.clave}`}
+                className="group flex items-center gap-2 border-l-2 border-transparent pl-3 py-1 font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-500 hover:border-emerald-500 hover:text-emerald-300 transition-colors"
+              >
+                <span className="text-zinc-700 group-hover:text-emerald-500">{s.n}</span>
+                <span className="truncate">{s.t}</span>
+              </a>
+            ))}
+          </nav>
+        </aside>
+
+        {/* RIGHT — main content */}
+        <main className="min-w-0 flex-1">
           {SECCIONES.map((s) => (
-            <section key={s.n} id={`s-${s.n}`} className="scroll-mt-24">
-              <h2 className="mb-5 font-mono text-[11px] uppercase tracking-[0.22em] text-emerald-400">
-                // {s.n} — {s.t}
+            <section
+              key={s.n}
+              id={s.clave}
+              className="scroll-mt-24 border-b border-white/[0.04] py-8 last:border-b-0"
+            >
+              <h2 className="text-lg font-bold text-zinc-100 mb-3">
+                {s.t}
               </h2>
-              <div className="space-y-4 text-[15px] leading-relaxed text-white/75 [&_a]:text-emerald-300 [&_li]:pl-1 [&_strong]:text-white [&_ul]:ml-5 [&_ul]:list-disc [&_ul]:space-y-2">
+              <div className="space-y-3 text-sm leading-relaxed text-zinc-400 [&_a]:text-emerald-300 [&_li]:pl-1 [&_strong]:text-zinc-100 [&_ul]:ml-5 [&_ul]:list-disc [&_ul]:space-y-2">
                 {s.body}
               </div>
             </section>
           ))}
-        </div>
 
-        <div className="mt-20 border-t border-white/[0.08] pt-8 font-mono text-[11px] uppercase tracking-[0.18em] text-white/40">
-          fin del documento · <span className="text-emerald-300">v1.0</span>
-        </div>
-      </main>
+          <div className="mt-12 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-600">
+            fin del documento · <span className="text-emerald-400">v1.0</span>
+          </div>
+        </main>
+      </div>
+
       <PieDePagina />
     </div>
   );

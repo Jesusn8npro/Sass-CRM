@@ -8,7 +8,7 @@
  *   { accion: "archivar" }  → archiva (saca del index público)
  */
 import { NextRequest, NextResponse } from "next/server";
-import { requerirAdmin } from "@/lib/auth/sesion";
+import { parsearJSON, requerirAdmin } from "@/lib/auth/sesion";
 import {
   actualizarArticulo,
   archivarArticulo,
@@ -19,6 +19,7 @@ import {
   registrarAccionAdmin,
 } from "@/lib/baseDatos";
 import { calcularTiempoLectura } from "@/lib/blog/markdown";
+import { enviarNuevoArticuloSuscriptores } from "@/lib/emails/disparadores";
 
 export const dynamic = "force-dynamic";
 
@@ -55,18 +56,17 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   if (auth instanceof NextResponse) return auth;
   const { id } = await ctx.params;
 
-  let body: Record<string, unknown>;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Body no es JSON" }, { status: 400 });
-  }
+  const body = await parsearJSON<Record<string, unknown>>(req);
+  if (body instanceof NextResponse) return body;
 
   try {
     // Acciones especiales
     if (body.accion === "publicar") {
       const articulo = await publicarArticulo(id);
       void auditar(auth.email, "blog_articulo_publicar", { articulo_id: id });
+      if (articulo) {
+        void enviarNuevoArticuloSuscriptores(id, articulo.titulo, articulo.resumen, articulo.slug, articulo.autor_nombre);
+      }
       return NextResponse.json({ articulo });
     }
     if (body.accion === "archivar") {

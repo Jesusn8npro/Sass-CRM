@@ -161,45 +161,67 @@ export function ChatDemo({ idIndustria, nombreAgente, mensajeBienvenida }: Props
   }
 
   return (
-    <div className="flex h-[60vh] min-h-[480px] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0A0A0A]">
-      {/* Turnstile widget invisible — solo se monta si la site key
-          está configurada vía NEXT_PUBLIC_TURNSTILE_SITE_KEY. */}
+    <div className="flex h-[62vh] min-h-[500px] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-zinc-950 shadow-[0_0_48px_-12px_rgba(0,0,0,0.8)]">
+      {/* Turnstile widget invisible */}
       {TURNSTILE_SITE_KEY && (
         <div ref={turnstileContainerRef} className="hidden" aria-hidden />
       )}
-      {/* Header tipo whatsapp */}
-      <div className="flex items-center gap-3 border-b border-white/[0.06] bg-black/40 px-5 py-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/15 font-mono text-[11px] font-semibold text-emerald-300">
+
+      {/* Header tipo WhatsApp */}
+      <div className="flex items-center gap-3 border-b border-white/[0.07] bg-zinc-900/60 px-5 py-3 backdrop-blur-sm">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/15 font-mono text-[11px] font-semibold text-emerald-300 ring-1 ring-emerald-400/20">
           {nombreAgente.slice(0, 2).toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-medium text-white">{nombreAgente}</p>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-300">
-            {escribiendo ? "escribiendo..." : "en línea"}
-          </p>
+          <div className="flex items-center gap-1.5">
+            {escribiendo ? (
+              <>
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                </span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-300">
+                  escribiendo...
+                </span>
+              </>
+            ) : (
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">
+                en línea
+              </span>
+            )}
+          </div>
         </div>
+        {/* Indicador de demo */}
+        <span className="hidden rounded-full border border-emerald-400/20 bg-emerald-400/[0.06] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.2em] text-emerald-400 sm:inline-flex">
+          Demo
+        </span>
       </div>
 
       {/* Cuerpo de mensajes */}
       <div
         ref={cajaRef}
-        className="flex-1 space-y-2 overflow-y-auto bg-[#0A0A0A] px-4 py-4"
+        className="flex-1 space-y-2.5 overflow-y-auto px-4 py-5"
+        style={{
+          background:
+            "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(16,185,129,0.04), transparent 55%), #09090b",
+        }}
       >
         {mensajes.map((m, i) => (
-          <Burbuja key={i} rol={m.rol}>
+          <Burbuja key={i} rol={m.rol} indice={i}>
             {m.contenido}
           </Burbuja>
         ))}
         {escribiendo && <BurbujaEscribiendo />}
         {error && (
-          <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/[0.06] px-3 py-2 text-xs text-red-300">
+          <div className="mt-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-3 py-2.5 text-xs text-red-300/90">
             {error}
           </div>
         )}
       </div>
 
       {/* Input */}
-      <div className="border-t border-white/[0.06] bg-black/40 px-3 py-3">
+      <div className="border-t border-white/[0.07] bg-zinc-900/60 px-3 py-3 backdrop-blur-sm">
         <div className="flex items-end gap-2">
           <textarea
             value={input}
@@ -208,13 +230,13 @@ export function ChatDemo({ idIndustria, nombreAgente, mensajeBienvenida }: Props
             rows={1}
             placeholder="Escribí un mensaje..."
             disabled={escribiendo}
-            className="min-h-[42px] flex-1 resize-none rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition-colors focus:border-emerald-400/40 disabled:opacity-50"
+            className="min-h-[42px] flex-1 resize-none rounded-2xl border border-white/[0.07] bg-zinc-800/60 px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition-colors focus:border-emerald-400/40 focus:bg-zinc-800/80 disabled:opacity-50"
           />
           <button
             type="button"
             onClick={enviar}
             disabled={escribiendo || !input.trim()}
-            className="rounded-full bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-black transition-all hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-full bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-black shadow-[0_0_18px_-4px_rgba(52,211,153,0.5)] transition-all hover:bg-emerald-300 hover:shadow-[0_0_28px_-4px_rgba(52,211,153,0.7)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
           >
             Enviar
           </button>
@@ -226,19 +248,27 @@ export function ChatDemo({ idIndustria, nombreAgente, mensajeBienvenida }: Props
 
 function Burbuja({
   rol,
+  indice,
   children,
 }: {
   rol: "user" | "assistant";
+  indice: number;
   children: React.ReactNode;
 }) {
   const esUsuario = rol === "user";
+  // Delay escalonado para mensajes iniciales, sin delay en los nuevos
+  const delay = indice < 3 ? `${indice * 60}ms` : "0ms";
+
   return (
-    <div className={`flex ${esUsuario ? "justify-end" : "justify-start"}`}>
+    <div
+      className={`flex animate-fade-in-up ${esUsuario ? "justify-end" : "justify-start"}`}
+      style={{ animationDelay: delay }}
+    >
       <div
-        className={`max-w-[78%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-[13.5px] leading-relaxed ${
+        className={`max-w-[78%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[13.5px] leading-relaxed shadow-sm ${
           esUsuario
-            ? "bg-emerald-400 text-black"
-            : "bg-white/[0.06] text-white/90"
+            ? "rounded-tr-sm bg-emerald-400 text-black"
+            : "rounded-tl-sm bg-zinc-800/80 text-white/90 ring-1 ring-white/[0.05]"
         }`}
       >
         {children}
@@ -249,12 +279,21 @@ function Burbuja({
 
 function BurbujaEscribiendo() {
   return (
-    <div className="flex justify-start">
-      <div className="rounded-2xl bg-white/[0.06] px-3.5 py-2.5">
-        <div className="flex gap-1">
-          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/50 [animation-delay:0ms]" />
-          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/50 [animation-delay:120ms]" />
-          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/50 [animation-delay:240ms]" />
+    <div className="flex animate-fade-in-up justify-start">
+      <div className="rounded-2xl rounded-tl-sm bg-zinc-800/80 px-4 py-3 ring-1 ring-white/[0.05]">
+        <div className="flex items-center gap-1.5">
+          <span
+            className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-400/70"
+            style={{ animationDelay: "0ms" }}
+          />
+          <span
+            className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-400/70"
+            style={{ animationDelay: "160ms" }}
+          />
+          <span
+            className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-400/70"
+            style={{ animationDelay: "320ms" }}
+          />
         </div>
       </div>
     </div>

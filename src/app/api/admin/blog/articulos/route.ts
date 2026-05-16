@@ -3,7 +3,7 @@
  * POST /api/admin/blog/articulos  — crear artículo manual
  */
 import { NextRequest, NextResponse } from "next/server";
-import { requerirAdmin } from "@/lib/auth/sesion";
+import { parsearJSON, requerirAdmin } from "@/lib/auth/sesion";
 import {
   crearArticulo,
   listarTodosLosArticulos,
@@ -43,12 +43,8 @@ export async function POST(req: NextRequest) {
   const auth = await requerirAdmin();
   if (auth instanceof NextResponse) return auth;
 
-  let body: Record<string, unknown>;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Body no es JSON válido" }, { status: 400 });
-  }
+  const body = await parsearJSON<Record<string, unknown>>(req);
+  if (body instanceof NextResponse) return body;
 
   const titulo = typeof body.titulo === "string" ? body.titulo.trim() : "";
   const resumen = typeof body.resumen === "string" ? body.resumen.trim() : "";

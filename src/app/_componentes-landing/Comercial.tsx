@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RevealOnScroll } from "@/components/RevealOnScroll";
 
 // ============================================================
 // PRECIOS — 3 cards + tabla comparativa premium con check/cross
@@ -151,9 +152,9 @@ export function Precios() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-3">
-          {PLANES.map((plan) => (
+          {PLANES.map((plan, i) => (
+            <RevealOnScroll key={plan.n} delay={i * 100}>
             <article
-              key={plan.n}
               className={`group relative flex flex-col rounded-2xl border p-7 transition-all ${
                 plan.destacado
                   ? "border-emerald-400/40 bg-gradient-to-b from-emerald-400/[0.06] to-transparent shadow-[0_0_60px_-20px_rgba(52,211,153,0.5)] hover:shadow-[0_0_80px_-20px_rgba(52,211,153,0.8)]"
@@ -208,6 +209,7 @@ export function Precios() {
                 </span>
               </Link>
             </article>
+            </RevealOnScroll>
           ))}
         </div>
 
@@ -313,26 +315,29 @@ const PREGUNTAS = [
 export function PreguntasFrecuentes() {
   return (
     <section id="faq" className="mx-auto max-w-3xl px-6 py-24 md:py-32">
-      <p className="mb-4 text-center font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-400">
-        // faq
-      </p>
-      <h2 className="text-center text-4xl tracking-[-0.025em] text-white md:text-5xl">
-        Preguntas{" "}
-        <span className="font-display italic text-white/70">frecuentes</span>.
-      </h2>
-      <p className="mt-4 text-center text-base text-white/55">
-        Si tu duda no está acá,{" "}
-        <Link
-          href="/contacto"
-          className="text-emerald-300 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-        >
-          escribinos
-        </Link>
-        .
-      </p>
+      <RevealOnScroll>
+        <p className="mb-4 text-center font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-400">
+          // faq
+        </p>
+        <h2 className="text-center text-4xl tracking-[-0.025em] text-white md:text-5xl">
+          Preguntas{" "}
+          <span className="font-display italic text-white/70">frecuentes</span>.
+        </h2>
+        <p className="mt-4 text-center text-base text-white/55">
+          Si tu duda no está acá,{" "}
+          <Link
+            href="/contacto"
+            className="text-emerald-300 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+          >
+            escribinos
+          </Link>
+          .
+        </p>
+      </RevealOnScroll>
       <div className="mt-12 divide-y divide-white/[0.06] border-y border-white/[0.06]">
-        {PREGUNTAS.map((p) => (
-          <details key={p.q} className="group py-5">
+        {PREGUNTAS.map((p, i) => (
+          <RevealOnScroll key={p.q} delay={i * 50}>
+          <details className="group py-5">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-md text-[15px] font-medium text-white/90 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-black">
               <span>{p.q}</span>
               <span
@@ -346,6 +351,7 @@ export function PreguntasFrecuentes() {
               {p.a}
             </p>
           </details>
+          </RevealOnScroll>
         ))}
       </div>
     </section>
@@ -357,6 +363,7 @@ export function PreguntasFrecuentes() {
 // ============================================================
 export function CtaFinal() {
   return (
+    <RevealOnScroll>
     <section className="mx-auto max-w-6xl px-6 pb-24 md:pb-32">
       <div className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-emerald-400/[0.08] via-black to-black p-10 md:p-16">
         <div
@@ -424,5 +431,6 @@ export function CtaFinal() {
         </div>
       </div>
     </section>
+    </RevealOnScroll>
   );
 }

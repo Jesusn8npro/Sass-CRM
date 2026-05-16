@@ -28,31 +28,34 @@ export default async function PaginaDemoIndustria({ params }: Props) {
   if (!plantilla) notFound();
 
   return (
-    <main className="min-h-screen bg-black font-sans text-white antialiased [color-scheme:dark]">
+    <main className="min-h-screen bg-zinc-950 font-sans text-white antialiased [color-scheme:dark]">
       <Navegacion />
 
-      <section className="border-b border-white/[0.06] bg-black">
+      {/* Barra superior de navegación */}
+      <section className="border-b border-white/[0.06] bg-zinc-950/80 backdrop-blur-sm">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-6 py-5">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/demo"
-              className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/50 hover:text-white/80"
-            >
-              ← Cambiar industria
-            </Link>
-          </div>
+          <Link
+            href="/demo"
+            className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/50 transition-colors hover:text-emerald-300"
+          >
+            ← Cambiar industria
+          </Link>
           <Link
             href="/signup"
-            className="hidden rounded-full bg-emerald-400 px-4 py-1.5 text-[12px] font-semibold text-black hover:bg-emerald-300 sm:inline-flex"
+            className="hidden rounded-full bg-emerald-400 px-4 py-1.5 text-[12px] font-semibold text-black transition-colors hover:bg-emerald-300 sm:inline-flex"
           >
             Crear cuenta gratis
           </Link>
         </div>
       </section>
 
+      {/* Contenido principal */}
       <section className="mx-auto max-w-4xl px-6 py-10">
-        <div className="mb-6 flex items-center gap-4">
-          <span className="text-5xl">{plantilla.emoji}</span>
+        {/* Encabezado del demo */}
+        <div className="mb-8 flex items-center gap-4 animate-fade-in-up">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/[0.08] bg-zinc-900 text-4xl shadow-[0_0_24px_-6px_rgba(52,211,153,0.2)]">
+            {plantilla.emoji}
+          </div>
           <div>
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-400">
               // demo en vivo
@@ -61,7 +64,9 @@ export default async function PaginaDemoIndustria({ params }: Props) {
               {plantilla.nombre}
             </h1>
             <p className="mt-1 text-sm text-white/55">
-              Hablás con {plantilla.agente_nombre_default} —{" "}
+              Hablás con{" "}
+              <span className="text-white/80">{plantilla.agente_nombre_default}</span>
+              {" "}—{" "}
               {plantilla.agente_rol_default.toLowerCase()}
             </p>
           </div>

@@ -1,44 +1,133 @@
 import Link from "next/link";
+import { Logo } from "@/app/_componentes-landing/Layout";
 import { FormularioSignup } from "./formulario";
+
+const METRICAS = [
+  { valor: "2 min", label: "Setup inicial" },
+  { valor: "< 4s", label: "Latencia IA" },
+  { valor: "+1.200", label: "Mensajes / día" },
+];
 
 export default function PaginaSignup() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-zinc-50 to-emerald-50 px-4 py-8 dark:from-zinc-950 dark:to-emerald-950/20">
-      <div className="w-full max-w-md">
-        <Link href="/" className="mb-6 flex items-center justify-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500 text-base font-bold text-white">
-            S
-          </div>
-          <span className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-            Sass-CRM
+    <main className="flex min-h-screen bg-zinc-950">
+      {/* ── Panel izquierdo: formulario ── */}
+      <div className="flex flex-1 flex-col items-center justify-center px-6 py-12">
+        {/* Logo */}
+        <Link href="/" className="mb-10 flex items-center gap-2.5">
+          <Logo />
+          <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-white/70">
+            sass-crm<span className="text-emerald-400">/</span>v2
           </span>
         </Link>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-          <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-            Crear tu cuenta
+        <div className="w-full max-w-sm">
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-400">
+            gratis para siempre
+          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-white">
+            Comenzá hoy gratis
           </h1>
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1.5 text-sm text-zinc-400">
             Setup en 2 minutos. Sin tarjeta de crédito.
           </p>
 
-          <FormularioSignup />
+          {/* Form card */}
+          <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl">
+            <FormularioSignup />
+          </div>
 
-          <p className="mt-5 text-center text-sm text-zinc-600 dark:text-zinc-400">
+          {/* Hint */}
+          <p className="mt-4 text-center font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-600">
+            sin tarjeta de crédito · cancelá cuando quieras
+          </p>
+
+          {/* Link alternativo */}
+          <p className="mt-5 text-center text-sm text-zinc-500">
             ¿Ya tenés cuenta?{" "}
             <Link
               href="/login"
-              className="font-semibold text-emerald-700 hover:underline dark:text-emerald-400"
+              className="font-semibold text-emerald-400 transition-colors hover:text-emerald-300"
             >
-              Iniciá sesión
+              Iniciá sesión →
             </Link>
           </p>
+
+          {/* Legal */}
+          <p className="mt-4 text-center text-[10px] text-zinc-600">
+            Al crear cuenta aceptás nuestros{" "}
+            <Link href="/terminos" className="underline hover:text-zinc-400">
+              términos
+            </Link>{" "}
+            y{" "}
+            <Link href="/privacidad" className="underline hover:text-zinc-400">
+              política de privacidad
+            </Link>
+            .
+          </p>
+        </div>
+      </div>
+
+      {/* ── Panel derecho: info (solo lg+) ── */}
+      <aside
+        className="relative hidden w-[46%] overflow-hidden lg:flex lg:flex-col lg:justify-between"
+        style={{ background: "linear-gradient(135deg, #18181b 0%, #09090b 100%)" }}
+      >
+        {/* Borde izquierdo sutil */}
+        <div className="absolute inset-y-0 left-0 w-px bg-zinc-800" />
+
+        {/* Orb animado */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-32 -right-32 h-[480px] w-[480px] rounded-full"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(52,211,153,0.18) 0%, rgba(52,211,153,0.04) 60%, transparent 80%)",
+            animation: "mesh-drift-1 12s ease-in-out infinite",
+          }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute bottom-0 left-0 h-[340px] w-[340px] rounded-full"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(20,184,166,0.12) 0%, transparent 70%)",
+            animation: "mesh-drift-2 16s ease-in-out infinite",
+          }}
+        />
+
+        {/* Contenido */}
+        <div className="relative z-10 flex flex-1 flex-col justify-center gap-6 px-12">
+          {/* Métricas flotantes */}
+          {METRICAS.map((m, i) => (
+            <div
+              key={m.label}
+              className="w-fit rounded-xl border border-zinc-700/60 bg-zinc-900/80 px-5 py-3.5 shadow-xl backdrop-blur-sm"
+              style={{
+                animation: `float-card ${4 + i * 0.8}s ease-in-out infinite`,
+                animationDelay: `${i * 0.6}s`,
+              }}
+            >
+              <p className="text-xl font-bold text-white">{m.valor}</p>
+              <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-400">
+                {m.label}
+              </p>
+            </div>
+          ))}
         </div>
 
-        <p className="mt-4 text-center text-[11px] text-zinc-500">
-          Al crear cuenta aceptás nuestros términos y política de privacidad.
-        </p>
-      </div>
+        {/* Testimonial */}
+        <div className="relative z-10 m-10 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6 backdrop-blur-sm">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-400">
+            Consultora Nexo
+          </p>
+          <blockquote className="mt-3 text-sm leading-relaxed text-zinc-300">
+            "En tres días el bot ya estaba atendiendo 300 consultas diarias.
+            Nuestro equipo se enfoca en cerrar, no en responder."
+          </blockquote>
+          <p className="mt-4 text-xs text-zinc-500">— Martín S., CEO</p>
+        </div>
+      </aside>
     </main>
   );
 }

@@ -431,3 +431,65 @@ export function emailWhatsAppCaido(
     html: layout({ titulo: "WhatsApp desconectado", cuerpo }),
   };
 }
+
+// ============================================================
+// 7. Confirmación de suscripción al blog
+// ============================================================
+
+export function emailConfirmacionSuscripcion(
+  nombre: string | null,
+  urlConfirmar: string,
+): { subject: string; html: string } {
+  const cuerpo = `
+    <h1 style="font-family: ${FONT_SERIF}; font-style: italic; font-weight: 400; font-size: 30px; line-height: 1.2; color: ${COLOR_TEXTO}; margin: 0 0 16px;">
+      Confirmá tu suscripción.
+    </h1>
+    <p style="font-family: ${FONT_SANS}; font-size: 15px; line-height: 1.7; color: ${COLOR_TEXTO}; margin: 0 0 16px;">
+      ${saludo(nombre)} Hacé clic para confirmar que querés recibir nuevos artículos del blog de Sass-CRM.
+    </p>
+    <p style="font-family: ${FONT_SANS}; font-size: 14px; line-height: 1.7; color: ${COLOR_TEXTO_TENUE}; margin: 0 0 8px;">
+      Si no lo pediste vos, ignorá este email — no se tomará ninguna acción.
+    </p>
+    ${botonCTA(urlConfirmar, "Confirmar suscripción")}
+  `;
+  return {
+    subject: "Confirmá tu suscripción al blog",
+    html: layout({ titulo: "Confirmá tu suscripción", cuerpo }),
+  };
+}
+
+// ============================================================
+// 8. Nuevo artículo publicado — digest para suscriptores
+// ============================================================
+
+export function emailNuevoArticulo(
+  titulo: string,
+  resumen: string,
+  urlArticulo: string,
+  urlDesuscribir: string,
+  autorNombre: string,
+): { subject: string; html: string } {
+  const cuerpo = `
+    <p style="font-family: ${FONT_MONO}; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: ${COLOR_ACENTO}; margin: 0 0 12px;">
+      Nuevo artículo
+    </p>
+    <h1 style="font-family: ${FONT_SERIF}; font-style: italic; font-weight: 400; font-size: 30px; line-height: 1.25; color: ${COLOR_TEXTO}; margin: 0 0 16px;">
+      ${esc(titulo)}
+    </h1>
+    <p style="font-family: ${FONT_SANS}; font-size: 15px; line-height: 1.7; color: ${COLOR_TEXTO_TENUE}; margin: 0 0 8px;">
+      ${esc(resumen)}
+    </p>
+    <p style="font-family: ${FONT_SANS}; font-size: 13px; color: ${COLOR_TEXTO_TENUE}; margin: 0 0 20px;">
+      Por <span style="color: ${COLOR_TEXTO};">${esc(autorNombre)}</span>
+    </p>
+    ${botonCTA(urlArticulo, "Leer artículo")}
+    <p style="font-family: ${FONT_SANS}; font-size: 11px; color: ${COLOR_TEXTO_TENUE}; margin: 24px 0 0;">
+      Recibís este email porque te suscribiste al blog de Sass-CRM.
+      <a href="${esc(urlDesuscribir)}" style="color: ${COLOR_ACENTO}; text-decoration: underline;">Cancelar suscripción</a>.
+    </p>
+  `;
+  return {
+    subject: `Nuevo artículo: ${titulo}`,
+    html: layout({ titulo: esc(titulo), cuerpo }),
+  };
+}

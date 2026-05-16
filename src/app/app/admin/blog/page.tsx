@@ -91,6 +91,9 @@ export default async function PaginaAdminBlog({
         />
       </nav>
 
+      {/* Gráfico top artículos */}
+      <GraficoLecturas articulos={articulos} />
+
       <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-white/[0.06] dark:bg-white/[0.02]">
         <table className="w-full text-sm">
           <thead className="border-b border-zinc-200 text-left font-mono text-[10px] uppercase tracking-wider text-zinc-500 dark:border-white/[0.06] dark:text-white/40">
@@ -98,6 +101,7 @@ export default async function PaginaAdminBlog({
               <th className="px-4 py-3">Título</th>
               <th className="px-4 py-3">Categoría</th>
               <th className="px-4 py-3">Estado</th>
+              <th className="px-4 py-3">Publicar</th>
               <th className="px-4 py-3">Origen</th>
               <th className="px-4 py-3 text-right">Lecturas</th>
               <th className="px-4 py-3">Editado</th>
@@ -111,7 +115,7 @@ export default async function PaginaAdminBlog({
             {articulos.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-4 py-12 text-center font-mono text-[11px] uppercase tracking-wider text-zinc-400 dark:text-white/35"
                 >
                   sin artículos en esta vista
@@ -120,6 +124,49 @@ export default async function PaginaAdminBlog({
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function GraficoLecturas({ articulos }: { articulos: ArticuloConCategoria[] }) {
+  const top = articulos
+    .filter((a) => a.visualizaciones > 0)
+    .sort((a, b) => b.visualizaciones - a.visualizaciones)
+    .slice(0, 8);
+
+  if (top.length === 0) return null;
+
+  const maximo = top[0].visualizaciones;
+
+  return (
+    <div className="mb-6 rounded-2xl border border-zinc-200 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02]">
+      <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-300">
+        // top artículos · rendimiento
+      </p>
+      <div className="space-y-2">
+        {top.map((a) => {
+          const pct = Math.round((a.visualizaciones / maximo) * 100);
+          return (
+            <div key={a.id} className="flex items-center gap-3">
+              <span
+                className="w-44 shrink-0 truncate font-mono text-[10px] text-zinc-600 dark:text-white/55"
+                title={a.titulo}
+              >
+                {a.titulo}
+              </span>
+              <div className="relative h-[18px] flex-1 rounded-sm bg-zinc-100 dark:bg-white/[0.04]">
+                <div
+                  className="absolute inset-y-0 left-0 rounded-sm border-l-2 border-emerald-400 bg-emerald-500/20"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <span className="w-10 text-right font-mono text-[10px] text-zinc-500 dark:text-white/40">
+                {a.visualizaciones}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -150,6 +197,8 @@ function FiltroEstado({
 
 function FilaArticulo({ articulo }: { articulo: ArticuloConCategoria }) {
   const e = ETIQUETA_ESTADO[articulo.estado];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- campo nuevo, tipo aún no actualizado
+  const programadoPara = ((articulo as any).programado_para as string | null) ?? null;
   return (
     <tr className="border-t border-zinc-100 dark:border-white/[0.04]">
       <td className="px-4 py-3">
@@ -169,6 +218,11 @@ function FilaArticulo({ articulo }: { articulo: ArticuloConCategoria }) {
         >
           {e.label}
         </span>
+      </td>
+      <td className="px-4 py-3 font-mono text-[10px] text-zinc-400 dark:text-white/35">
+        {programadoPara
+          ? new Date(programadoPara).toLocaleDateString("es")
+          : "—"}
       </td>
       <td className="px-4 py-3 font-mono text-[10px] uppercase tracking-wider text-zinc-500 dark:text-white/40">
         {articulo.generado_por === "ia"

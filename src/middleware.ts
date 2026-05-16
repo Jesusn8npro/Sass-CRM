@@ -20,6 +20,9 @@ const API_PUBLICA_ALLOWLIST = [
   "/api/v1",
   // Demo público (chat sandbox). Rate-limit por IP en el handler.
   "/api/demo/chat",
+  // Newsletter del blog — suscripción y desuscripción sin auth.
+  "/api/blog/suscribir",
+  "/api/blog/desuscribir",
 ];
 
 // UUID v4 exacto — solo coincide con IDs reales, no con "nueva" ni slugs

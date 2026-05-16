@@ -6,6 +6,7 @@ import {
   listarArticulosPublicados,
   listarCategorias,
   obtenerCategoriaPorSlug,
+  type ArticuloConCategoria,
 } from "@/lib/baseDatos";
 import { urlAbsoluta } from "@/lib/blog/siteUrl";
 
@@ -46,89 +47,177 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PaginaCategoria({ params }: Props) {
   const { slug } = await params;
-  const categoria = await obtenerCategoriaPorSlug(slug);
+  const [categoria, categorias] = await Promise.all([
+    obtenerCategoriaPorSlug(slug),
+    listarCategorias(),
+  ]);
   if (!categoria) notFound();
 
-  const articulos = await listarArticulosPublicados({
-    categoriaSlug: slug,
-    limite: 50,
-  });
+  const articulos = await listarArticulosPublicados({ categoriaSlug: slug, limite: 50 });
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="mx-auto max-w-5xl px-4 sm:px-6 py-12">
-        <Link
-          href="/blog"
-          className="text-sm text-emerald-600 hover:text-emerald-700"
-        >
-          ← Todas las categorías
-        </Link>
-        <header className="mt-6 mb-10">
-          <p className="text-sm uppercase tracking-widest text-emerald-600 font-medium">
-            Categoría
-          </p>
-          <h1 className="text-4xl sm:text-5xl font-bold mt-2">
-            {categoria.nombre}
+    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+      {/* Orb ambiental */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed left-0 top-0 h-[500px] w-[500px] opacity-25"
+        style={{
+          background: "radial-gradient(circle, rgba(16,185,129,0.18) 0%, transparent 70%)",
+          filter: "blur(80px)",
+          animation: "mesh-drift-1 20s ease-in-out infinite",
+        }}
+      />
+
+      <div className="relative mx-auto max-w-[1400px] px-4 sm:px-6 py-10 lg:py-14">
+        {/* Header */}
+        <header className="mb-10 border-b border-white/[0.06] pb-8">
+          <Link
+            href="/blog"
+            className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-400 transition hover:text-emerald-300"
+          >
+            ← Todas las categorías
+          </Link>
+          <h1 className="mt-3 text-4xl font-bold tracking-tight md:text-5xl">
+            <span className="font-display italic text-emerald-300">{categoria.nombre}</span>
           </h1>
           {categoria.descripcion && (
-            <p className="mt-3 text-zinc-600 dark:text-zinc-400 text-lg max-w-2xl">
-              {categoria.descripcion}
-            </p>
+            <p className="mt-3 max-w-xl text-sm text-zinc-400">{categoria.descripcion}</p>
           )}
-          <p className="mt-2 text-sm text-zinc-500">
+          <p className="mt-2 font-mono text-xs text-zinc-600">
             {articulos.length} {articulos.length === 1 ? "artículo" : "artículos"}
           </p>
         </header>
 
-        {articulos.length === 0 ? (
-          <div className="text-center py-20 text-zinc-500">
-            Todavía no hay artículos en esta categoría.
-          </div>
+        {/* Layout 3 columnas */}
+        <div className="flex gap-8">
+          {/* ── Sidebar izquierdo ── */}
+          <aside className="hidden w-52 shrink-0 lg:block">
+            <div className="sticky top-20 flex flex-col gap-5">
+              <div>
+                <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.24em] text-zinc-500">
+                  Categorías
+                </p>
+                <nav className="flex flex-col gap-1">
+                  <Link
+                    href="/blog"
+                    className="rounded-lg px-3 py-1.5 text-sm text-zinc-400 transition hover:bg-white/[0.04] hover:text-zinc-100"
+                  >
+                    Todos los artículos
+                  </Link>
+                  {categorias.map((c) => (
+                    <Link
+                      key={c.id}
+                      href={`/blog/categoria/${c.slug}`}
+                      className={`rounded-lg px-3 py-1.5 text-sm transition ${
+                        c.slug === slug
+                          ? "bg-emerald-400/10 border border-emerald-400/20 font-medium text-emerald-400"
+                          : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-100"
+                      }`}
+                    >
+                      {c.nombre}
+                    </Link>
+                  ))}
+                </nav>
+              </div>
+            </div>
+          </aside>
+
+          {/* ── Grilla de artículos ── */}
+          <main className="min-w-0 flex-1">
+            {articulos.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <p className="text-zinc-400">Todavía no hay artículos en esta categoría.</p>
+                <Link href="/blog" className="mt-4 text-sm text-emerald-400 hover:text-emerald-300 transition">
+                  Ver todos los artículos →
+                </Link>
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {articulos.map((a, i) => (
+                  <TarjetaArticulo key={a.id} articulo={a} prioridad={i < 2} />
+                ))}
+              </div>
+            )}
+          </main>
+
+          {/* ── Sidebar derecho ── */}
+          <aside className="hidden w-52 shrink-0 xl:block">
+            <div className="sticky top-20 flex flex-col gap-5">
+              <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[0.04] p-5">
+                <p className="font-mono text-[9px] uppercase tracking-[0.24em] text-emerald-400">
+                  Comenzá hoy
+                </p>
+                <p className="mt-2 text-sm font-semibold text-zinc-100">
+                  Automatizá tu WhatsApp con IA en 30 minutos.
+                </p>
+                <Link
+                  href="/signup"
+                  className="mt-4 block rounded-lg bg-emerald-500 px-4 py-2.5 text-center text-xs font-bold text-black transition hover:bg-emerald-400"
+                >
+                  Crear cuenta gratis
+                </Link>
+                <p className="mt-2 text-center font-mono text-[9px] text-zinc-600">
+                  Sin tarjeta · Setup ≤ 2 min
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.24em] text-zinc-500">
+                  Esta categoría
+                </p>
+                <p className="text-xl font-bold text-emerald-300">{articulos.length}</p>
+                <p className="text-xs text-zinc-500">
+                  {articulos.length === 1 ? "artículo publicado" : "artículos publicados"}
+                </p>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TarjetaArticulo({
+  articulo,
+  prioridad,
+}: {
+  articulo: ArticuloConCategoria;
+  prioridad?: boolean;
+}) {
+  return (
+    <Link
+      href={`/blog/${articulo.slug}`}
+      style={{ contentVisibility: "auto", containIntrinsicSize: "0 320px" }}
+      className="group flex flex-col overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.02] transition-all hover:border-emerald-400/30 hover:bg-white/[0.04]"
+    >
+      <div className="relative aspect-video w-full">
+        {articulo.imagen_portada_url ? (
+          <Image
+            src={articulo.imagen_portada_url}
+            alt={articulo.imagen_portada_alt ?? articulo.titulo}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 380px"
+            loading={prioridad ? "eager" : "lazy"}
+            priority={prioridad}
+            className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+          />
         ) : (
-          <div className="grid gap-6 md:grid-cols-2">
-            {articulos.map((a, i) => (
-              <Link
-                key={a.id}
-                href={`/blog/${a.slug}`}
-                style={{
-                  contentVisibility: "auto",
-                  containIntrinsicSize: "0 380px",
-                }}
-                className="group rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden hover:border-emerald-500 transition flex flex-col"
-              >
-                {a.imagen_portada_url ? (
-                  <div className="relative w-full aspect-video bg-zinc-100 dark:bg-zinc-800">
-                    <Image
-                      src={a.imagen_portada_url}
-                      alt={a.imagen_portada_alt ?? a.titulo}
-                      fill
-                      sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 480px"
-                      loading={i < 2 ? "eager" : "lazy"}
-                      priority={i < 2}
-                      className="object-cover"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-full aspect-video bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white text-3xl font-bold">
-                    {a.titulo[0]?.toUpperCase()}
-                  </div>
-                )}
-                <div className="p-5 flex-1 flex flex-col">
-                  <h2 className="text-xl font-bold group-hover:text-emerald-600 transition">
-                    {a.titulo}
-                  </h2>
-                  <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 line-clamp-3 flex-1">
-                    {a.resumen}
-                  </p>
-                  <div className="mt-4 text-xs text-zinc-500">
-                    {a.tiempo_lectura_min} min · {a.autor_nombre}
-                  </div>
-                </div>
-              </Link>
-            ))}
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-600/20 to-zinc-900 text-3xl font-bold text-emerald-300/40">
+            {articulo.titulo[0]?.toUpperCase() ?? "B"}
           </div>
         )}
       </div>
-    </div>
+      <div className="flex flex-1 flex-col p-4">
+        <h2 className="text-sm font-semibold leading-snug text-zinc-100 transition group-hover:text-emerald-200">
+          {articulo.titulo}
+        </h2>
+        <p className="mt-1.5 line-clamp-2 flex-1 text-xs text-zinc-500">{articulo.resumen}</p>
+        <div className="mt-3 flex items-center justify-between text-[10px] text-zinc-600">
+          <span>{articulo.autor_nombre}</span>
+          <span>{articulo.tiempo_lectura_min} min</span>
+        </div>
+      </div>
+    </Link>
   );
 }

@@ -22,6 +22,26 @@ export function Hero() {
             "radial-gradient(ellipse 90% 70% at 50% 30%, black 30%, transparent 75%)",
         }}
       />
+      {/* Orb de gradiente animado — izquierda */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-40 top-8 h-[520px] w-[520px] rounded-full"
+        style={{
+          background: "radial-gradient(circle, rgba(16,185,129,0.20) 0%, transparent 68%)",
+          animation: "mesh-drift-1 18s ease-in-out infinite",
+          filter: "blur(48px)",
+        }}
+      />
+      {/* Orb de gradiente animado — derecha */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-32 bottom-8 h-[420px] w-[420px] rounded-full"
+        style={{
+          background: "radial-gradient(circle, rgba(52,211,153,0.14) 0%, transparent 70%)",
+          animation: "mesh-drift-2 24s ease-in-out infinite",
+          filter: "blur(56px)",
+        }}
+      />
       {/* Línea horizontal de escaneo sutil */}
       <div
         aria-hidden
@@ -108,7 +128,10 @@ function MockupPanel() {
       />
 
       {/* KPI flotante esquina sup. izq. */}
-      <div className="absolute -left-2 -top-6 z-10 hidden rounded-xl border border-white/[0.08] bg-black/80 px-3.5 py-2.5 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.9)] backdrop-blur-md md:block">
+      <div
+        className="absolute -left-2 -top-6 z-10 hidden rounded-xl border border-white/[0.08] bg-black/80 px-3.5 py-2.5 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.9)] backdrop-blur-md md:block"
+        style={{ animation: "float-card 6s ease-in-out infinite" }}
+      >
         <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40">
           tasa de respuesta
         </p>
@@ -121,7 +144,10 @@ function MockupPanel() {
       </div>
 
       {/* KPI flotante esquina sup. der. */}
-      <div className="absolute -right-2 -top-4 z-10 hidden rounded-xl border border-emerald-400/30 bg-black/80 px-3.5 py-2.5 shadow-[0_10px_40px_-10px_rgba(52,211,153,0.3)] backdrop-blur-md md:block">
+      <div
+        className="absolute -right-2 -top-4 z-10 hidden rounded-xl border border-emerald-400/30 bg-black/80 px-3.5 py-2.5 shadow-[0_10px_40px_-10px_rgba(52,211,153,0.3)] backdrop-blur-md md:block"
+        style={{ animation: "float-card 8s ease-in-out infinite 1s" }}
+      >
         <p className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.2em] text-emerald-300">
           <span className="relative flex h-1.5 w-1.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -135,7 +161,10 @@ function MockupPanel() {
       </div>
 
       {/* KPI flotante inferior */}
-      <div className="absolute -bottom-4 left-1/2 z-10 hidden -translate-x-1/2 rounded-full border border-white/[0.08] bg-black/85 px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-white/60 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.9)] backdrop-blur-md md:block">
+      <div
+        className="absolute -bottom-4 left-1/2 z-10 hidden -translate-x-1/2 rounded-full border border-white/[0.08] bg-black/85 px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-white/60 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.9)] backdrop-blur-md md:block"
+        style={{ animation: "float-card-inv 7s ease-in-out infinite 0.5s" }}
+      >
         <span className="text-emerald-400">+</span> 47 leads convertidos esta semana
       </div>
 

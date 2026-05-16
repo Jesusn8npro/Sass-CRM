@@ -28,6 +28,7 @@ import {
   emailRecargaCreditos,
   emailReporteSemanal,
   emailWhatsAppCaido,
+  emailNuevoArticulo,
   type KpisReporteSemanal,
   type LeadAtencionReporte,
 } from "./plantillas";
@@ -444,6 +445,64 @@ export async function enviarReporteSemanal(
 // ============================================================
 // 5. WhatsApp caído (cuenta desconectada)
 // ============================================================
+
+// ============================================================
+// 7. Nuevo artículo del blog — enviar a todos los suscriptores activos
+// ============================================================
+
+/**
+ * Envía el digest de nuevo artículo a todos los suscriptores confirmados y
+ * no desuscritos. Fire-and-forget: no bloquea el flujo del handler.
+ */
+export async function enviarNuevoArticuloSuscriptores(
+  articuloId: string,
+  titulo: string,
+  resumen: string,
+  slug: string,
+  autorNombre: string,
+): Promise<void> {
+  try {
+    const appUrl = urlApp();
+    const urlArticulo = `${appUrl}/blog/${slug}`;
+    const LOTE = 100;
+    let offset = 0;
+
+    while (true) {
+      const { data: suscriptores, error } = await db()
+        .from("suscriptores_blog")
+        .select("email, token_confirmacion")
+        .eq("confirmado", true)
+        .is("desuscrito_en", null)
+        .order("suscrito_en", { ascending: true })
+        .range(offset, offset + LOTE - 1);
+
+      if (error) {
+        log.warn({ err: error, articuloId }, "[emails] nuevoArticulo: error leyendo suscriptores");
+        break;
+      }
+      if (!suscriptores || suscriptores.length === 0) break;
+
+      for (const s of suscriptores) {
+        const urlDesuscribir = `${appUrl}/api/blog/desuscribir?token=${encodeURIComponent(s.token_confirmacion ?? "")}`;
+        const { subject, html } = emailNuevoArticulo(titulo, resumen, urlArticulo, urlDesuscribir, autorNombre);
+        const r = await enviarEmail({
+          to: s.email,
+          subject,
+          html,
+          idempotencyKey: `articulo:${articuloId}:suscriptor:${s.email}`,
+        });
+        if (!r.ok && r.motivo !== "sin_api_key") {
+          log.warn({ email: s.email, articuloId, motivo: r.motivo }, "[emails] nuevoArticulo: fallo envío");
+        }
+      }
+
+      if (suscriptores.length < LOTE) break;
+      offset += LOTE;
+    }
+  } catch (err) {
+    log.error({ err, articuloId }, "[emails] excepción en enviarNuevoArticuloSuscriptores");
+  }
+}
 
 export async function enviarWhatsAppCaido(idCuenta: string): Promise<void> {
   try {
