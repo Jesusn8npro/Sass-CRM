@@ -29,6 +29,10 @@ import {
 
 export const dynamic = "force-dynamic";
 
+/** Secret global del assistant de Vapi (ENV). Protege contra payloads falsos
+ *  en las rutas de outreach y calls desconocidas, donde no hay cuenta en DB. */
+const VAPI_WEBHOOK_SECRET_GLOBAL = process.env.VAPI_WEBHOOK_SECRET?.trim() ?? null;
+
 // ============================================================
 // Tipos de payload Vapi
 // ============================================================
@@ -512,6 +516,14 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ ok: true, tipo, ignorado: true });
+  }
+
+  // ── Rutas 2 y 3: verificar secret global del assistant ───
+  // Para WhatsApp (ruta 1) el secret se verifica contra la cuenta en DB.
+  // Para outreach y calls desconocidas usamos el ENV VAPI_WEBHOOK_SECRET.
+  if (VAPI_WEBHOOK_SECRET_GLOBAL && !verificarSecretWebhook(headerSecret, VAPI_WEBHOOK_SECRET_GLOBAL)) {
+    console.warn(`[vapi-webhook] ✗ Secret inválido para call no-WhatsApp — callId: ${callId}`);
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   // ── Ruta 2: llamada de OUTREACH (prospeccion_llamadas) ────
