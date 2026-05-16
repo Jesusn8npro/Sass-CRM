@@ -24,6 +24,7 @@ export async function encolarBandejaSalida(
   return (data as { id: string }).id;
 }
 
+/** Solo devuelve items pendientes que NO están marcados como fallidos. */
 export async function obtenerPendientesBandejaDeCuenta(
   cuentaId: string,
   limite = 20,
@@ -33,6 +34,7 @@ export async function obtenerPendientesBandejaDeCuenta(
     .select("*")
     .eq("cuenta_id", cuentaId)
     .eq("enviado", false)
+    .eq("fallido", false)
     .order("creado_en", { ascending: true })
     .limit(limite);
   if (error) lanzar(error, "obtenerPendientesBandejaDeCuenta");
@@ -45,4 +47,22 @@ export async function marcarBandejaEnviado(id: string): Promise<void> {
     .update({ enviado: true })
     .eq("id", id);
   if (error) lanzar(error, "marcarBandejaEnviado");
+}
+
+/** Incrementa el contador de intentos. Recibe el valor actual para evitar una lectura extra. */
+export async function incrementarIntentosBandeja(id: string, intentosActuales: number): Promise<void> {
+  const { error } = await db()
+    .from("bandeja_salida")
+    .update({ intentos: intentosActuales + 1 })
+    .eq("id", id);
+  if (error) lanzar(error, "incrementarIntentosBandeja");
+}
+
+/** Marca el item como fallido permanentemente — no se reintentará. */
+export async function marcarBandejaFallido(id: string): Promise<void> {
+  const { error } = await db()
+    .from("bandeja_salida")
+    .update({ fallido: true })
+    .eq("id", id);
+  if (error) lanzar(error, "marcarBandejaFallido");
 }

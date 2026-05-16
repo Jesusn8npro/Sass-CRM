@@ -67,6 +67,8 @@ export interface FilaBandejaSalida {
   contenido: string;
   media_path: string | null;
   enviado: boolean;
+  intentos: number;
+  fallido: boolean;
   creado_en: string;
 }
 

@@ -17,8 +17,10 @@ import {
 import { readFile as fsReadFileAsync } from "node:fs/promises";
 import { obtenerGestor } from "./gestor";
 import {
+  incrementarIntentosBandeja,
   insertarMensaje,
   marcarBandejaEnviado,
+  marcarBandejaFallido,
   obtenerConversacionPorId,
   obtenerPendientesBandejaDeCuenta,
   vincularEcoHumanoReciente,
@@ -689,6 +691,19 @@ async function enviarItemBandeja(
   return msgId;
 }
 
+const MAX_INTENTOS_BANDEJA = 3;
+
+/** Detecta errores de conexión cerrada de WhatsApp (Baileys 428). */
+function esErrorConexion(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes("Connection Closed") ||
+    msg.includes("Precondition Required") ||
+    msg.includes("Connection Terminated") ||
+    msg.includes("Stream Errored")
+  );
+}
+
 export async function procesarBandejaSalidaDeCuenta(
   sock: WASocket,
   cuentaId: string,
@@ -698,15 +713,13 @@ export async function procesarBandejaSalidaDeCuenta(
   if (pendientes.length === 0) return;
 
   const prefijo = `[bot:${etiquetaCuenta}]`;
+
   for (const item of pendientes) {
     const conv = await obtenerConversacionPorId(item.conversacion_id);
     const jid = conv?.jid_wa ?? `${item.telefono}@s.whatsapp.net`;
     try {
       const msgId = await enviarItemBandeja(sock, jid, item);
       await marcarBandejaEnviado(item.id);
-      // Vinculamos el msgId real a la fila humano que el multimedia
-      // route ya insertó sin wa_msg_id. Sin esto, cuando llegue el echo
-      // se duplica (no encuentra match para dedupe).
       try {
         await vincularEcoHumanoReciente(
           item.cuenta_id,
@@ -718,14 +731,38 @@ export async function procesarBandejaSalidaDeCuenta(
       } catch {
         /* no-op: si falla, el dedup en handler del echo lo agarra */
       }
-      console.log(
-        `${prefijo} → ${item.tipo} humano enviado a ${item.telefono}`,
-      );
+      console.log(`${prefijo} → ${item.tipo} humano enviado a ${item.telefono}`);
     } catch (err) {
-      console.error(
-        `${prefijo} falló envío de bandeja ${item.id} (reintentará):`,
-        err,
-      );
+      const intentosAhora = (item.intentos ?? 0) + 1;
+
+      if (esErrorConexion(err)) {
+        // Conexión cerrada: marcar fallido y PARAR — no tiene sentido seguir
+        // intentando con los demás items de esta cuenta en este ciclo.
+        await marcarBandejaFallido(item.id).catch(() => null);
+        console.warn(
+          `${prefijo} conexión cerrada — item ${item.id} descartado. ` +
+          `Reencolar manualmente o esperar reconexión.`,
+        );
+        break;
+      }
+
+      if (intentosAhora >= MAX_INTENTOS_BANDEJA) {
+        // Agotó reintentos: marcar como fallido definitivamente
+        await marcarBandejaFallido(item.id).catch(() => null);
+        console.error(
+          `${prefijo} bandeja ${item.id} falló ${intentosAhora} veces — descartado.`,
+          err instanceof Error ? err.message : err,
+        );
+      } else {
+        // Primer o segundo intento: solo incrementar y loguear una vez
+        await incrementarIntentosBandeja(item.id, item.intentos ?? 0).catch(() => null);
+        if (intentosAhora === 1) {
+          console.warn(
+            `${prefijo} falló envío de bandeja ${item.id} (intento ${intentosAhora}/${MAX_INTENTOS_BANDEJA}):`,
+            err instanceof Error ? err.message : err,
+          );
+        }
+      }
     }
   }
 }
