@@ -1,0 +1,32 @@
+name: Generar artículo diario
+
+on:
+  schedule:
+    # 8:00 AM Colombia (UTC-5) = 13:00 UTC — todos los días
+    - cron: '0 13 * * *'
+  workflow_dispatch: # permite disparo manual desde GitHub
+
+jobs:
+  generar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Llamar endpoint de generación
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.APP_URL }}/api/cron/generar-articulos" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            --max-time 300)
+
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | head -1)
+
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+
+          if [ "$http_code" != "200" ]; then
+            echo "❌ Error: el endpoint respondió $http_code"
+            exit 1
+          fi
+
+          echo "✅ Artículo generado exitosamente"
