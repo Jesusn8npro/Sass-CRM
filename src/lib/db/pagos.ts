@@ -64,6 +64,34 @@ export async function marcarPagoAprobado(
   if (error) lanzar(error, "marcarPagoAprobado");
 }
 
+/**
+ * Reclama un pago marcándolo aprobado de forma atómica: el UPDATE solo
+ * afecta filas que aún están `pendiente`. Devuelve true únicamente si
+ * ESTE llamado ganó la transición pendiente→aprobado (count === 1).
+ *
+ * Sirve como candado: el caller acredita SOLO si gana. Si otro request
+ * concurrente (doble-click) o un retry ya procesó el pago, devuelve
+ * false y el caller no debe volver a acreditar.
+ */
+export async function reclamarPagoAprobado(
+  id: string,
+  cambios: { paypalCaptureId?: string; metadata?: Record<string, unknown> },
+): Promise<boolean> {
+  const update: Record<string, unknown> = {
+    estado: "aprobado",
+    procesado_en: new Date().toISOString(),
+  };
+  if (cambios.paypalCaptureId) update.paypal_capture_id = cambios.paypalCaptureId;
+  if (cambios.metadata) update.metadata = cambios.metadata;
+  const { error, count } = await db()
+    .from("pagos")
+    .update(update, { count: "exact" })
+    .eq("id", id)
+    .eq("estado", "pendiente");
+  if (error) lanzar(error, "reclamarPagoAprobado");
+  return count === 1;
+}
+
 export async function marcarPagoFallido(id: string, motivo: string): Promise<void> {
   const { error } = await db()
     .from("pagos")

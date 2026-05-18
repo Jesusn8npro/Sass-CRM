@@ -3,9 +3,9 @@ import { parsearJSON, requerirSesion } from "@/lib/auth/sesion";
 import { capturarOrdenPayPal } from "@/lib/paypal/cliente";
 import { agregarCreditos } from "@/lib/db/creditos";
 import {
-  marcarPagoAprobado,
   marcarPagoFallido,
   obtenerPagoPorOrderId,
+  reclamarPagoAprobado,
 } from "@/lib/db/pagos";
 import { enviarRecargaCreditos } from "@/lib/emails/disparadores";
 
@@ -58,16 +58,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "captura_no_completada", status: captura.status }, { status: 409 });
   }
 
-  // Sumar créditos a la cuenta. El DAO ya es atómico vía RPC.
-  if (pago.cuenta_id && pago.creditos_otorgados > 0) {
-    await agregarCreditos(pago.cuenta_id, pago.creditos_otorgados);
-  }
-
+  // Reclamo atómico ANTES de acreditar: la transición pendiente→aprobado
+  // es el candado. Si dos requests entran a la vez (doble-click) o hubo
+  // un retry, solo el que gana acredita; el resto sale ya_procesado.
   const captureId = captura.purchase_units[0]?.payments?.captures?.[0]?.id;
-  await marcarPagoAprobado(pago.id, {
+  const gano = await reclamarPagoAprobado(pago.id, {
     paypalCaptureId: captureId,
     metadata: { ...pago.metadata, status_paypal: captura.status },
   });
+  if (!gano) {
+    return NextResponse.json({ ok: true, ya_procesado: true });
+  }
+
+  // Ganado el reclamo: ahora sí acreditar. Si esto fallara (raro: error
+  // de RPC justo después del UPDATE), el pago queda aprobado sin
+  // créditos — detectable y reconciliable desde el panel admin. Es el
+  // mal menor frente al doble crédito que el orden anterior permitía.
+  if (pago.cuenta_id && pago.creditos_otorgados > 0) {
+    await agregarCreditos(pago.cuenta_id, pago.creditos_otorgados);
+  }
 
   // Email transaccional fire-and-forget — no bloquea la respuesta.
   void enviarRecargaCreditos(auth.id, pago.id);
