@@ -15,7 +15,11 @@ const API_PUBLICA_ALLOWLIST = [
   "/api/apify/webhook",
   "/api/resend/webhook",
   "/api/billing/paypal/webhook",
-  "/api/cron/reportes-semanales",
+  // Crons: TODA ruta /api/cron/* se auto-protege con header x-cron-secret
+  // en su handler. El middleware debe dejarlas pasar porque las dispara
+  // GitHub Actions / EasyPanel sin sesión de usuario. Contrato innegociable:
+  // ningún route bajo /api/cron puede omitir la verificación de CRON_SECRET.
+  "/api/cron",
   // API pública v1 — autenticada vía API key en el handler, no por sesión.
   "/api/v1",
   // Demo público (chat sandbox). Rate-limit por IP en el handler.
