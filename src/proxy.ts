@@ -33,7 +33,7 @@ const API_PUBLICA_ALLOWLIST = [
 const RE_CUENTA_UUID =
   /^\/app\/cuentas\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(\/.*)?$/;
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { supabase, response } = crearClienteMiddleware(request);
 
   const {
