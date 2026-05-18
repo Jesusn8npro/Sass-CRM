@@ -56,12 +56,15 @@ export async function POST(request: NextRequest) {
     let enviados = 0;
     let fallos = 0;
 
-    // Marcar como ejecutando para evitar doble-fire si el cron se solapa
-    await db()
+    // Reclamo atómico: solo el cron que gana la transición
+    // pendiente→completado envía. Si otra ejecución solapada ya lo
+    // tomó, count es 0 y saltamos para no enviar el broadcast dos veces.
+    const { count: reclamadas } = await db()
       .from("broadcast_logs")
-      .update({ estado: "completado" })
+      .update({ estado: "completado" }, { count: "exact" })
       .eq("id", bc.id)
       .eq("estado", "pendiente");
+    if (!reclamadas) continue;
 
     for (const convId of ids) {
       try {
