@@ -49,26 +49,37 @@ export async function generarAudioTTS(
   }
 
   const url = `${ENDPOINT}/${encodeURIComponent(vozId.trim())}?output_format=mp3_44100_128`;
-  const respuesta = await fetch(url, {
-    method: "POST",
-    headers: {
-      "xi-api-key": apiKey,
-      "Content-Type": "application/json",
-      Accept: "audio/mpeg",
-    },
-    body: JSON.stringify({
-      text: texto,
-      model_id: MODELO_TTS,
-      voice_settings: {
-        // similarity_boost alto preserva mejor el acento/timbre de la
-        // voz original (importante para voces clonadas en español).
-        stability: 0.5,
-        similarity_boost: 0.9,
-        style: 0.3,
-        use_speaker_boost: true,
+  // Timeout duro: si ElevenLabs cuelga, abortamos a los 30s en vez de
+  // dejar trabada la respuesta de WhatsApp indefinidamente. 30s es
+  // holgado para el TTS de una respuesta de chat (típico 1-3s).
+  const ctrl = new AbortController();
+  const timeout = setTimeout(() => ctrl.abort(), 30_000);
+  let respuesta: Response;
+  try {
+    respuesta = await fetch(url, {
+      method: "POST",
+      headers: {
+        "xi-api-key": apiKey,
+        "Content-Type": "application/json",
+        Accept: "audio/mpeg",
       },
-    }),
-  });
+      body: JSON.stringify({
+        text: texto,
+        model_id: MODELO_TTS,
+        voice_settings: {
+          // similarity_boost alto preserva mejor el acento/timbre de la
+          // voz original (importante para voces clonadas en español).
+          stability: 0.5,
+          similarity_boost: 0.9,
+          style: 0.3,
+          use_speaker_boost: true,
+        },
+      }),
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!respuesta.ok) {
     const cuerpo = await respuesta.text().catch(() => "");
