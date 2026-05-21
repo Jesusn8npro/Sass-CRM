@@ -92,7 +92,7 @@ export default function PaginaLlamadas() {
     }
   }, [idCuenta, seleccionada]);
 
-  usePollingVisible(cargarTodo, 15000);
+  usePollingVisible(cargarTodo, 30_000);
 
   async function refrescarDetalle(id: string) {
     try {

@@ -175,7 +175,7 @@ export default function PaginaLlamadasProspeccion() {
     }
   }, [idCuenta]);
 
-  usePollingVisible(cargar, 20_000);
+  usePollingVisible(cargar, 40_000);
 
   const completadas = llamadas.filter(l => l.transcripcion || l.resumen || l.datos_capturados).length;
   const sinRespuesta = llamadas.filter(l =>

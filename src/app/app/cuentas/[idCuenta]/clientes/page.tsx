@@ -71,8 +71,8 @@ export default function PaginaClientes() {
     }
   }, [idCuenta]);
 
-  // Auto-refresh cada 20s para ver datos capturados llegando en vivo.
-  usePollingVisible(cargar, 20000);
+  // Auto-refresh cada 45s para ver datos capturados llegando en vivo.
+  usePollingVisible(cargar, 45_000);
 
   const filas: FilaCliente[] = useMemo(() => {
     const mapaEmail = new Map<string, string>();

@@ -145,7 +145,8 @@ export async function listarUsuariosPaginado(
     .order("creado_en", { ascending: false });
 
   if (filtros.busqueda && filtros.busqueda.trim()) {
-    q = q.ilike("email", `%${filtros.busqueda.trim()}%`);
+    const busqueda = filtros.busqueda.trim().replace(/[\\_%]/g, (c) => `\\${c}`);
+    q = q.ilike("email", `%${busqueda}%`);
   }
   if (filtros.plan) q = q.eq("plan", filtros.plan);
   if (filtros.estadoBilling) q = q.eq("estado_billing", filtros.estadoBilling);

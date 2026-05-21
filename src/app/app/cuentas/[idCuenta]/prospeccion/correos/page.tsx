@@ -60,7 +60,7 @@ export default function PaginaCorreosProspeccion() {
     }
   }, [idCuenta]);
 
-  usePollingVisible(cargar, 20_000);
+  usePollingVisible(cargar, 40_000);
 
   // Agrupar por lead
   const porLead = correos.reduce<Record<string, CorreoLog[]>>((acc, c) => {

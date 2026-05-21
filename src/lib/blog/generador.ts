@@ -141,11 +141,16 @@ NO uses "##" o "###" sin espacio después. Sigue el spec markdown.
 NO inventes estadísticas sin citar fuente — si no tienes datos verificables, omítelas.
 SI el tema es técnico, incluye snippets de código bien formateados.
 
-SEO:
-- seo_titulo: <=65 chars, incluye keyword principal cerca del inicio.
-- seo_descripcion: <=160 chars, vende el clic, NO duplicar título.
-- seo_keywords: 3-7, mix de short-tail y long-tail.
-- slug_sugerido: kebab-case ASCII, máximo 80 chars, basado en keywords.
+SEO — REGLAS OBLIGATORIAS:
+- La keyword principal debe aparecer LITERALMENTE en el primer párrafo de la introducción.
+- El primer H2 debe contener la keyword principal o una variación semántica directa.
+- seo_titulo: <=65 chars, keyword principal en las primeras 3 palabras si es posible.
+- seo_descripcion: <=160 chars, vende el clic, NO duplicar título, termina con CTA implícito.
+- seo_keywords: 3-7, mix de short-tail y long-tail (ej: "automatizar WhatsApp" + "cómo automatizar mensajes de WhatsApp para ventas").
+- slug_sugerido: kebab-case ASCII, máximo 60 chars, sólo las palabras clave más importantes.
+- Distribuí las keywords en al menos 3 H2 y H3 — nunca en el mismo.
+- Si el artículo tiene preguntas frecuentes (real o implícitas), agrupá al menos 2 en una sección "## Preguntas frecuentes" al final — esto activa Featured Snippets en Google.
+- Densidad de keyword: mencionar la keyword principal cada ~200 palabras, nunca dos veces seguidas.
 
 IMÁGENES:
 - imagen_prompt_sugerido: prompt EN INGLÉS para la PORTADA CLICKBAIT.

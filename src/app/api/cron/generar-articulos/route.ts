@@ -22,6 +22,7 @@ import { obtenerOCrearTagsPorNombres, asignarTagsAArticulo } from "@/lib/db/blog
 import { categoriaDeHoy, CATEGORIA_IDS, obtenerTemaActual } from "@/lib/blog/temas-perplexity";
 import { obtenerOCrearConversacion } from "@/lib/db/conversaciones";
 import { encolarBandejaSalida } from "@/lib/db/bandejaSalida";
+import { obtenerBlogConfig, debeEjecutarAhora } from "@/lib/db/blogConfig";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -59,11 +60,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
+  // ── 0. Verificar configuración de horario ────────────────────────────────
+  let config;
+  try {
+    config = await obtenerBlogConfig();
+  } catch (err) {
+    log.warn({ err }, "[cron:blog] no se pudo leer blog_config, usando defaults");
+    config = null;
+  }
+
+  if (config && !debeEjecutarAhora(config)) {
+    const horaUTC = new Date().getUTCHours();
+    const diaUTC = new Date().getUTCDay();
+    log.info({ horaUTC, diaUTC, horas: config.horas, dias: config.dias_semana }, "[cron:blog] fuera de horario configurado, saltando");
+    return NextResponse.json({ ok: true, saltado: true, motivo: "fuera_de_horario" });
+  }
+
   const inicio = Date.now();
   const categoria = categoriaDeHoy();
   const categoriaId = CATEGORIA_IDS[categoria];
+  const longitud = (config?.longitud ?? "medio") as "corto" | "medio" | "largo";
+  const tierPortada = (config?.tier_portada ?? "pro") as "pro" | "estandar";
+  const modoImagenes = (config?.modo_imagenes ?? "completo") as "sin-imagenes" | "solo-portada" | "completo";
 
-  log.info({ categoria }, "[cron:blog] iniciando generación diaria");
+  log.info({ categoria, longitud, tierPortada, modoImagenes }, "[cron:blog] iniciando generación");
 
   // ── 1. Obtener tema ───────────────────────────────────────────────────────
   const { tema, contexto_adicional, fuente } = await obtenerTemaActual(categoria);
@@ -80,7 +100,7 @@ export async function POST(request: NextRequest) {
     generado = await generarArticulo({
       tema: temaCompleto,
       categoria,
-      longitud: "medio",
+      longitud,
       audiencia: "dueños de PYMEs y emprendedores en Latinoamérica",
     });
   } catch (err) {
@@ -97,7 +117,7 @@ export async function POST(request: NextRequest) {
   const t0Imagenes = Date.now();
   let imgs;
   try {
-    imgs = await generarImagenesArticulo(generado, slug, "completo", "pro");
+    imgs = await generarImagenesArticulo(generado, slug, modoImagenes, tierPortada);
   } catch (err) {
     log.warn({ err }, "[cron:blog] falló imágenes, continuando sin ellas");
     imgs = {

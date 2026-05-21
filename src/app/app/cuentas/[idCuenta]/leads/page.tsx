@@ -67,7 +67,7 @@ export default function PaginaLeads() {
     }
   }, [idCuenta]);
 
-  usePollingVisible(cargar, 15000);
+  usePollingVisible(cargar, 30_000);
 
   async function lanzar(e: React.FormEvent) {
     e.preventDefault();

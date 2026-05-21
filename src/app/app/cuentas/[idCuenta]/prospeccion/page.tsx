@@ -66,7 +66,7 @@ export default function PaginaProspeccion() {
   usePollingVisible(() => {
     void cargarStats();
     void cargarLeads();
-  }, 15_000);
+  }, 40_000);
 
   async function dispararPrueba() {
     setDisparando(true);

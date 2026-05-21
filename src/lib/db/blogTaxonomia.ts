@@ -159,7 +159,7 @@ export async function asignarTagsAArticulo(
     .from("articulo_tags")
     .delete()
     .eq("articulo_id", articuloId)
-    .not("tag_id", "in", `(${tagsIds.join(",")})`);
+    .not("tag_id", "in", tagsIds);
   // Insertar las nuevas (ON CONFLICT DO NOTHING vía upsert)
   const filas = tagsIds.map((tagId) => ({
     articulo_id: articuloId,

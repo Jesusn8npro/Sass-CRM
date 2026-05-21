@@ -67,6 +67,12 @@ export default async function PaginaAdminBlog({
             >
               ✍ Manual
             </Link>
+            <Link
+              href="/app/admin/blog/configuracion"
+              className="rounded-full border border-zinc-200 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-700 transition-colors hover:border-zinc-400 dark:border-white/15 dark:text-white/70 dark:hover:border-white/30"
+            >
+              ⚙ Automatización
+            </Link>
           </div>
         </div>
       </header>

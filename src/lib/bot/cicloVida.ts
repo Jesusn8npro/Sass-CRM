@@ -320,12 +320,12 @@ export async function arrancarBotEnProceso(): Promise<void> {
       } catch (err) {
         console.error("[bot] error procesando bandejas de salida:", err);
       }
-    }, 2000);
+    }, 8_000); // era 2s → 8s: misma experiencia real, -75% de queries
 
     await emitirHeartbeats();
     estado.intervaloHeartbeat = setInterval(() => {
       void emitirHeartbeats();
-    }, 5000);
+    }, 60_000); // era 5s → 60s: heartbeat cada minuto es suficiente
 
     estado.intervaloSincronizacion = setInterval(async () => {
       try {
@@ -333,7 +333,7 @@ export async function arrancarBotEnProceso(): Promise<void> {
       } catch (err) {
         console.error("[bot] error en sincronización:", err);
       }
-    }, 3000);
+    }, 30_000); // era 3s → 30s: detectar cuentas nuevas cada 30s es más que suficiente
 
     // Seguimientos programados: cada 30s revisa los que ya están due
     estado.intervaloSeguimientos = setInterval(() => {

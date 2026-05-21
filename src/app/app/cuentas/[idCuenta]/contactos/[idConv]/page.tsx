@@ -80,7 +80,7 @@ export default function PaginaCliente360() {
     }
   }, [idCuenta, idConv]);
 
-  usePollingVisible(cargar, 20000);
+  usePollingVisible(cargar, 40_000);
 
   async function llamar() {
     if (!data) return;

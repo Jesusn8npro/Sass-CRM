@@ -24,7 +24,7 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
   const metricas = await unstable_cache(
     () => obtenerMetricas(idCuenta),
     ["metricas", idCuenta],
-    { revalidate: 60, tags: [`metricas:${idCuenta}`] },
+    { revalidate: 300, tags: [`metricas:${idCuenta}`] },
   )();
   return NextResponse.json(metricas);
 }

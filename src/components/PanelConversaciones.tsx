@@ -54,7 +54,7 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
       .catch(() => {});
   }, []);
 
-  // Polling de cuenta (estado de conexión, etc) cada 15s
+  // Polling de cuenta (estado de conexión, etc) cada 45s
   const cargarCuenta = useCallback(async () => {
     try {
       const res = await fetch(`/api/cuentas/${idCuenta}`, {
@@ -67,9 +67,9 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
       /* ignorar */
     }
   }, [idCuenta]);
-  usePollingVisible(cargarCuenta, 15000);
+  usePollingVisible(cargarCuenta, 45_000);
 
-  // Polling de conversaciones cada 12s, solo si la cuenta está conectada
+  // Polling de conversaciones cada 25s, solo si la cuenta está conectada
   const cargarConversaciones = useCallback(async () => {
     try {
       const res = await fetch(
@@ -83,7 +83,7 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
       /* ignorar */
     }
   }, [idCuenta]);
-  usePollingVisible(cargarConversaciones, 12000, cuenta?.estado === "conectado");
+  usePollingVisible(cargarConversaciones, 25_000, cuenta?.estado === "conectado");
 
   // Deep link ?conv=X
   useEffect(() => {

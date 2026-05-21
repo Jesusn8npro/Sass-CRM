@@ -83,8 +83,8 @@ export default function PaginaAdminLogs() {
     void cargar();
   }, [cargar]);
 
-  // Auto-refresh cada 10s, pausado cuando el tab no está visible
-  usePollingVisible(cargar, 10_000, autoRefresh);
+  // Auto-refresh cada 30s, pausado cuando el tab no está visible
+  usePollingVisible(cargar, 30_000, autoRefresh);
 
   const eventosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();

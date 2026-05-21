@@ -78,6 +78,19 @@ export default async function PaginaArticulo({ params }: Props) {
     articleSection: articulo.categoria_nombre ?? undefined,
   };
 
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Inicio", item: urlAbsoluta("/") },
+      { "@type": "ListItem", position: 2, name: "Blog", item: urlAbsoluta("/blog") },
+      ...(articulo.categoria_slug && articulo.categoria_nombre
+        ? [{ "@type": "ListItem", position: 3, name: articulo.categoria_nombre, item: urlAbsoluta(`/blog/categoria/${articulo.categoria_slug}`) },
+           { "@type": "ListItem", position: 4, name: articulo.titulo, item: articuloUrl }]
+        : [{ "@type": "ListItem", position: 3, name: articulo.titulo, item: articuloUrl }]),
+    ],
+  };
+
   const tocItems = extraerTabla(articulo.contenido_md);
   const fechaFormateada = new Date(articulo.publicado_en ?? articulo.creado_en)
     .toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" });
@@ -85,6 +98,7 @@ export default async function PaginaArticulo({ params }: Props) {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
       <BarraProgresoLectura />
 
       {/* Orb ambiental */}

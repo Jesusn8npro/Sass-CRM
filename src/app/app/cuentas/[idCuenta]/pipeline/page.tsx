@@ -99,7 +99,7 @@ export default function PaginaPipeline() {
 
   // Polling suave para que cuando lleguen mensajes nuevos, las tarjetas
   // muevan su preview sin perder el estado del Kanban.
-  usePollingVisible(cargarTodo, 20000);
+  usePollingVisible(cargarTodo, 45_000);
 
   const conversacionesPorEtapa = useMemo(() => {
     const mapa = new Map<string | "sin", ConversacionConPreview[]>();
