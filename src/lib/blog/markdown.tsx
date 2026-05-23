@@ -19,7 +19,6 @@
  * Output: React elements (server-component compatible).
  */
 import { Fragment, type ReactNode } from "react";
-import Image from "next/image";
 import { slugificar } from "./slug";
 
 // ============================================================
