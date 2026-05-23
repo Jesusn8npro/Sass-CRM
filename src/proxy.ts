@@ -24,9 +24,13 @@ const API_PUBLICA_ALLOWLIST = [
   "/api/v1",
   // Demo público (chat sandbox). Rate-limit por IP en el handler.
   "/api/demo/chat",
+  // Callback de auth (intercambio de token_hash para reset de contraseña y magic links).
+  "/api/auth/callback",
   // Newsletter del blog — suscripción y desuscripción sin auth.
   "/api/blog/suscribir",
   "/api/blog/desuscribir",
+  // Demo público voz — registro de llamada desde widget landing (rate-limitado en handler).
+  "/api/landing/llamada",
 ];
 
 // UUID v4 exacto — solo coincide con IDs reales, no con "nueva" ni slugs

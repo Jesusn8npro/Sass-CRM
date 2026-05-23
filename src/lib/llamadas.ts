@@ -22,7 +22,7 @@ import {
   type LlamadaVapi,
   type Mensaje,
 } from "./baseDatos";
-import { iniciarLlamada } from "./vapi";
+import { iniciarLlamada, SCHEMA_DATOS_LLAMADA, PROMPT_DATOS_LLAMADA } from "./vapi";
 import { resolverCredencialesVapi } from "./vapi-credenciales";
 
 const COOLDOWN_MS = 60 * 60 * 1000; // 1 hora
@@ -231,6 +231,14 @@ export async function iniciarLlamadaConContexto(
       contextoAdicional: contexto,
       primerMensajeOverride:
         opciones.primerMensajeOverride?.trim() || primerMensaje,
+      // Garantiza que el assistant extraiga datos estructurados post-llamada
+      // aunque no tenga analysisPlan configurado en el dashboard de Vapi.
+      analysisPlan: {
+        structuredDataSchema: SCHEMA_DATOS_LLAMADA,
+        structuredDataPrompt: PROMPT_DATOS_LLAMADA,
+        summaryPrompt:
+          "Resume la conversación en 2-3 oraciones en español: qué se discutió, si hubo interés, y cuál es el próximo paso acordado.",
+      },
     });
 
     if (!respuesta.id) {

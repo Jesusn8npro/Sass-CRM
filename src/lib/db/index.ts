@@ -53,3 +53,4 @@ export * from "./blog";
 export * from "./blogTaxonomia";
 export * from "./blogConfig";
 export * from "./cuentaMiembros";
+export * from "./llamadasLanding";

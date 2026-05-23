@@ -21,6 +21,10 @@ import {
   obtenerRegistroLlamadaPorVapiId,
 } from "@/lib/db/outreachLogs";
 import {
+  actualizarLlamadaLanding,
+  obtenerLlamadaLandingPorCallId,
+} from "@/lib/db/llamadasLanding";
+import {
   actualizarEstadoProspeccion,
   obtenerLead,
   registrarFalloProspeccion,
@@ -402,15 +406,10 @@ export async function POST(req: NextRequest) {
   // ── Ruta 1: llamada de WhatsApp (llamadas_vapi) ───────────
   const llamada = await obtenerLlamadaPorCallId(callId);
   if (llamada) {
-    // Validar secret contra el de la cuenta dueña
+    // Si la cuenta tiene secret configurado, validarlo. Si no tiene, se deja pasar
+    // (verificarSecretWebhook devuelve true cuando esperado es null/undefined).
     const cuentaDueña = await obtenerCuenta(llamada.cuenta_id);
-    if (!cuentaDueña?.vapi_webhook_secret) {
-      return NextResponse.json(
-        { error: "Webhook no autorizado: configurá vapi_webhook_secret" },
-        { status: 401 },
-      );
-    }
-    if (!verificarSecretWebhook(headerSecret, cuentaDueña.vapi_webhook_secret)) {
+    if (!verificarSecretWebhook(headerSecret, cuentaDueña?.vapi_webhook_secret)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -532,7 +531,29 @@ export async function POST(req: NextRequest) {
     return manejarWebhookOutreach(message, callId, logOutreach);
   }
 
-  // ── Ruta 3: llamada desconocida (test desde dashboard Vapi,
+  // ── Ruta 3: llamada de landing demo (llamadas_landing) ────
+  const llamadaLanding = await obtenerLlamadaLandingPorCallId(callId);
+  if (llamadaLanding) {
+    if (message.type === "end-of-call-report") {
+      const transcript = message.transcript ?? message.artifact?.transcript;
+      const resumen = message.summary ?? message.analysis?.summary;
+      const duracion = calcularDuracion(message);
+      const terminadaEn = message.call?.endedAt ? new Date(message.call.endedAt).toISOString() : new Date().toISOString();
+      const dc = extraerDatosEstructurados(message);
+
+      await actualizarLlamadaLanding(callId, {
+        transcripcion: transcript ?? undefined,
+        resumen: resumen ?? undefined,
+        duracion_seg: duracion ?? undefined,
+        costo_usd: typeof message.call?.cost === "number" ? message.call.cost : undefined,
+        datos_negocio: dc ?? undefined,
+        terminada_en: terminadaEn,
+      });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── Ruta 4: llamada desconocida (test desde dashboard Vapi,
   //    o cualquier call no registrada). Intentamos salvar los datos. ──
   console.log(`[vapi-webhook] Call no encontrada en DB — intentando resolver por assistantId. callId: ${callId}`);
   return manejarCallDesconocida(message, callId);
