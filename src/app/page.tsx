@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
-import { Navegacion, PieDePagina } from "./_componentes-landing/Layout";
+import { Navegacion, PieDePagina, BotoneFlotanteWhatsApp, StickyCTAMovil } from "./_componentes-landing/Layout";
+import { Hero } from "./_componentes-landing/HeroSection";
 import {
   CasosDeUso,
   ComoFunciona,
+  Demo,
   Funciones,
-  Hero,
   Metricas,
+  VideoSection,
+  BlogSection,
 } from "./_componentes-landing/Secciones";
+import { listarArticulosPublicados } from "@/lib/baseDatos";
 import {
   CtaFinal,
   Precios,
@@ -14,29 +18,31 @@ import {
 } from "./_componentes-landing/Comercial";
 import { LogosClientes } from "./_componentes-landing/LogosClientes";
 import { TestimoniosSociales } from "./_componentes-landing/TestimoniosSociales";
-import { CalculadoraROI } from "./_componentes-landing/CalculadoraROI";
+import { BotonLlamadaVapi } from "./_componentes-landing/LlamadaVapi";
 import { urlAbsoluta } from "@/lib/blog/siteUrl";
 
-const TITULO = "Agente de WhatsApp con IA para PYMEs — Sass-CRM";
+const TITULO = "INYECTAIA — Agentes de IA para WhatsApp, Ventas y Automatización";
 const DESCRIPCION =
-  "Automatiza tu WhatsApp Business con IA: responde leads, agenda citas y cierra ventas 24/7 sin programar. Gratis para empezar.";
+  "Inyectamos IA en tu negocio: agentes WhatsApp que venden 24/7, llamadas con voz clonada, prospección automática y pipeline inteligente. Sin código. Resultados desde el día 1.";
 
 export const metadata: Metadata = {
   title: TITULO,
   description: DESCRIPCION,
   keywords: [
-    "agente whatsapp ia",
+    "inyectaia",
+    "agentes ia whatsapp",
     "automatizar whatsapp business",
     "chatbot whatsapp pymes",
-    "crm whatsapp",
-    "ventas whatsapp automatico",
+    "crm ia whatsapp",
+    "ventas automaticas ia",
     "bot whatsapp colombia",
     "bot whatsapp argentina",
     "bot whatsapp mexico",
-    "automatizacion whatsapp latam",
-    "whatsapp business ia pymes",
-    "agendar citas whatsapp ia",
-    "responder whatsapp automatico",
+    "automatizacion ia latam",
+    "llamadas ia voz clonada",
+    "prospeccion automatica ia",
+    "pipeline ventas ia",
+    "inteligencia artificial negocios",
   ],
   alternates: { canonical: urlAbsoluta("/") },
   openGraph: {
@@ -45,7 +51,7 @@ export const metadata: Metadata = {
     url: urlAbsoluta("/"),
     type: "website",
     locale: "es_419",
-    siteName: "Sass-CRM",
+    siteName: "INYECTAIA",
   },
   twitter: {
     card: "summary_large_image",
@@ -60,10 +66,10 @@ const FAQ_SCHEMA = {
   mainEntity: [
     {
       "@type": "Question",
-      name: "¿Esto banea mi WhatsApp?",
+      name: "¿Qué es INYECTAIA?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "No. WhatsApp Web (no API oficial), límites diarios, jitter humano, horarios respetados. Diseñado para no quemar números.",
+        text: "INYECTAIA es una plataforma que inyecta inteligencia artificial en tu negocio: agentes WhatsApp que venden 24/7, llamadas con voz clonada, prospección automática y pipeline de ventas inteligente.",
       },
     },
     {
@@ -76,10 +82,10 @@ const FAQ_SCHEMA = {
     },
     {
       "@type": "Question",
-      name: "¿Mis datos están seguros?",
+      name: "¿Esto banea mi WhatsApp?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Sí. Postgres con Row Level Security y encriptación. Cada usuario ve solo sus cuentas. Las claves de IA son privadas por cuenta.",
+        text: "No. Usamos WhatsApp Web con límites diarios, jitter humano y respeto de horarios. Diseñado para no quemar números.",
       },
     },
     {
@@ -87,15 +93,7 @@ const FAQ_SCHEMA = {
       name: "¿Cuánto tarda el setup?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "2 minutos crear cuenta + escanear QR. 30 minutos configurar catálogo y prompt. Vendiendo el mismo día.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "¿Puedo migrar de n8n / Wati / Botmaker?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Sí. Te ayudamos a importar contactos y conversaciones. Curva de aprendizaje: 1 día comparado con n8n.",
+        text: "2 minutos crear cuenta + escanear QR. 30 minutos configurar el agente IA. Vendiendo el mismo día.",
       },
     },
   ],
@@ -104,17 +102,17 @@ const FAQ_SCHEMA = {
 const ORGANIZATION_SCHEMA = {
   "@context": "https://schema.org",
   "@type": "Organization",
-  name: "Sass-CRM",
+  name: "INYECTAIA",
   url: urlAbsoluta("/"),
   description: DESCRIPCION,
-  foundingLocation: { "@type": "Place", name: "Colombia" },
+  foundingLocation: { "@type": "Place", name: "LATAM" },
   sameAs: [],
 };
 
 const WEBSITE_SCHEMA = {
   "@context": "https://schema.org",
   "@type": "WebSite",
-  name: "Sass-CRM",
+  name: "INYECTAIA",
   url: urlAbsoluta("/"),
   inLanguage: "es",
   potentialAction: {
@@ -127,7 +125,7 @@ const WEBSITE_SCHEMA = {
 const SOFTWARE_SCHEMA = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  name: "Sass-CRM",
+  name: "INYECTAIA",
   url: urlAbsoluta("/"),
   description: DESCRIPCION,
   applicationCategory: "BusinessApplication",
@@ -139,21 +137,23 @@ const SOFTWARE_SCHEMA = {
       name: "Gratis",
       price: "0",
       priceCurrency: "USD",
-      description: "1 cuenta WhatsApp, 100 conversaciones/mes.",
+      description: "1 agente WhatsApp, 100 conversaciones/mes.",
     },
     {
       "@type": "Offer",
       name: "Pro",
       price: "29",
       priceCurrency: "USD",
-      description: "WhatsApp ilimitados, voz clonada, multi-modelo.",
+      description: "Agentes ilimitados, voz clonada, multi-modelo IA.",
     },
   ],
 };
 
-export default function PaginaLanding() {
+export default async function PaginaLanding() {
+  const posts = await listarArticulosPublicados({ limite: 3 }).catch(() => []);
+
   return (
-    <main className="min-h-screen bg-black font-sans text-white antialiased [color-scheme:dark]">
+    <div className="landing-root">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_SCHEMA) }}
@@ -170,19 +170,29 @@ export default function PaginaLanding() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(SOFTWARE_SCHEMA) }}
       />
+      <div className="landing-ambient" aria-hidden="true">
+        <div className="orb a" />
+        <div className="orb b" />
+        <div className="orb c" />
+      </div>
       <Navegacion />
       <Hero />
       <LogosClientes />
       <Metricas />
-      <ComoFunciona />
       <Funciones />
-      <TestimoniosSociales />
-      <CalculadoraROI />
+      <ComoFunciona />
+      <Demo />
       <CasosDeUso />
+      <VideoSection />
       <Precios />
+      <TestimoniosSociales />
+      <BlogSection posts={posts} />
       <PreguntasFrecuentes />
       <CtaFinal />
       <PieDePagina />
-    </main>
+      <BotonLlamadaVapi />
+      <BotoneFlotanteWhatsApp />
+      <StickyCTAMovil />
+    </div>
   );
 }

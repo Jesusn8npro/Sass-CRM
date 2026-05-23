@@ -18,7 +18,7 @@ import {
 } from "./baseDatos";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY?.trim() || null;
-const RESEND_FROM = process.env.RESEND_FROM?.trim() || "Sass-CRM <noreply@sass-crm.dev>";
+const RESEND_FROM = process.env.RESEND_FROM?.trim() || "INYECTAIA <noreply@inyectaia.com>";
 
 /**
  * Notifica al dueño de una cuenta sobre un evento. Idempotente:
@@ -99,7 +99,7 @@ async function mandarEmail(
   </div>
   <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 32px 0;">
   <p style="font-size: 12px; color: #71717a;">
-    Recibís este email porque sos dueño de una cuenta en Sass-CRM.
+    Recibís este email porque sos dueño de una cuenta en INYECTAIA.
     Para dejar de recibir notificaciones, andá a tu panel → Mi Cuenta.
   </p>
 </body></html>

@@ -7,13 +7,8 @@ interface WebhookFila {
   ultimo_resultado: string | null;
   total_disparos: number;
   total_fallos: number;
-}
-
-interface WebhookTop {
   cuenta_id: string;
   url: string;
-  total_fallos: number;
-  ultimo_resultado: string | null;
 }
 
 interface CuentaFila {
@@ -23,20 +18,17 @@ interface CuentaFila {
 export default async function PaginaAdminSalud() {
   const sb = crearClienteAdmin();
 
-  const [{ data: webhooksRaw }, { data: cuentasRaw }, { data: webhooksTop }] = await Promise.all([
-    sb.from("webhooks_salientes").select("esta_activo, ultimo_resultado, total_disparos, total_fallos"),
+  const [{ data: webhooksRaw }, { data: cuentasRaw }] = await Promise.all([
+    sb.from("webhooks_salientes").select("esta_activo, ultimo_resultado, total_disparos, total_fallos, cuenta_id, url"),
     sb.from("cuentas").select("estado"),
-    sb
-      .from("webhooks_salientes")
-      .select("cuenta_id, url, total_fallos, ultimo_resultado")
-      .gt("total_fallos", 0)
-      .order("total_fallos", { ascending: false })
-      .limit(10),
   ]);
 
   const webhooks = (webhooksRaw ?? []) as WebhookFila[];
   const cuentas = (cuentasRaw ?? []) as CuentaFila[];
-  const top10 = (webhooksTop ?? []) as WebhookTop[];
+  const top10 = webhooks
+    .filter((w) => w.total_fallos > 0)
+    .sort((a, b) => b.total_fallos - a.total_fallos)
+    .slice(0, 10);
 
   const totalWebhooks = webhooks.length;
   const webhooksActivos = webhooks.filter((w) => w.esta_activo).length;

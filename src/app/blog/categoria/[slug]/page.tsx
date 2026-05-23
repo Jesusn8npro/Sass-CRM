@@ -32,11 +32,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!cat) return { title: "Categoría no encontrada", robots: { index: false } };
   const url = urlAbsoluta(`/blog/categoria/${cat.slug}`);
   return {
-    title: `${cat.nombre} · Blog Sass-CRM`,
+    title: `${cat.nombre} · Blog INYECTAIA`,
     description: cat.descripcion ?? `Artículos sobre ${cat.nombre.toLowerCase()}.`,
     alternates: { canonical: url },
     openGraph: {
-      title: `${cat.nombre} · Blog Sass-CRM`,
+      title: `${cat.nombre} · Blog INYECTAIA`,
       description: cat.descripcion ?? undefined,
       url,
       type: "website",

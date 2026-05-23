@@ -4,8 +4,8 @@ import { FormularioSignup } from "./formulario";
 
 const METRICAS = [
   { valor: "2 min", label: "Setup inicial" },
-  { valor: "< 4s", label: "Latencia IA" },
-  { valor: "+1.200", label: "Mensajes / día" },
+  { valor: "< 5s", label: "Respuesta IA" },
+  { valor: "3.800+", label: "Negocios activos" },
 ];
 
 export default function PaginaSignup() {
@@ -16,8 +16,8 @@ export default function PaginaSignup() {
         {/* Logo */}
         <Link href="/" className="mb-10 flex items-center gap-2.5">
           <Logo />
-          <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-white/70">
-            sass-crm<span className="text-emerald-400">/</span>v2
+          <span className="font-mono text-[12px] uppercase tracking-[0.15em] text-white">
+            INYECT<span className="text-emerald-400">AI</span>A
           </span>
         </Link>
 
@@ -119,13 +119,13 @@ export default function PaginaSignup() {
         {/* Testimonial */}
         <div className="relative z-10 m-10 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6 backdrop-blur-sm">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-400">
-            Consultora Nexo
+            Joyería Acosta · Buenos Aires
           </p>
           <blockquote className="mt-3 text-sm leading-relaxed text-zinc-300">
-            "En tres días el bot ya estaba atendiendo 300 consultas diarias.
-            Nuestro equipo se enfoca en cerrar, no en responder."
+            "Lo enchufé un viernes, el sábado ya estaba vendiendo. El cliente
+            ni se entera que es una IA — responde con el mismo tono que yo."
           </blockquote>
-          <p className="mt-4 text-xs text-zinc-500">— Martín S., CEO</p>
+          <p className="mt-4 text-xs text-zinc-500">— Martín Acosta, fundador</p>
         </div>
       </aside>
     </main>

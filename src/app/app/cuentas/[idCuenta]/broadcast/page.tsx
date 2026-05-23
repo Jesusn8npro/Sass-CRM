@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useParams } from "next/navigation";
 import type { ConversacionConPreview, EstadoLead } from "@/lib/baseDatos";
+
+const LIMITE_CONTACTOS = 100;
 
 const ESTADOS_LEAD: EstadoLead[] = [
   "nuevo", "contactado", "calificado", "interesado", "negociacion", "cerrado", "perdido",
@@ -65,19 +67,55 @@ export default function PaginaBroadcast() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [offsetContactos, setOffsetContactos] = useState(0);
+  const [hayMasContactos, setHayMasContactos] = useState(false);
+  const [cargandoMas, setCargandoMas] = useState(false);
+
   const [logs, setLogs] = useState<BroadcastLog[]>([]);
   const [cargandoLogs, setCargandoLogs] = useState(false);
 
   useEffect(() => {
     if (!idCuenta) return;
-    fetch(`/api/cuentas/${idCuenta}/conversaciones?limite=500`, { cache: "no-store" })
+    fetch(
+      `/api/cuentas/${idCuenta}/conversaciones?limite=${LIMITE_CONTACTOS}`,
+      { cache: "no-store", signal: AbortSignal.timeout(15_000) },
+    )
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.conversaciones) setConversaciones(d.conversaciones);
+      .then((d: { conversaciones: ConversacionConPreview[] } | null) => {
+        if (d?.conversaciones) {
+          setConversaciones(d.conversaciones);
+          setHayMasContactos(d.conversaciones.length === LIMITE_CONTACTOS);
+          setOffsetContactos(LIMITE_CONTACTOS);
+        }
       })
       .catch(() => {})
       .finally(() => setCargando(false));
   }, [idCuenta]);
+
+  const cargarMasContactos = useCallback(async () => {
+    if (!idCuenta || !hayMasContactos || cargandoMas) return;
+    setCargandoMas(true);
+    try {
+      const r = await fetch(
+        `/api/cuentas/${idCuenta}/conversaciones?limite=${LIMITE_CONTACTOS}&offset=${offsetContactos}`,
+        { cache: "no-store", signal: AbortSignal.timeout(15_000) },
+      );
+      if (r.ok) {
+        const d = (await r.json()) as { conversaciones: ConversacionConPreview[] };
+        if (d.conversaciones.length > 0) {
+          setConversaciones((prev) => [...prev, ...d.conversaciones]);
+          setOffsetContactos((prev) => prev + LIMITE_CONTACTOS);
+          setHayMasContactos(d.conversaciones.length === LIMITE_CONTACTOS);
+        } else {
+          setHayMasContactos(false);
+        }
+      }
+    } catch {
+      // silencioso — el usuario puede volver a intentar
+    } finally {
+      setCargandoMas(false);
+    }
+  }, [idCuenta, hayMasContactos, cargandoMas, offsetContactos]);
 
   useEffect(() => {
     if (tab !== "historial" || !idCuenta) return;
@@ -254,7 +292,10 @@ export default function PaginaBroadcast() {
                   >
                     {todosSeleccionados ? "Deseleccionar todos" : `Seleccionar los ${filtradas.length}`}
                   </button>
-                  <span className="text-xs text-zinc-500">{seleccionados.size} seleccionados</span>
+                  <span className="text-xs text-zinc-500">
+                    {seleccionados.size} sel. · {conversaciones.length} cargados
+                    {hayMasContactos ? " (hay más)" : ""}
+                  </span>
                 </div>
 
                 {cargando ? (
@@ -301,6 +342,18 @@ export default function PaginaBroadcast() {
                       </li>
                     ))}
                   </ul>
+                )}
+                {hayMasContactos && !cargando && (
+                  <div className="border-t border-zinc-100 px-3 py-2.5 dark:border-zinc-800">
+                    <button
+                      type="button"
+                      onClick={cargarMasContactos}
+                      disabled={cargandoMas}
+                      className="text-xs font-medium text-emerald-700 hover:underline disabled:opacity-50 dark:text-emerald-400"
+                    >
+                      {cargandoMas ? "Cargando…" : "Cargar más contactos →"}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

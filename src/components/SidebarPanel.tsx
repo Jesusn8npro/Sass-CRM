@@ -90,11 +90,11 @@ export function SidebarPanel({
       {/* Header: logo + selector cuenta */}
       <div className="border-b border-borde px-4 py-4">
         <Link href="/app" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-marca-500 to-marca-600 text-sm font-bold text-white shadow-[var(--shadow-glow-marca-sm)]">
-            S
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-marca-500 to-marca-600 text-[10px] font-black text-white shadow-[var(--shadow-glow-marca-sm)]">
+            IA
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold tracking-tight text-texto">Sass-CRM</p>
+            <p className="truncate text-sm font-semibold tracking-tight text-texto">INYECTAIA</p>
             <p className="text-[10px] uppercase tracking-wider text-texto-tenue">Panel</p>
           </div>
         </Link>

@@ -26,7 +26,11 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
 
-  const usuario = await obtenerUsuarioApp(id);
+  const [usuario, cuentas, pagos] = await Promise.all([
+    obtenerUsuarioApp(id),
+    listarCuentasDeUsuarioAdmin(id),
+    listarPagosUsuario(id, 50),
+  ]);
   if (!usuario) {
     return NextResponse.json(
       { error: "Usuario no encontrado" },
@@ -34,14 +38,12 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
     );
   }
 
-  const cuentas = await listarCuentasDeUsuarioAdmin(id);
   const saldos = await Promise.all(
     cuentas.map(async (c) => ({
       cuenta_id: c.id,
       saldo: await obtenerSaldo(c.id),
     })),
   );
-  const pagos = await listarPagosUsuario(id, 50);
 
   return NextResponse.json({ usuario, cuentas, saldos, pagos });
 }
@@ -77,8 +79,10 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
   }
 
   if (cuerpo.accion === "suspender") {
-    await marcarBillingUsuario(id, "suspendido");
-    const sa = await obtenerSuperAdminPorEmail(auth.email);
+    const [, sa] = await Promise.all([
+      marcarBillingUsuario(id, "suspendido"),
+      obtenerSuperAdminPorEmail(auth.email),
+    ]);
     if (sa) {
       void registrarAccionAdmin({
         superAdminId: sa.id,
@@ -90,8 +94,10 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     return NextResponse.json({ ok: true });
   }
   if (cuerpo.accion === "reactivar") {
-    await marcarBillingUsuario(id, "activo");
-    const sa = await obtenerSuperAdminPorEmail(auth.email);
+    const [, sa] = await Promise.all([
+      marcarBillingUsuario(id, "activo"),
+      obtenerSuperAdminPorEmail(auth.email),
+    ]);
     if (sa) {
       void registrarAccionAdmin({
         superAdminId: sa.id,

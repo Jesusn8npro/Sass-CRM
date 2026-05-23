@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   const producto = await paypalFetch<{ id: string }>("/v1/catalogs/products", {
     method: "POST",
     body: {
-      name: `Sass-CRM ${def.nombre}`,
+      name: `INYECTAIA ${def.nombre}`,
       description: `Suscripción mensual al plan ${def.nombre}`,
       type: "SERVICE",
       category: "SOFTWARE",
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     method: "POST",
     body: {
       product_id: producto.id,
-      name: `Sass-CRM ${def.nombre} Mensual`,
+      name: `INYECTAIA ${def.nombre} Mensual`,
       description: `Plan ${def.nombre} — facturación mensual`,
       status: "ACTIVE",
       billing_cycles: [

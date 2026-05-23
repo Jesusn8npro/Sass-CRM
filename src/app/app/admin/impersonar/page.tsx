@@ -1,26 +1,10 @@
 import Link from "next/link";
-import { crearClienteAdmin } from "@/lib/supabase/cliente-servidor";
+import { listarTodasLasCuentasAdmin } from "@/lib/db/cuentas";
 
 export const dynamic = "force-dynamic";
 
-interface CuentaConUsuario {
-  id: string;
-  etiqueta: string;
-  estado: string;
-  telefono: string | null;
-  creado_en: string;
-  usuario_id: string;
-  usuarios: { email: string } | null;
-}
-
 export default async function PaginaAdminImpersonar() {
-  const sb = crearClienteAdmin();
-  const { data } = await sb
-    .from("cuentas")
-    .select("id, etiqueta, estado, telefono, creado_en, usuario_id, usuarios(email)")
-    .order("creado_en", { ascending: false });
-
-  const cuentas = (data ?? []) as unknown as CuentaConUsuario[];
+  const cuentas = await listarTodasLasCuentasAdmin();
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -71,7 +55,7 @@ export default async function PaginaAdminImpersonar() {
                   {c.telefono ? `+${c.telefono}` : "—"}
                 </td>
                 <td className="px-4 py-3 font-mono text-[11px] text-zinc-600 dark:text-white/60">
-                  {c.usuarios?.email ?? c.usuario_id.slice(0, 8) + "…"}
+                  {c.owner_email ?? c.usuario_id.slice(0, 8) + "…"}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <Link

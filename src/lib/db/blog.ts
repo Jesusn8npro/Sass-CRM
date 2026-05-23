@@ -260,6 +260,23 @@ export async function obtenerArticuloPorId(
   return (data as ArticuloBlog) ?? null;
 }
 
+export interface SuscriptorBlog {
+  id: string;
+  email: string;
+  confirmado: boolean;
+  creado_en: string;
+  desuscrito_en: string | null;
+}
+
+export async function listarSuscriptoresBlog(): Promise<SuscriptorBlog[]> {
+  const { data, error } = await db()
+    .from("suscriptores_blog")
+    .select("id, email, confirmado, creado_en, desuscrito_en")
+    .order("creado_en", { ascending: false });
+  if (error) lanzar(error, "listarSuscriptoresBlog");
+  return (data ?? []) as SuscriptorBlog[];
+}
+
 export async function listarTodosLosArticulos(opciones?: {
   estado?: EstadoArticulo;
   generado_por?: "ia" | "humano" | "mixto";

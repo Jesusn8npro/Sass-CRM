@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { usePollingVisible } from "@/components/usePollingVisible";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import type {
@@ -45,24 +46,32 @@ export default function PaginaInversiones() {
 
   const cargar = useCallback(async () => {
     if (!idCuenta) return;
-    const [resCuenta, resInv] = await Promise.all([
-      fetch(`/api/cuentas/${idCuenta}`, { cache: "no-store" }),
-      fetch(`/api/cuentas/${idCuenta}/inversiones`, { cache: "no-store" }),
-    ]);
-    if (resCuenta.ok) {
-      const d = (await resCuenta.json()) as RespuestaCuenta;
-      setCuenta(d.cuenta);
-    }
-    if (resInv.ok) {
-      const d = (await resInv.json()) as RespuestaInversiones;
-      setInversiones(d.inversiones);
-      setResumen(d.resumen);
+    try {
+      const [resCuenta, resInv] = await Promise.all([
+        fetch(`/api/cuentas/${idCuenta}`, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(10_000),
+        }),
+        fetch(`/api/cuentas/${idCuenta}/inversiones`, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(15_000),
+        }),
+      ]);
+      if (resCuenta.ok) {
+        const d = (await resCuenta.json()) as RespuestaCuenta;
+        setCuenta(d.cuenta);
+      }
+      if (resInv.ok) {
+        const d = (await resInv.json()) as RespuestaInversiones;
+        setInversiones(d.inversiones);
+        setResumen(d.resumen);
+      }
+    } catch (err) {
+      console.error("[inversiones] error cargando:", err);
     }
   }, [idCuenta]);
 
-  useEffect(() => {
-    cargar();
-  }, [cargar]);
+  usePollingVisible(cargar, 60_000);
 
   async function borrar(id: string) {
     const ok = await confirmar({

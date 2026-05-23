@@ -92,10 +92,10 @@ export function LayoutShellMovil({
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-xs font-bold text-white shadow-sm">
-            S
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-[9px] font-black text-white shadow-sm">
+            IA
           </div>
-          <span className="text-sm font-bold tracking-tight">Sass-CRM</span>
+          <span className="text-sm font-bold tracking-tight">INYECTAIA</span>
           <div className="ml-auto">
             <PillCreditos idCuenta={idCuenta} />
           </div>

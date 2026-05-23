@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { iniciarSesion } from "./acciones";
 
 export function FormularioLogin() {
@@ -73,6 +74,15 @@ export function FormularioLogin() {
       >
         {enviando ? "Entrando..." : "Entrar"}
       </button>
+
+      <p className="text-center text-xs text-zinc-600">
+        <Link
+          href="/forgot-password"
+          className="transition-colors hover:text-zinc-400"
+        >
+          ¿Olvidaste tu contraseña?
+        </Link>
+      </p>
     </form>
   );
 }

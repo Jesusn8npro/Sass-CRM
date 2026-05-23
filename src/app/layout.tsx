@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import { Inter, Instrument_Serif, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { ProveedoresUI } from "@/components/ProveedoresUI";
 import "./globals.css";
 
@@ -23,13 +23,19 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--fuente-grotesk",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: {
-    default: "Sass-CRM — Agente WhatsApp con IA",
-    template: "%s · Sass-CRM",
+    default: "INYECTAIA — Agentes de IA para WhatsApp y Ventas",
+    template: "%s · INYECTAIA",
   },
   description:
-    "Automatiza tu WhatsApp Business con IA: responde leads, agenda citas y cierra ventas 24/7 sin programar.",
+    "Inyectamos IA en tu negocio: agentes WhatsApp que venden 24/7, llamadas con voz clonada, prospección automática y pipeline inteligente. Sin código.",
   metadataBase: new URL(
     process.env.APP_URL ?? process.env.PUBLIC_URL ?? "http://localhost:3000",
   ),
@@ -51,7 +57,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="es" className={`${inter.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html lang="es" className={`${inter.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: scriptInicializaTema }} />
         {/* Preconnect a Supabase Storage — las imágenes del blog vienen de ahí */}

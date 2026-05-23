@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
         custom_id: auth.id,
         subscriber: { email_address: auth.email },
         application_context: {
-          brand_name: "Sass-CRM",
+          brand_name: "INYECTAIA",
           user_action: "SUBSCRIBE_NOW",
           shipping_preference: "NO_SHIPPING",
           payment_method: {

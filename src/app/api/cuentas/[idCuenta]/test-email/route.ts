@@ -39,7 +39,7 @@ export async function POST(_req: NextRequest, { params }: Contexto) {
     );
   }
 
-  const subject = `Sass-CRM · Prueba de email (${cuenta.etiqueta})`;
+  const subject = `INYECTAIA · Prueba de email (${cuenta.etiqueta})`;
   const html = `
 <!DOCTYPE html>
 <html><body style="font-family: -apple-system, system-ui, sans-serif; max-width: 580px; margin: 0 auto; padding: 32px; color: #18181b;">

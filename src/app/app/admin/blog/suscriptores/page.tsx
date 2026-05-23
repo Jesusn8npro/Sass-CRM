@@ -1,23 +1,9 @@
-import { crearClienteAdmin } from "@/lib/supabase/cliente-servidor";
+import { listarSuscriptoresBlog, type SuscriptorBlog } from "@/lib/db/blog";
 
 export const dynamic = "force-dynamic";
 
-interface Suscriptor {
-  id: string;
-  email: string;
-  confirmado: boolean;
-  creado_en: string;
-  desuscrito_en: string | null;
-}
-
 export default async function PaginaAdminSuscriptores() {
-  const sb = crearClienteAdmin();
-  const { data } = await sb
-    .from("suscriptores_blog")
-    .select("*")
-    .order("creado_en", { ascending: false });
-
-  const suscriptores = (data ?? []) as Suscriptor[];
+  const suscriptores = await listarSuscriptoresBlog();
 
   const total = suscriptores.length;
   const confirmados = suscriptores.filter((s) => s.confirmado).length;
@@ -107,7 +93,7 @@ function Tarjeta({
   );
 }
 
-function pillEstado(s: Suscriptor): string {
+function pillEstado(s: SuscriptorBlog): string {
   const base = "inline-flex rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wider";
   if (s.desuscrito_en)
     return `${base} border-red-500/40 bg-red-50 text-red-700 dark:border-red-400/30 dark:bg-red-400/[0.08] dark:text-red-200`;

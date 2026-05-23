@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { Navegacion, PieDePagina } from "@/app/_componentes-landing/Layout";
 
 export const metadata: Metadata = {
-  title: "Términos de Servicio — Sass-CRM",
+  title: "Términos de Servicio — INYECTAIA",
   description:
-    "Términos y condiciones que rigen el uso de Sass-CRM, plataforma de automatización de WhatsApp con IA.",
+    "Términos y condiciones que rigen el uso de INYECTAIA, plataforma de automatización de WhatsApp con IA.",
 };
 
 const SECCIONES = [
@@ -15,13 +15,13 @@ const SECCIONES = [
     body: (
       <>
         <p>
-          Al crear una cuenta o usar Sass-CRM (en adelante, <em>el servicio</em> o
+          Al crear una cuenta o usar INYECTAIA (en adelante, <em>el servicio</em> o
           <em> la plataforma</em>) aceptás estos Términos de Servicio en su totalidad.
           Si no estás de acuerdo con alguno de los puntos, no uses el servicio.
         </p>
         <p>
           Estos términos forman un contrato legal entre vos (el <em>usuario</em> o
-          <em> titular de la cuenta</em>) y el operador de Sass-CRM. Leélos con calma.
+          <em> titular de la cuenta</em>) y el operador de INYECTAIA. Leélos con calma.
         </p>
       </>
     ),
@@ -33,7 +33,7 @@ const SECCIONES = [
     body: (
       <>
         <p>
-          Sass-CRM es una plataforma multi-tenant que conecta números de WhatsApp
+          INYECTAIA es una plataforma multi-tenant que conecta números de WhatsApp
           de negocios y opera sobre ellos un agente de inteligencia artificial.
           El agente puede responder mensajes, agendar citas, capturar datos del
           contacto, derivar a un humano y ejecutar tareas relacionadas con la
@@ -82,7 +82,7 @@ const SECCIONES = [
     clave: "uso-aceptable",
     body: (
       <>
-        <p>No podés usar Sass-CRM para:</p>
+        <p>No podés usar INYECTAIA para:</p>
         <ul>
           <li>
             Enviar spam masivo, mensajes no solicitados a contactos que no
@@ -225,7 +225,7 @@ const SECCIONES = [
         <ul>
           <li>
             Los créditos son <strong>crédito de servicio</strong>: solo sirven
-            para usar dentro de Sass-CRM.
+            para usar dentro de INYECTAIA.
           </li>
           <li>
             No son convertibles a dinero ni reembolsables una vez acreditados.
@@ -254,7 +254,7 @@ const SECCIONES = [
           para prestarte el servicio.
         </p>
         <p>
-          El software, el diseño, la marca Sass-CRM, los textos del producto y
+          El software, el diseño, la marca INYECTAIA, los textos del producto y
           el código fuente son propiedad nuestra y están protegidos por la
           legislación de propiedad intelectual aplicable.
         </p>
@@ -349,7 +349,7 @@ const SECCIONES = [
       <>
         <p>
           Estos términos se rigen por la legislación del país de operación de
-          Sass-CRM. Cualquier controversia se someterá a los tribunales
+          INYECTAIA. Cualquier controversia se someterá a los tribunales
           competentes de esa jurisdicción.
         </p>
         <p className="font-mono text-[12px] text-white/50">
@@ -367,10 +367,10 @@ const SECCIONES = [
         <p>
           Para consultas sobre estos términos, escribinos a{" "}
           <a
-            href="mailto:legal@sass-crm.com"
+            href="mailto:legal@inyectaia.com"
             className="font-mono text-emerald-300 underline-offset-4 hover:underline"
           >
-            legal@sass-crm.com
+            legal@inyectaia.com
           </a>
           .
         </p>
@@ -393,7 +393,7 @@ export default function PaginaTerminos() {
           Términos de Servicio
         </h1>
         <p className="mt-4 max-w-xl text-sm leading-relaxed text-zinc-400">
-          Las reglas que rigen el uso de Sass-CRM. Las escribimos en español
+          Las reglas que rigen el uso de INYECTAIA. Las escribimos en español
           claro porque queremos que las leas, no que las saltes.
         </p>
       </div>

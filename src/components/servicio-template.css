@@ -1,0 +1,76 @@
+/* ServicioTemplate — acento dinámico via CSS custom properties */
+/* Uso: set --accent: #hex  y  --accent-rgb: r,g,b  en el elemento raíz */
+
+.sp-hero-glow {
+  background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(var(--accent-rgb),0.18), transparent 60%);
+}
+.sp-crumb { color: var(--accent); }
+
+.sp-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  border-radius: 9999px; padding: 4px 12px;
+  border: 1px solid rgba(var(--accent-rgb),0.3);
+  background: rgba(var(--accent-rgb),0.05);
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.22em;
+}
+.sp-badge-dot {
+  position: relative; display: flex; width: 6px; height: 6px; flex-shrink: 0;
+}
+.sp-badge-dot::before {
+  content: ''; position: absolute; inset: 0; border-radius: 9999px;
+  background: var(--accent); opacity: 0.75;
+  animation: sp-ping 1s cubic-bezier(0,0,0.2,1) infinite;
+}
+.sp-badge-dot::after {
+  content: ''; position: absolute; inset: 0; border-radius: 9999px;
+  background: var(--accent);
+}
+@keyframes sp-ping { 75%,100% { transform: scale(2); opacity: 0; } }
+
+.sp-italic { color: var(--accent); }
+
+.sp-btn-primary { transition: background 0.2s; }
+.sp-btn-primary:hover { background: var(--accent) !important; }
+
+.sp-btn-secondary {
+  border: 1px solid rgba(var(--accent-rgb),0.3) !important;
+  background: rgba(var(--accent-rgb),0.04) !important;
+  color: rgba(var(--accent-rgb),0.85) !important;
+}
+.sp-btn-secondary:hover {
+  border-color: rgba(var(--accent-rgb),0.6) !important;
+  color: #fff !important;
+}
+
+/* Metric hover line */
+.sp-metric-line {
+  position: absolute; bottom: 0; left: 0;
+  height: 1px; width: 0; background: var(--accent);
+  transition: width 0.5s;
+}
+.group:hover .sp-metric-line { width: 100%; }
+
+/* Features section */
+.sp-label { color: var(--accent); }
+.sp-feat-glow {
+  background: radial-gradient(ellipse at top left, rgba(var(--accent-rgb),0.06), transparent 60%);
+}
+.sp-feat-num { color: rgba(255,255,255,0.35); transition: color 0.2s; }
+.group:hover .sp-feat-num { color: var(--accent); }
+.sp-feat-line {
+  position: absolute; bottom: 0; left: 0;
+  height: 1px; width: 0;
+  background: linear-gradient(to right, rgba(var(--accent-rgb),0.8), transparent);
+  transition: width 0.5s;
+}
+.group:hover .sp-feat-line { width: 66.666%; }
+
+/* Final CTA */
+.sp-cta-box {
+  background: linear-gradient(to bottom right, rgba(var(--accent-rgb),0.07), black, black);
+}
+.sp-cta-glow {
+  background-image: radial-gradient(circle at 15% 20%, rgba(var(--accent-rgb),0.18) 0, transparent 40%);
+}

@@ -64,7 +64,7 @@ function footerComun(): string {
   return `
     <hr style="border: none; border-top: 1px solid ${COLOR_BORDE}; margin: 40px 0 24px;">
     <p style="font-family: ${FONT_SANS}; font-size: 12px; color: ${COLOR_TEXTO_TENUE}; line-height: 1.6; margin: 0 0 8px;">
-      <strong style="color: ${COLOR_TEXTO};">Sass-CRM</strong> · CRM con IA para WhatsApp
+      <strong style="color: ${COLOR_TEXTO};">INYECTAIA</strong> · Agentes de IA para WhatsApp
     </p>
     <p style="font-family: ${FONT_SANS}; font-size: 11px; color: ${COLOR_TEXTO_TENUE}; line-height: 1.6; margin: 0;">
       Si no querés recibir más emails como este, ajustá tus preferencias <a href="#" style="color: ${COLOR_ACENTO}; text-decoration: underline;">acá</a>.
@@ -89,7 +89,7 @@ function layout(args: { titulo: string; cuerpo: string }): string {
           <tr>
             <td style="padding: 40px 36px;">
               <p style="font-family: ${FONT_MONO}; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: ${COLOR_ACENTO}; margin: 0 0 18px;">
-                Sass-CRM
+                INYECTAIA
               </p>
               ${args.cuerpo}
               ${footerComun()}
@@ -113,7 +113,7 @@ export function emailBienvenida(
 ): { subject: string; html: string } {
   const cuerpo = `
     <h1 style="font-family: ${FONT_SERIF}; font-style: italic; font-weight: 400; font-size: 32px; line-height: 1.2; color: ${COLOR_TEXTO}; margin: 0 0 16px;">
-      Bienvenido a Sass-CRM.
+      Bienvenido a INYECTAIA.
     </h1>
     <p style="font-family: ${FONT_SANS}; font-size: 15px; line-height: 1.7; color: ${COLOR_TEXTO}; margin: 0 0 12px;">
       ${saludo(nombre)}
@@ -128,7 +128,7 @@ export function emailBienvenida(
     </p>
   `;
   return {
-    subject: "Bienvenido a Sass-CRM",
+    subject: "Bienvenido a INYECTAIA",
     html: layout({ titulo: "Bienvenido", cuerpo }),
   };
 }
@@ -365,7 +365,7 @@ export function emailReporteSemanal(args: {
 
   const cuerpo = `
     <h1 style="font-family: ${FONT_SERIF}; font-style: italic; font-weight: 400; font-size: 30px; line-height: 1.2; color: ${COLOR_TEXTO}; margin: 0 0 8px;">
-      Tu semana en Sass-CRM.
+      Tu semana en INYECTAIA.
     </h1>
     <p style="font-family: ${FONT_MONO}; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: ${COLOR_TEXTO_TENUE}; margin: 0 0 20px;">
       ${esc(etiquetaCuenta)} · ${esc(periodo)}
@@ -393,7 +393,7 @@ export function emailReporteSemanal(args: {
     </p>
   `;
 
-  const subject = `📊 Tu semana en Sass-CRM — ${fmtNum(kpis.leadsNuevos)} leads · ${fmtNum(kpis.citasAgendadas)} citas`;
+  const subject = `📊 Tu semana en INYECTAIA — ${fmtNum(kpis.leadsNuevos)} leads · ${fmtNum(kpis.citasAgendadas)} citas`;
   return {
     subject,
     html: layout({ titulo: "Reporte semanal", cuerpo }),
@@ -445,7 +445,7 @@ export function emailConfirmacionSuscripcion(
       Confirmá tu suscripción.
     </h1>
     <p style="font-family: ${FONT_SANS}; font-size: 15px; line-height: 1.7; color: ${COLOR_TEXTO}; margin: 0 0 16px;">
-      ${saludo(nombre)} Hacé clic para confirmar que querés recibir nuevos artículos del blog de Sass-CRM.
+      ${saludo(nombre)} Hacé clic para confirmar que querés recibir nuevos artículos del blog de INYECTAIA.
     </p>
     <p style="font-family: ${FONT_SANS}; font-size: 14px; line-height: 1.7; color: ${COLOR_TEXTO_TENUE}; margin: 0 0 8px;">
       Si no lo pediste vos, ignorá este email — no se tomará ninguna acción.
@@ -484,7 +484,7 @@ export function emailNuevoArticulo(
     </p>
     ${botonCTA(urlArticulo, "Leer artículo")}
     <p style="font-family: ${FONT_SANS}; font-size: 11px; color: ${COLOR_TEXTO_TENUE}; margin: 24px 0 0;">
-      Recibís este email porque te suscribiste al blog de Sass-CRM.
+      Recibís este email porque te suscribiste al blog de INYECTAIA.
       <a href="${esc(urlDesuscribir)}" style="color: ${COLOR_ACENTO}; text-decoration: underline;">Cancelar suscripción</a>.
     </p>
   `;

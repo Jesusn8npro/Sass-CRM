@@ -51,7 +51,7 @@ export default async function PaginaPanel() {
         <header className="mb-8 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-              Sass-CRM {esAdmin && <span className="ml-1 rounded bg-emerald-500/10 px-1.5 py-px text-emerald-700 dark:text-emerald-300">ADMIN</span>}
+              INYECTAIA {esAdmin && <span className="ml-1 rounded bg-emerald-500/10 px-1.5 py-px text-emerald-700 dark:text-emerald-300">ADMIN</span>}
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight">
               {cuentas.length === 0

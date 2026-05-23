@@ -284,3 +284,34 @@ export async function desmarcarCuentaComoPanelAdmin(
     .eq("id", cuentaId);
   if (error) lanzar(error, "desmarcarCuentaComoPanelAdmin");
 }
+
+export interface CuentaConOwnerEmail {
+  id: string;
+  etiqueta: string;
+  estado: string;
+  telefono: string | null;
+  creado_en: string;
+  usuario_id: string;
+  owner_email: string | null;
+}
+
+export async function listarTodasLasCuentasAdmin(): Promise<CuentaConOwnerEmail[]> {
+  const { data, error } = await db()
+    .from("cuentas")
+    .select("id, etiqueta, estado, telefono, creado_en, usuario_id, usuarios(email)")
+    .order("creado_en", { ascending: false });
+  if (error) lanzar(error, "listarTodasLasCuentasAdmin");
+  return ((data ?? []) as unknown as Array<{
+    id: string; etiqueta: string; estado: string; telefono: string | null;
+    creado_en: string; usuario_id: string;
+    usuarios: { email: string } | null;
+  }>).map((c) => ({
+    id: c.id,
+    etiqueta: c.etiqueta,
+    estado: c.estado,
+    telefono: c.telefono,
+    creado_en: c.creado_en,
+    usuario_id: c.usuario_id,
+    owner_email: c.usuarios?.email ?? null,
+  }));
+}

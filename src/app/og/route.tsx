@@ -5,9 +5,9 @@ export const runtime = "edge";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const titulo = searchParams.get("titulo") ?? "Blog · Sass-CRM";
+  const titulo = searchParams.get("titulo") ?? "Blog · INYECTAIA";
   const categoria = searchParams.get("categoria") ?? "";
-  const autor = searchParams.get("autor") ?? "Equipo Sass-CRM";
+  const autor = searchParams.get("autor") ?? "Equipo INYECTAIA";
   const tiempo = searchParams.get("tiempo") ?? "5";
 
   return new ImageResponse(
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
                 textTransform: "uppercase",
               }}
             >
-              Sass-CRM Blog
+              INYECTAIA Blog
             </span>
           </div>
           {categoria && (
@@ -159,7 +159,7 @@ export async function GET(request: NextRequest) {
             </div>
           </div>
           <div style={{ fontSize: "13px", color: "#52525b", fontFamily: "monospace" }}>
-            sass-crm.app
+            inyectaia.com
           </div>
         </div>
       </div>

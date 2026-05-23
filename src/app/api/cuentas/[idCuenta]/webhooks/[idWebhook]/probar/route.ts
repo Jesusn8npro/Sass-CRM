@@ -53,7 +53,7 @@ export async function POST(_req: NextRequest, { params }: Contexto) {
   try {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "User-Agent": "Sass-CRM-Webhook/1.0",
+      "User-Agent": "INYECTAIA-Webhook/1.0",
     };
     if (w.secret) headers["x-webhook-secret"] = w.secret;
     const res = await fetch(w.url, {

@@ -1,561 +1,183 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import "./landing.css";
 
-// ============================================================
-// HERO — editorial premium con KPIs flotantes y señal en vivo
-// ============================================================
-export function Hero() {
-  return (
-    <section className="relative overflow-hidden border-b border-white/[0.06]">
-      {/* Atmósfera: glow esmeralda + grid + viñeta */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(16,185,129,0.22),transparent_60%)]"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.07]"
-        style={{
-          backgroundImage:
-            "linear-gradient(to right, rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.6) 1px, transparent 1px)",
-          backgroundSize: "56px 56px",
-          maskImage:
-            "radial-gradient(ellipse 90% 70% at 50% 30%, black 30%, transparent 75%)",
-        }}
-      />
-      {/* Orb de gradiente animado — izquierda */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -left-40 top-8 h-[520px] w-[520px] rounded-full"
-        style={{
-          background: "radial-gradient(circle, rgba(16,185,129,0.20) 0%, transparent 68%)",
-          animation: "mesh-drift-1 18s ease-in-out infinite",
-          filter: "blur(48px)",
-        }}
-      />
-      {/* Orb de gradiente animado — derecha */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -right-32 bottom-8 h-[420px] w-[420px] rounded-full"
-        style={{
-          background: "radial-gradient(circle, rgba(52,211,153,0.14) 0%, transparent 70%)",
-          animation: "mesh-drift-2 24s ease-in-out infinite",
-          filter: "blur(56px)",
-        }}
-      />
-      {/* Línea horizontal de escaneo sutil */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-[58%] h-px bg-gradient-to-r from-transparent via-emerald-400/30 to-transparent"
-      />
+// ── Counter hook (used by StatNum) ─────────────────────────────────────────
+function useCounter(target: number, duration = 1800): [number, React.RefObject<HTMLSpanElement>] {
+  const [val, setVal] = useState(0);
+  const ref = useRef<HTMLSpanElement>(null!);
+  const started = useRef(false);
 
-      <div className="relative mx-auto max-w-6xl px-6 pt-20 pb-24 md:pt-28">
-        {/* Píldora EN VIVO */}
-        <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/[0.05] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-300 backdrop-blur-sm">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-          </span>
-          <span>En vivo</span>
-          <span className="text-emerald-400/40">·</span>
-          <span>1.247 mensajes respondidos hoy</span>
-        </div>
+  useEffect(() => {
+    if (!ref.current) return;
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting && !started.current) {
+          started.current = true;
+          const start = performance.now();
+          const tick = (t: number) => {
+            const p = Math.min((t - start) / duration, 1);
+            const eased = 1 - Math.pow(1 - p, 3);
+            setVal(target * eased);
+            if (p < 1) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        }
+      });
+    }, { threshold: 0.4 });
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, [target, duration]);
 
-        <h1 className="max-w-[18ch] text-[44px] leading-[1.02] tracking-[-0.03em] text-white md:text-[88px] md:leading-[0.94]">
-          Tu vendedor de WhatsApp{" "}
-          <span className="font-display italic text-emerald-300">nunca</span>{" "}
-          duerme.
-        </h1>
-
-        <p className="mt-7 max-w-xl text-[15px] leading-relaxed text-white/60 md:text-base">
-          Una IA que responde en{" "}
-          <span className="text-white">menos de 5 segundos</span>, agenda
-          turnos, llama leads con tu voz clonada y cierra ventas a las 3 AM.
-          Setup en{" "}
-          <span className="font-mono text-emerald-300">30 minutos</span>, cero
-          código.
-        </p>
-
-        <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <Link
-            href="/signup"
-            className="group relative inline-flex items-center gap-3 overflow-hidden rounded-full bg-white px-5 py-3 text-sm font-semibold text-black shadow-[0_0_44px_-8px_rgba(255,255,255,0.4)] transition-all hover:bg-emerald-300 hover:shadow-[0_0_60px_-8px_rgba(52,211,153,0.7)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-          >
-            <span>Crear cuenta gratis</span>
-            <span
-              aria-hidden
-              className="font-mono text-xs opacity-60 transition-transform group-hover:translate-x-0.5"
-            >
-              →
-            </span>
-          </Link>
-          <Link
-            href="/demo"
-            className="group inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/[0.04] px-5 py-3 text-sm font-medium text-emerald-200 transition-all hover:border-emerald-400/60 hover:bg-emerald-400/[0.10] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-          >
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            </span>
-            Probar demo en vivo
-            <span aria-hidden className="font-mono text-xs opacity-70 transition-transform group-hover:translate-x-0.5">→</span>
-          </Link>
-          <Link
-            href="#como-funciona"
-            className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-3 text-sm font-medium text-white/80 transition-all hover:border-white/40 hover:bg-white/[0.03] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-          >
-            Ver cómo opera
-          </Link>
-          <span className="ml-1 hidden font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 sm:inline">
-            sin tarjeta · setup ≤ 2 min
-          </span>
-        </div>
-
-        <div className="mt-20 md:mt-24">
-          <MockupPanel />
-        </div>
-      </div>
-    </section>
-  );
+  return [val, ref];
 }
 
-function MockupPanel() {
-  return (
-    <div className="relative mx-auto max-w-5xl">
-      {/* Glow detrás del mockup */}
-      <div
-        aria-hidden
-        className="absolute -inset-8 rounded-[2rem] bg-[radial-gradient(ellipse_at_center,rgba(16,185,129,0.20),transparent_60%)] blur-2xl"
-      />
-
-      {/* KPI flotante esquina sup. izq. */}
-      <div
-        className="absolute -left-2 -top-6 z-10 hidden rounded-xl border border-white/[0.08] bg-black/80 px-3.5 py-2.5 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.9)] backdrop-blur-md md:block"
-        style={{ animation: "float-card 6s ease-in-out infinite" }}
-      >
-        <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40">
-          tasa de respuesta
-        </p>
-        <p className="mt-0.5 flex items-baseline gap-1.5">
-          <span className="font-display text-2xl tracking-tight text-white">
-            100%
-          </span>
-          <span className="font-mono text-[10px] text-emerald-400">↑ 24×7</span>
-        </p>
-      </div>
-
-      {/* KPI flotante esquina sup. der. */}
-      <div
-        className="absolute -right-2 -top-4 z-10 hidden rounded-xl border border-emerald-400/30 bg-black/80 px-3.5 py-2.5 shadow-[0_10px_40px_-10px_rgba(52,211,153,0.3)] backdrop-blur-md md:block"
-        style={{ animation: "float-card 8s ease-in-out infinite 1s" }}
-      >
-        <p className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.2em] text-emerald-300">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-          </span>
-          respondió en
-        </p>
-        <p className="mt-0.5 font-display text-2xl tracking-tight text-white">
-          3.2<span className="text-base text-white/50">s</span>
-        </p>
-      </div>
-
-      {/* KPI flotante inferior */}
-      <div
-        className="absolute -bottom-4 left-1/2 z-10 hidden -translate-x-1/2 rounded-full border border-white/[0.08] bg-black/85 px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-white/60 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.9)] backdrop-blur-md md:block"
-        style={{ animation: "float-card-inv 7s ease-in-out infinite 0.5s" }}
-      >
-        <span className="text-emerald-400">+</span> 47 leads convertidos esta semana
-      </div>
-
-      <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0A0A0A] shadow-[0_30px_120px_-20px_rgba(0,0,0,0.9)]">
-        <div className="flex items-center gap-1.5 border-b border-white/[0.06] bg-black/40 px-4 py-2.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
-          <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/60" />
-          <span className="ml-3 truncate font-mono text-[10px] tracking-wide text-white/30">
-            sass-crm.app/cuentas/joyería
-          </span>
-          <span className="ml-auto hidden items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.2em] text-emerald-300 sm:flex">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            </span>
-            IA activa
-          </span>
-        </div>
-        <div className="grid grid-cols-12 text-left">
-          <aside className="col-span-4 border-r border-white/[0.06] bg-white/[0.02] p-4 md:col-span-3">
-            <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.2em] text-white/40">
-              Cuentas
-            </p>
-            <FilaSidebar
-              inicial="MJ"
-              nombre="Mi Joyería"
-              tel="+54 11 5555-1234"
-              activa
-            />
-            <FilaSidebar
-              inicial="OD"
-              nombre="Odontología Plus"
-              tel="+57 300 222-4444"
-            />
-            <FilaSidebar
-              inicial="CR"
-              nombre="Carnicería del Sur"
-              tel="+52 81 8888-1111"
-            />
-          </aside>
-          <div className="col-span-8 p-5 md:col-span-9">
-            <div className="mb-4 flex items-center justify-between border-b border-white/[0.06] pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-400/15 font-mono text-[10px] font-semibold text-emerald-300">
-                  AC
-                </div>
-                <div>
-                  <div className="text-[13px] font-medium text-white">
-                    Ana Cordero
-                  </div>
-                  <div className="font-mono text-[10px] text-white/40">
-                    +54 9 11 4444-3333 · MODO IA
-                  </div>
-                </div>
-              </div>
-              <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-emerald-300">
-                interesado
-              </span>
-            </div>
-            <div className="space-y-1.5">
-              <Burbuja lado="izq">
-                Vi el anillo de oro 18k, ¿cuánto sale?
-              </Burbuja>
-              <Burbuja lado="der">
-                ¡Hola Ana! Sale $185.000. Tenemos 3 medidas. ¿Querés ver fotos?
-              </Burbuja>
-              <Burbuja lado="izq">Sí, y métodos de pago.</Burbuja>
-              <Burbuja lado="der" tipo="imagen">
-                producto.jpg generado por IA
-              </Burbuja>
-              <Burbuja lado="der">
-                Transferencia (5% off), MercadoPago 12 cuotas, efectivo. ¿Te paso turno?
-              </Burbuja>
-              <BurbujaEscribiendo />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+// ── Reveal hook ────────────────────────────────────────────────────────────
+function useReveal() {
+  useEffect(() => {
+    const els = document.querySelectorAll(".reveal");
+    if (!els.length) return;
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) {
+          e.target.classList.add("visible");
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.1 });
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
 }
 
-function FilaSidebar({
-  inicial,
-  nombre,
-  tel,
-  activa,
-}: {
-  inicial: string;
-  nombre: string;
-  tel: string;
-  activa?: boolean;
-}) {
-  return (
-    <div
-      className={`mb-1 flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors ${
-        activa ? "bg-white/[0.06]" : "hover:bg-white/[0.03]"
-      }`}
-    >
-      <div className="relative flex h-6 w-6 items-center justify-center rounded bg-emerald-400/15 font-mono text-[9px] font-semibold text-emerald-300">
-        {inicial}
-        <span className="absolute -right-0.5 -bottom-0.5 h-1.5 w-1.5 rounded-full bg-emerald-400 ring-2 ring-[#0A0A0A]" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[11px] text-white/90">{nombre}</div>
-        <div className="truncate font-mono text-[9px] text-white/40">{tel}</div>
-      </div>
-    </div>
-  );
+// ── Stats / Metricas ───────────────────────────────────────────────────────
+function StatNum({ value, prefix = "", suffix = "", decimals = 0 }: { value: number; prefix?: string; suffix?: string; decimals?: number }) {
+  const [v, ref] = useCounter(value, 2000);
+  const formatted = decimals > 0 ? v.toFixed(decimals) : Math.round(v).toLocaleString("es-ES");
+  return <span ref={ref}>{prefix}{formatted}{suffix}</span>;
 }
-
-function Burbuja({
-  lado,
-  tipo,
-  children,
-}: {
-  lado: "izq" | "der";
-  tipo?: "imagen";
-  children: React.ReactNode;
-}) {
-  const izq = lado === "izq";
-  return (
-    <div className={`flex ${izq ? "justify-start" : "justify-end"}`}>
-      <div
-        className={`max-w-[78%] rounded-2xl px-3 py-1.5 text-[12px] leading-snug ${
-          izq
-            ? "bg-white/[0.06] text-white/85"
-            : tipo === "imagen"
-              ? "bg-emerald-400/15 italic text-emerald-200"
-              : "bg-emerald-400 text-black"
-        }`}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function BurbujaEscribiendo() {
-  return (
-    <div className="flex justify-start">
-      <div className="flex items-center gap-1.5 rounded-2xl bg-white/[0.06] px-3 py-2 text-[12px]">
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/60 [animation-delay:-0.3s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/60 [animation-delay:-0.15s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/60" />
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-// MÉTRICAS — terminal-style con barras micro-decorativas
-// ============================================================
-const METRICAS = [
-  { v: "<5s", l: "respuesta promedio", d: "p99 bajo 8 segundos" },
-  { v: "24/7", l: "uptime real", d: "sin pausas, sin turnos" },
-  { v: "∞", l: "conversaciones simultáneas", d: "no se cuelga, no se traba" },
-  { v: "0%", l: "comisión por venta", d: "lo que vendés es tuyo" },
-];
 
 export function Metricas() {
+  useReveal();
   return (
-    <section
-      aria-label="Métricas clave"
-      className="border-b border-white/[0.06] bg-black"
-    >
-      <div className="mx-auto max-w-6xl px-6 py-8">
-        <div className="grid grid-cols-2 gap-px bg-white/[0.06] md:grid-cols-4">
-          {METRICAS.map((m) => (
-            <div
-              key={m.l}
-              className="group relative flex flex-col items-start gap-1 bg-black px-5 py-6 transition-colors hover:bg-white/[0.015]"
-            >
-              <span className="font-display text-4xl tracking-tight text-white md:text-5xl">
-                {m.v}
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
-                {m.l}
-              </span>
-              <span className="text-[11px] text-white/30">{m.d}</span>
-              <span
-                aria-hidden
-                className="absolute bottom-0 left-0 h-px w-0 bg-emerald-400 transition-all duration-500 group-hover:w-full"
-              />
-            </div>
-          ))}
+    <section className="stats-section">
+      <div className="l-container">
+        <div className="stats-grid reveal">
+          <div className="stat-cell">
+            <div className="stat-num"><StatNum prefix="+" value={342} suffix="%" /></div>
+            <div className="stat-label">ROI medio en 90 días</div>
+          </div>
+          <div className="stat-cell">
+            <div className="stat-num">24/7</div>
+            <div className="stat-label">Operación sin descanso</div>
+          </div>
+          <div className="stat-cell">
+            <div className="stat-num"><StatNum value={8} suffix=" seg" /></div>
+            <div className="stat-label">Tiempo medio de respuesta</div>
+          </div>
+          <div className="stat-cell">
+            <div className="stat-num"><StatNum value={1.2} decimals={1} suffix="M+" /></div>
+            <div className="stat-label">Conversaciones automatizadas</div>
+          </div>
         </div>
       </div>
     </section>
   );
 }
 
-// ============================================================
-// CÓMO FUNCIONA — timeline con conector visual
-// ============================================================
-const PASOS = [
-  {
-    n: "01",
-    t: "Conectá tu WhatsApp",
-    d: "Escaneás un QR como WhatsApp Web. Tu número queda enlazado al panel en menos de 2 minutos.",
-    duracion: "2 min",
-  },
-  {
-    n: "02",
-    t: "Cargá tu negocio",
-    d: "Le contás a la IA cómo vendés: qué ofrecés, qué horarios, cómo respondés. Ella arma el agente. Cero formularios.",
-    duracion: "30 min",
-  },
-  {
-    n: "03",
-    t: "Dejá que venda",
-    d: "La IA responde, agenda, captura datos y los lleva al pipeline Kanban. Vos sólo cerrás.",
-    duracion: "para siempre",
-  },
-];
-
-export function ComoFunciona() {
+// ── Services / Funciones ───────────────────────────────────────────────────
+function IconSvc({ name }: { name: string }) {
+  const paths: Record<string, React.ReactNode> = {
+    chat: <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/>,
+    phone: <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92Z"/>,
+    target: <><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>,
+    zap: <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/>,
+    chart: <><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></>,
+    cube: <><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.27 6.96 8.73 5.05 8.73-5.05"/><path d="M12 22.08V12"/></>,
+  };
   return (
-    <section
-      id="como-funciona"
-      className="mx-auto max-w-6xl px-6 py-24 md:py-32"
-    >
-      <div className="mb-14 max-w-2xl">
-        <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-400">
-          // operación
-        </p>
-        <h2 className="text-4xl tracking-[-0.025em] text-white md:text-5xl">
-          De cero a vendiendo en{" "}
-          <span className="font-display italic text-white/70">tres pasos</span>.
-        </h2>
-        <p className="mt-5 max-w-lg text-base text-white/55">
-          Ningún paso requiere programar. Si sabés mandar un mensaje por WhatsApp, ya sabés usar esto.
-        </p>
-      </div>
-      <div className="relative grid gap-px bg-white/[0.06] md:grid-cols-3">
-        {/* Línea conectora horizontal */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute top-[68px] left-7 right-7 hidden h-px bg-gradient-to-r from-emerald-400/0 via-emerald-400/30 to-emerald-400/0 md:block"
-        />
-        {PASOS.map((p) => (
-          <div
-            key={p.n}
-            className="group relative flex flex-col gap-4 bg-black p-7 transition-all hover:bg-white/[0.02]"
-          >
-            <div className="flex items-baseline justify-between">
-              <span className="font-display text-7xl leading-none text-emerald-400/80 transition-colors group-hover:text-emerald-300">
-                {p.n}
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
-                {p.duracion}
-              </span>
-            </div>
-            <h3 className="text-lg font-medium text-white">{p.t}</h3>
-            <p className="text-sm leading-relaxed text-white/55">{p.d}</p>
-            <span
-              aria-hidden
-              className="absolute right-6 top-6 h-px w-8 bg-emerald-400/40 transition-all group-hover:w-12 group-hover:bg-emerald-400/70"
-            />
-          </div>
-        ))}
-      </div>
-    </section>
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {paths[name]}
+    </svg>
   );
 }
-
-// ============================================================
-// FUNCIONES — 6 destacadas con tarjetas premium + tira "incluye también"
-// ============================================================
-const FUNCIONES_DESTACADAS = [
-  {
-    n: "01",
-    t: "Captación de leads con IA",
-    d: "Decile «restaurantes en Bogotá» o «abogados en CDMX». Te llegan con teléfono, email y web, listos para contactar.",
-    tag: "nuevo",
-  },
-  {
-    n: "02",
-    t: "Estudio de imágenes IA",
-    d: "Subís una foto del producto, elegís el preset (fondo blanco, lifestyle, premium) y en segundos tenés la versión para vender.",
-    tag: "nuevo",
-  },
-  {
-    n: "03",
-    t: "Configurás conversando",
-    d: "Sin formularios. Conversás con la IA y ella configura el agente: nombre, tono, bienvenida, contexto de tu negocio.",
-    tag: "nuevo",
-  },
-  {
-    n: "04",
-    t: "IA multimodal",
-    d: "GPT-4o ve imágenes, escucha audios, responde en texto y en voz. Todo en la misma conversación, sin cambiar de canal.",
-  },
-  {
-    n: "05",
-    t: "Llamadas con voz clonada",
-    d: "Tu agente llama leads con tu voz clonada (ElevenLabs + Vapi). El cliente piensa que sos vos al teléfono.",
-  },
-  {
-    n: "06",
-    t: "Pipeline Kanban",
-    d: "Arrastrás las conversaciones entre etapas. Cada tarjeta tiene el historial completo del lead, sin buscar en el chat.",
-  },
-];
-
-const FUNCIONES_EXTRA = [
-  "Catálogo con stock y precio",
-  "Agenda con recordatorios",
-  "Créditos pay-as-you-go",
-  "Multi-cuenta de WhatsApp",
-  "Captura automática de email/teléfono",
-  "Anti-ban con jitter humano",
-];
 
 export function Funciones() {
-  return (
-    <section
-      id="funciones"
-      className="relative border-y border-white/[0.06] bg-[#080808]"
-    >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_100%_0%,rgba(16,185,129,0.08),transparent_50%)]"
-      />
-      <div className="relative mx-auto max-w-6xl px-6 py-24 md:py-32">
-        <div className="mb-14 flex flex-col items-start justify-between gap-6 md:flex-row md:items-end">
-          <div className="max-w-2xl">
-            <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-400">
-              // stack
-            </p>
-            <h2 className="text-4xl tracking-[-0.025em] text-white md:text-5xl">
-              Un solo panel.{" "}
-              <span className="font-display italic text-white/70">
-                Todo adentro.
-              </span>{" "}
-              Nada de Zapier.
-            </h2>
-          </div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/40">
-            sin Zapier · sin n8n · todo integrado
-          </p>
-        </div>
+  useReveal();
+  const services = [
+    { icon: "chat", tag: "", title: "Agentes WhatsApp con IA", desc: "Conversaciones que responden, califican y agendan reuniones 24/7 en tu número de WhatsApp Business.", features: ["Respuesta en menos de 8 segundos", "Aprende de tus mejores closers", "Conectado con tu CRM en directo"] },
+    { icon: "phone", tag: "violet", title: "Llamadas automatizadas IA", desc: "Voces neuronales hiperrealistas que llaman, califican prospectos y derivan a humano solo los hot leads.", features: ["Voz neuronal multi-idioma", "Detecta intención de compra", "Reportes + grabaciones"] },
+    { icon: "target", tag: "magenta", title: "Prospección masiva", desc: "Encuentra y contacta a tu cliente ideal en LinkedIn, email y WhatsApp en piloto automático.", features: ["Listas ICP inteligentes", "Mensajes personalizados con IA", "+500 prospectos/día"] },
+    { icon: "zap", tag: "lime", title: "Automatizaciones no-code", desc: "Conecta todo tu stack y elimina tareas repetitivas con flujos visuales. Cero código, cero excusas.", features: ["+200 integraciones nativas", "Builder visual drag & drop", "Triggers en tiempo real"] },
+    { icon: "chart", tag: "", title: "Ventas multi-canal", desc: "Pipeline orquestado por IA: secuencias, follow-ups y cierres a gran escala en múltiples canales.", features: ["A/B testing automático", "Predicción de cierre", "Multi-canal sincronizado"] },
+    { icon: "cube", tag: "violet", title: "CRM con superpoderes IA", desc: "CRM nativo + IA que enriquece datos, prioriza leads y te dice exactamente qué hacer después.", features: ["Lead scoring automático", "Resumen de conversación", "Coach de ventas integrado"] },
+  ];
 
-        <div className="grid gap-px bg-white/[0.06] md:grid-cols-3">
-          {FUNCIONES_DESTACADAS.map((f) => (
-            <article
-              key={f.n}
-              className="group relative flex flex-col gap-3 overflow-hidden bg-black p-7 transition-all hover:bg-white/[0.02]"
-            >
-              {/* Gradient overlay tenue en hover */}
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(16,185,129,0.06),transparent_60%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-              />
-              <div className="relative flex items-center justify-between">
-                <span className="font-mono text-[10px] tracking-[0.2em] text-white/40 transition-colors group-hover:text-emerald-300">
-                  {f.n}
-                </span>
-                {f.tag && (
-                  <span className="rounded-full border border-fuchsia-400/30 bg-fuchsia-400/[0.06] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-fuchsia-300">
-                    {f.tag}
-                  </span>
-                )}
+  const handleMove = (e: React.MouseEvent<HTMLElement>) => {
+    const c = e.currentTarget;
+    const r = c.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * 100;
+    const y = ((e.clientY - r.top) / r.height) * 100;
+    c.style.setProperty("--mx", x + "%");
+    c.style.setProperty("--my", y + "%");
+    const dx = (e.clientX - r.left - r.width / 2) / r.width;
+    const dy = (e.clientY - r.top - r.height / 2) / r.height;
+    c.style.transform = `perspective(800px) rotateY(${dx * 6}deg) rotateX(${-dy * 6}deg) translateY(-4px)`;
+  };
+  const handleLeave = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.transform = ""; };
+
+  return (
+    <section id="servicios" className="l-section">
+      <div className="l-container">
+        <div className="section-head reveal">
+          <span className="eyebrow">Todo lo que vende, en un sitio</span>
+          <h2>6 superpoderes que <span className="gradient-text">reemplazan</span> a tu equipo comercial</h2>
+          <p>Olvídate de pagar 8 herramientas + 3 SDRs. Una sola plataforma que prospecta, conversa, llama y cierra por ti, 24/7, sin descansos ni excusas.</p>
+        </div>
+        <div className="services-grid">
+          {services.map((s, i) => (
+            <article key={i} className={`svc-card ${s.tag} reveal`} onMouseMove={handleMove} onMouseLeave={handleLeave}>
+              <div className="svc-card-inner">
+                <div className="svc-icon"><IconSvc name={s.icon} /></div>
+                <h3>{s.title}</h3>
+                <p>{s.desc}</p>
+                <ul className="svc-features">
+                  {s.features.map((f, j) => <li key={j}>{f}</li>)}
+                </ul>
               </div>
-              <h3 className="relative text-lg font-medium leading-snug text-white">
-                {f.t}
-              </h3>
-              <p className="relative text-sm leading-relaxed text-white/55">
-                {f.d}
-              </p>
-              {/* Línea inferior animada */}
-              <span
-                aria-hidden
-                className="absolute bottom-0 left-0 h-px w-0 bg-gradient-to-r from-emerald-400/80 to-transparent transition-all duration-500 group-hover:w-2/3"
-              />
             </article>
           ))}
         </div>
+      </div>
+    </section>
+  );
+}
 
-        <div className="mt-px flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-white/[0.06] bg-black px-7 py-5">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
-            incluye también
-          </span>
-          {FUNCIONES_EXTRA.map((e) => (
-            <span key={e} className="text-[12px] text-white/65">
-              <span aria-hidden className="mr-1.5 text-emerald-400">
-                +
-              </span>
-              {e}
-            </span>
+// ── How it works ───────────────────────────────────────────────────────────
+export function ComoFunciona() {
+  useReveal();
+  const steps = [
+    { n: "01", title: "Conecta tus canales", desc: "WhatsApp, email, LinkedIn, voz y CRM en menos de 10 minutos. Sin tocar una sola línea de código." },
+    { n: "02", title: "Entrena tu agente", desc: "Sube tu pitch, FAQs y casos reales. La IA aprende a vender como tu mejor closer en horas, no semanas." },
+    { n: "03", title: "Lanza y escala", desc: "La IA prospecta, conversa y cierra 24/7. Tú revisas reportes, firmas contratos y dejas de fichar a las 8." },
+  ];
+  return (
+    <section id="como" className="l-section" style={{ background: "linear-gradient(180deg, transparent, rgba(15,16,30,0.4), transparent)" }}>
+      <div className="l-container">
+        <div className="section-head reveal" style={{ textAlign: "center", margin: "0 auto 64px" }}>
+          <span className="eyebrow">Cómo funciona Inyectaia</span>
+          <h2>De cero a IA inyectada en <span className="gradient-text">72 horas</span></h2>
+          <p style={{ maxWidth: 580, margin: "0 auto" }}>Implementación guiada por un experto. Sin código, sin migraciones eternas, sin dolores de cabeza. Solo resultados.</p>
+        </div>
+        <div className="how-grid">
+          {steps.map((s, i) => (
+            <div className="how-step reveal" key={i}>
+              <div className="how-num">{s.n}</div>
+              <h3>{s.title}</h3>
+              <p>{s.desc}</p>
+            </div>
           ))}
         </div>
       </div>
@@ -563,63 +185,278 @@ export function Funciones() {
   );
 }
 
-// ============================================================
-// CASOS DE USO — tarjetas clickables con hover state premium
-// ============================================================
-const CASOS = [
-  { t: "E-commerce / Joyería", d: "Catálogo, fotos IA, pagos", h: "/blog/whatsapp-ecommerce" },
-  { t: "Odontología y salud", d: "Turnos, recordatorios, fichas", h: "/blog/whatsapp-odontologia" },
-  { t: "Inmobiliarias", d: "Visitas, fichas, seguimiento", h: "/blog/whatsapp-inmobiliarias" },
-  { t: "Restaurantes / Delivery", d: "Pedidos, menú, fidelización", h: "/blog/whatsapp-restaurantes" },
-  { t: "Cursos online & coaching", d: "Inscripción, soporte 24/7", h: "/blog/whatsapp-cursos" },
-  { t: "Estética y peluquería", d: "Agenda, precios, antes/después", h: "/blog/whatsapp-estetica" },
-  { t: "Concesionarias y autos", d: "Test drives, financiación", h: "/blog/whatsapp-autos" },
-  { t: "Gimnasios y bienestar", d: "Suscripciones, clases, planes", h: "/blog/whatsapp-gimnasios" },
+// ── Demo ───────────────────────────────────────────────────────────────────
+export function Demo() {
+  useReveal();
+  const [tab, setTab] = useState("whatsapp");
+  const tabs = [
+    { id: "whatsapp", label: "💬 Agente WhatsApp" },
+    { id: "dashboard", label: "📊 Dashboard" },
+    { id: "voice", label: "📞 Llamada IA" },
+  ];
+  return (
+    <section id="demo" className="l-section">
+      <div className="l-container">
+        <div className="section-head reveal">
+          <span className="eyebrow">Demo en vivo</span>
+          <h2>Mira a tu nuevo <span className="gradient-text">closer virtual</span> en acción</h2>
+          <p>Una conversación real entre nuestro agente de IA y un lead frío. Sin ediciones, en tiempo real.</p>
+        </div>
+        <div className="demo-tabs reveal">
+          {tabs.map((t) => (
+            <button key={t.id} className={`demo-tab${tab === t.id ? " active" : ""}`} onClick={() => setTab(t.id)}>{t.label}</button>
+          ))}
+        </div>
+        <div className="demo-grid">
+          {tab === "whatsapp" && <WhatsAppDemo />}
+          {tab === "voice" && <VoiceDemo />}
+          {tab === "dashboard" && <VoiceDemo />}
+          <DashboardSide />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function WhatsAppDemo() {
+  const messages = [
+    { from: "them", text: "Hola, vi vuestra web. ¿Cómo funciona exactamente?", time: "10:42" },
+    { from: "me", text: "¡Hola Laura! 👋 Te explico en 30 segundos: nuestra IA habla con tus leads por WhatsApp 24/7 y agenda solo los que están listos para comprar.", time: "10:42" },
+    { from: "them", text: "¿Y funciona en mi sector? Vendo cursos online.", time: "10:43" },
+    { from: "me", text: "Sí, tenemos +120 clientes de infoproductos. Uno cerró 47k€ el mes pasado con nuestro flujo. ¿Te enseño la demo?", time: "10:43" },
+    { from: "them", text: "Vale, mándame info.", time: "10:44" },
+    { from: "me", text: "¿Te va bien mañana a las 16:00 para una llamada de 15 min? Te enseño tu setup personalizado en directo.", time: "10:44" },
+  ];
+  return (
+    <div className="phone-mock reveal">
+      <div className="phone-screen">
+        <div className="wa-header">
+          <div className="wa-avatar">IA</div>
+          <div className="wa-meta">
+            <div className="wa-name">Inyectaia · Asistente</div>
+            <div className="wa-status">En línea</div>
+          </div>
+        </div>
+        <div className="wa-chat">
+          {messages.map((m, i) => (
+            <div key={i} className={`wa-bubble ${m.from}`} style={{ animationDelay: `${i * 0.5}s` }}>
+              {m.text} <span className="wa-time">{m.time}</span>
+            </div>
+          ))}
+          <div className="wa-typing"><span /><span /><span /></div>
+        </div>
+        <div className="wa-input">
+          <div className="wa-input-bar">Escribe un mensaje...</div>
+          <div className="wa-send">→</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VoiceDemo() {
+  return (
+    <div className="phone-mock reveal" style={{ borderRadius: 18 }}>
+      <div className="phone-screen" style={{ height: 480, background: "radial-gradient(circle at 50% 30%, rgba(138,92,255,0.3), #0a0e1f)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, gap: 16 }}>
+        <div style={{ width: 120, height: 120, borderRadius: "50%", background: "linear-gradient(135deg, #8a5cff, #00e5ff)", display: "grid", placeItems: "center", fontSize: 36, boxShadow: "0 0 60px rgba(138,92,255,0.6)" }}>🎙️</div>
+        <div style={{ fontWeight: 600, fontSize: 18 }}>Llamando a Carlos R.</div>
+        <div className="mono" style={{ color: "var(--cyan)", fontSize: 14 }}>00:02:14</div>
+        <div style={{ textAlign: "center", fontSize: 13, color: "var(--ink-dim)", maxWidth: 240, marginTop: 12 }}>
+          &ldquo;Hola Carlos, soy María del equipo Inyectaia, ¿tienes 2 minutos?&rdquo;
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <span className="dash-pill live" style={{ fontSize: 10 }}>EN VIVO</span>
+          <span className="dash-pill" style={{ fontSize: 10 }}>SENTIMIENTO: POSITIVO</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DashboardSide() {
+  return (
+    <div className="dash-mock reveal">
+      <div className="dash-head">
+        <div>
+          <div className="dash-title">Panel de operaciones · Hoy</div>
+          <div style={{ fontSize: 11, color: "var(--ink-faint)", marginTop: 2 }}>Tiempo real · Últimas 24h</div>
+        </div>
+        <div className="dash-pills">
+          <span className="dash-pill live">LIVE</span>
+          <span className="dash-pill">24H</span>
+        </div>
+      </div>
+      <div className="dash-kpis">
+        <div className="dash-kpi"><div className="lbl">Leads</div><div className="val">+218</div><div className="delta">↑ 32%</div></div>
+        <div className="dash-kpi"><div className="lbl">Reuniones</div><div className="val">47</div><div className="delta">↑ 18%</div></div>
+        <div className="dash-kpi"><div className="lbl">Cierres</div><div className="val">€12.4k</div><div className="delta">↑ 41%</div></div>
+      </div>
+      <div className="dash-chart">
+        <div style={{ fontSize: 12, color: "var(--ink-faint)", marginBottom: 8 }}>Conversaciones por hora</div>
+        <div className="chart-bars">
+          {[40, 65, 80, 55, 90, 75, 95, 70, 88, 60, 78, 92].map((h, i) => (
+            <div key={i} className={`chart-bar${i % 3 === 0 ? " alt" : ""}`} style={{ height: h + "%", animationDelay: `${i * 0.05}s` }} />
+          ))}
+        </div>
+        <div className="chart-legend"><span>WhatsApp</span><span>Llamadas IA</span></div>
+      </div>
+      <div className="dash-list">
+        <div className="dash-row">
+          <div className="av" style={{ background: "linear-gradient(135deg,#00e5ff,#8a5cff)" }}>LM</div>
+          <div><div className="nm">Laura Martín</div><span className="meta">Pidió demo · Hace 4 min</span></div>
+          <span className="badge">HOT 92</span>
+        </div>
+        <div className="dash-row">
+          <div className="av" style={{ background: "linear-gradient(135deg,#ff3ec9,#8a5cff)" }}>CR</div>
+          <div><div className="nm">Carlos Ramírez</div><span className="meta">Llamada agendada</span></div>
+          <span className="badge warn">WARM 71</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Casos de uso ───────────────────────────────────────────────────────────
+export function CasosDeUso() {
+  useReveal();
+  const cases = [
+    { tags: ["SaaS B2B", "Outbound"], title: "De 12 a 184 demos al mes", meta: "Crecimiento · 4 meses", cls: "x6", c1: "#1a0f3a", c2: "#00e5ff" },
+    { tags: ["E-commerce"], title: "Carritos recuperados +212%", meta: "Shopify · Moda", cls: "x3", c1: "#2d0b3a", c2: "#ff3ec9" },
+    { tags: ["Infoproducto"], title: "€47k en una semana", meta: "Lanzamiento curso", cls: "x3", c1: "#051422", c2: "#00e5ff" },
+    { tags: ["Real Estate"], title: "500 leads cualificados/mes", meta: "Inmobiliaria Madrid", cls: "x4", c1: "#1a0a2e", c2: "#b6ff3c" },
+    { tags: ["Servicios", "B2B"], title: "SDR sustituido por agente IA", meta: "Agencia de marketing", cls: "x8", c1: "#0a0e1f", c2: "#8a5cff" },
+  ];
+  return (
+    <section id="trabajos" className="l-section">
+      <div className="l-container">
+        <div className="section-head reveal">
+          <span className="eyebrow">Casos de éxito</span>
+          <h2>Trabajos reales con <span className="gradient-text">resultados reales</span></h2>
+          <p>Clientes que confiaron en Inyectaia y multiplicaron su pipeline en menos de 6 meses.</p>
+        </div>
+        <div className="work-grid">
+          {cases.map((c, i) => (
+            <article className={`work-card reveal ${c.cls}`} key={i}>
+              <div className="image-slot">
+                <div className="placeholder" style={{ "--c1": c.c1, "--c2": c.c2 } as React.CSSProperties}>
+                  <span className="placeholder-text">case study · imagen</span>
+                </div>
+              </div>
+              <div className="work-tags">{c.tags.map((t, j) => <span className="work-tag" key={j}>{t}</span>)}</div>
+              <div className="work-title">{c.title}</div>
+              <div className="work-meta">{c.meta}</div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Video ──────────────────────────────────────────────────────────────────
+export function VideoSection() {
+  useReveal();
+  const thumbs = [
+    { title: "Cómo construir tu primer agente", dur: "03:24", c1: "#2d0b3a", c2: "#ff3ec9" },
+    { title: "Setup de WhatsApp Business API", dur: "05:12", c1: "#0a0e1f", c2: "#00e5ff" },
+    { title: "Caso real: agencia 10x pipeline", dur: "08:47", c1: "#1a0f3a", c2: "#8a5cff" },
+  ];
+  return (
+    <section id="video" className="l-section" style={{ background: "linear-gradient(180deg, transparent, rgba(15,16,30,0.5), transparent)" }}>
+      <div className="l-container">
+        <div className="section-head reveal">
+          <span className="eyebrow">Videos y demos</span>
+          <h2>Ve la plataforma en <span className="gradient-text">acción</span></h2>
+          <p>Demos en vídeo, tutoriales y casos reales explicados por nuestro equipo.</p>
+        </div>
+        <div className="video-wrap reveal">
+          <div className="placeholder" style={{ "--c1": "#1a0f3a", "--c2": "#051422" } as React.CSSProperties}>
+            <span className="placeholder-text">video hero · demo producto</span>
+          </div>
+          <button className="video-play" aria-label="Reproducir video" />
+        </div>
+        <div className="video-grid">
+          {thumbs.map((v, i) => (
+            <div className="video-thumb reveal" key={i}>
+              <div className="placeholder" style={{ "--c1": v.c1, "--c2": v.c2 } as React.CSSProperties}>
+                <span className="placeholder-text">{v.title}</span>
+              </div>
+              <div className="mini-play" />
+              <div className="duration">{v.dur}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Blog ───────────────────────────────────────────────────────────────────
+type BlogPost = {
+  slug: string;
+  titulo: string;
+  resumen: string;
+  categoria_nombre?: string | null;
+  tiempo_lectura_min: number;
+  publicado_en?: string | null;
+  imagen_portada_url?: string | null;
+  imagen_portada_alt?: string | null;
+};
+
+const MOCK_POSTS: BlogPost[] = [
+  { slug: "#", titulo: "7 plantillas de WhatsApp que convierten leads fríos", resumen: "Las plantillas exactas que usan nuestros clientes para abrir conversaciones que sí responden.", categoria_nombre: "PROSPECCIÓN", tiempo_lectura_min: 6, publicado_en: "2026-05-12" },
+  { slug: "#", titulo: "Por qué tu próximo SDR no será humano (y está bien)", resumen: "El futuro del outbound ya no es 'humano vs IA'. Es híbrido. Te explicamos por qué.", categoria_nombre: "IA · VENTAS", tiempo_lectura_min: 8, publicado_en: "2026-05-08" },
+  { slug: "#", titulo: "Cómo una agencia pasó de 30 a 280 reuniones/mes", resumen: "El stack exacto que usaron, las decisiones, los errores y los números que validan el modelo.", categoria_nombre: "CASO REAL", tiempo_lectura_min: 11, publicado_en: "2026-05-02" },
 ];
 
-export function CasosDeUso() {
+const CARD_COLORS = [
+  { c1: "#1a0f3a", c2: "#8a5cff" },
+  { c1: "#051422", c2: "#00e5ff" },
+  { c1: "#2d0b3a", c2: "#ff3ec9" },
+];
+
+export function BlogSection({ posts }: { posts?: BlogPost[] }) {
+  useReveal();
+  const items = posts && posts.length > 0 ? posts.slice(0, 3) : MOCK_POSTS;
+
   return (
-    <section className="mx-auto max-w-6xl px-6 py-24 md:py-32">
-      <div className="mb-12 max-w-2xl">
-        <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.22em] text-emerald-400">
-          // industrias
-        </p>
-        <h2 className="text-4xl tracking-[-0.025em] text-white md:text-5xl">
-          Si tus clientes te escriben por WhatsApp,{" "}
-          <span className="font-display italic text-white/70">
-            acá los atendés
-          </span>
-          .
-        </h2>
+    <section id="blog-preview" className="l-section">
+      <div className="l-container">
+        <div className="section-head reveal">
+          <span className="eyebrow">Blog</span>
+          <h2>Aprende a vender con <span className="gradient-text">IA de verdad</span></h2>
+          <p>Guías, casos y plantillas listas para copiar. Cero teoría, todo aplicable.</p>
+        </div>
+        <div className="blog-grid">
+          {items.map((p, i) => {
+            const colors = CARD_COLORS[i % CARD_COLORS.length];
+            const fecha = p.publicado_en ? new Date(p.publicado_en).toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" }) : "";
+            return (
+              <Link href={p.slug !== "#" ? `/blog/${p.slug}` : "/blog"} key={p.slug + i} className="blog-card reveal" style={{ textDecoration: "none" }}>
+                <div className="blog-cover">
+                  {p.imagen_portada_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.imagen_portada_url} alt={p.imagen_portada_alt ?? p.titulo} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <div className="placeholder" style={{ "--c1": colors.c1, "--c2": colors.c2 } as React.CSSProperties}>
+                      <span className="placeholder-text">portada · artículo</span>
+                    </div>
+                  )}
+                </div>
+                <div className="blog-body">
+                  <div className="blog-meta">{p.categoria_nombre ?? "BLOG"} · {p.tiempo_lectura_min} min lectura</div>
+                  <div className="blog-title">{p.titulo}</div>
+                  <p className="blog-excerpt">{p.resumen}</p>
+                  <div className="blog-foot">
+                    <span>{fecha}</span>
+                    <span style={{ color: "var(--cyan)" }}>Leer →</span>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       </div>
-      <ul className="grid grid-cols-2 gap-px bg-white/[0.06] md:grid-cols-4">
-        {CASOS.map((c) => (
-          <li key={c.t}>
-            <Link
-              href={c.h}
-              className="group flex h-full flex-col justify-between gap-6 bg-black p-5 transition-all hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-400"
-            >
-              <div>
-                <p className="text-[14px] font-medium leading-snug text-white">
-                  {c.t}
-                </p>
-                <p className="mt-1 text-[12px] leading-relaxed text-white/45">
-                  {c.d}
-                </p>
-              </div>
-              <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white/30 transition-colors group-hover:text-emerald-300">
-                ver caso
-                <span
-                  aria-hidden
-                  className="transition-transform group-hover:translate-x-1"
-                >
-                  →
-                </span>
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }

@@ -5,8 +5,8 @@ import { FormularioLogin } from "./formulario";
 
 const METRICAS = [
   { valor: "100%", label: "Tasa de respuesta" },
-  { valor: "< 4s", label: "Latencia IA" },
-  { valor: "+1.200", label: "Mensajes / día" },
+  { valor: "< 5s", label: "Respuesta IA" },
+  { valor: "3.800+", label: "Negocios activos" },
 ];
 
 export default function PaginaLogin() {
@@ -17,8 +17,8 @@ export default function PaginaLogin() {
         {/* Logo */}
         <Link href="/" className="mb-10 flex items-center gap-2.5">
           <Logo />
-          <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-white/70">
-            sass-crm<span className="text-emerald-400">/</span>v2
+          <span className="font-mono text-[12px] uppercase tracking-[0.15em] text-white">
+            INYECT<span className="text-emerald-400">AI</span>A
           </span>
         </Link>
 
@@ -109,13 +109,13 @@ export default function PaginaLogin() {
         {/* Testimonial */}
         <div className="relative z-10 m-10 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6 backdrop-blur-sm">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-400">
-            Inmobiliaria Del Sur
+            Odontología Plus · Bogotá
           </p>
           <blockquote className="mt-3 text-sm leading-relaxed text-zinc-300">
-            "Pasamos de perder leads a cerrar el 80% de las consultas de WhatsApp.
-            El bot trabaja mientras dormimos."
+            "Antes perdía clientes por no contestar de noche. La IA de INYECTAIA cierra
+            ventas mientras duermo. Pasé de 120 a 410 turnos por mes."
           </blockquote>
-          <p className="mt-4 text-xs text-zinc-500">— Daniela R., directora comercial</p>
+          <p className="mt-4 text-xs text-zinc-500">— Dra. Carolina Méndez, directora</p>
         </div>
       </aside>
     </main>

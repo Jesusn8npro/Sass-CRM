@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { Navegacion, PieDePagina } from "@/app/_componentes-landing/Layout";
 
 export const metadata: Metadata = {
-  title: "Política de Privacidad — Sass-CRM",
+  title: "Política de Privacidad — INYECTAIA",
   description:
-    "Cómo Sass-CRM recolecta, usa, comparte y protege los datos personales de sus usuarios.",
+    "Cómo INYECTAIA recolecta, usa, comparte y protege los datos personales de sus usuarios.",
 };
 
 const SUBPROCESADORES = [
@@ -192,10 +192,10 @@ const SECCIONES = [
         <p>
           Para ejercer estos derechos, escribinos a{" "}
           <a
-            href="mailto:privacidad@sass-crm.com"
+            href="mailto:privacidad@inyectaia.com"
             className="font-mono text-emerald-300 underline-offset-4 hover:underline"
           >
-            privacidad@sass-crm.com
+            privacidad@inyectaia.com
           </a>
           . Respondemos en un plazo máximo de 15 días hábiles.
         </p>
@@ -226,7 +226,7 @@ const SECCIONES = [
     body: (
       <>
         <p>
-          Sass-CRM opera con servidores en LATAM, pero algunos
+          INYECTAIA opera con servidores en LATAM, pero algunos
           subprocesadores (OpenAI, ElevenLabs, Vapi, Resend) procesan datos
           en Estados Unidos o la Unión Europea.
         </p>
@@ -246,14 +246,14 @@ const SECCIONES = [
     body: (
       <>
         <p>
-          Sass-CRM no está dirigido a menores de 18 años y no recolectamos
+          INYECTAIA no está dirigido a menores de 18 años y no recolectamos
           datos de menores de manera consciente. Si detectás que un menor
           creó una cuenta, escribinos a{" "}
           <a
-            href="mailto:privacidad@sass-crm.com"
+            href="mailto:privacidad@inyectaia.com"
             className="font-mono text-emerald-300 underline-offset-4 hover:underline"
           >
-            privacidad@sass-crm.com
+            privacidad@inyectaia.com
           </a>{" "}
           y la eliminamos.
         </p>
@@ -321,10 +321,10 @@ const SECCIONES = [
           Para cualquier asunto relacionado con privacidad, protección de
           datos o ejercicio de derechos, escribinos a{" "}
           <a
-            href="mailto:privacidad@sass-crm.com"
+            href="mailto:privacidad@inyectaia.com"
             className="font-mono text-emerald-300 underline-offset-4 hover:underline"
           >
-            privacidad@sass-crm.com
+            privacidad@inyectaia.com
           </a>
           .
         </p>

@@ -7,8 +7,8 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Sass-CRM",
-    short_name: "Sass-CRM",
+    name: "INYECTAIA",
+    short_name: "INYECTAIA",
     description:
       "Agente IA para WhatsApp: responde leads, agenda citas y cierra ventas 24/7.",
     start_url: "/",

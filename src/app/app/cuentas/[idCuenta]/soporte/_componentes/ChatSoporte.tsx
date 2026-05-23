@@ -8,7 +8,7 @@ interface Mensaje {
 }
 
 const MENSAJE_BIENVENIDA =
-  "¡Hola! 👋 Soy el asistente de soporte de Sass-CRM. ¿En qué puedo ayudarte? Podés preguntarme sobre cómo usar la plataforma, configurar tu agente, importar productos, planes, troubleshooting, etc.";
+  "¡Hola! 👋 Soy el asistente de soporte de INYECTAIA. ¿En qué puedo ayudarte? Podés preguntarme sobre cómo usar la plataforma, configurar tu agente, importar productos, planes, troubleshooting, etc.";
 
 /**
  * Chat de soporte con un asistente IA que conoce el producto. Estado en

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Navegacion, PieDePagina } from "@/app/_componentes-landing/Layout";
 
 export const metadata: Metadata = {
-  title: "Documentación — Sass-CRM",
+  title: "Documentación — INYECTAIA",
   description: "Guía de integración: webhooks salientes, API REST y autenticación.",
 };
 
@@ -71,7 +71,7 @@ export default function PaginaDocs() {
             <h2 className="mb-3 text-lg font-bold text-zinc-100">Webhooks Salientes</h2>
             <div className="space-y-4 text-sm leading-relaxed text-zinc-400">
               <p>
-                Cuando ocurre un evento en tu cuenta, Sass-CRM hace un <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-xs text-emerald-300">POST</code> a la URL que configuraste. El payload llega en JSON con la siguiente estructura:
+                Cuando ocurre un evento en tu cuenta, INYECTAIA hace un <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-xs text-emerald-300">POST</code> a la URL que configuraste. El payload llega en JSON con la siguiente estructura:
               </p>
               <pre className="overflow-x-auto rounded-xl border border-white/[0.08] bg-zinc-900 p-4 font-mono text-sm text-emerald-300">{`{
   "evento": "mensaje_recibido",
@@ -80,7 +80,7 @@ export default function PaginaDocs() {
   "datos": { ... }
 }`}</pre>
               <p>
-                Para verificar que la llamada proviene de Sass-CRM, compará el header{" "}
+                Para verificar que la llamada proviene de INYECTAIA, compará el header{" "}
                 <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-xs text-emerald-300">x-webhook-secret</code>{" "}
                 contra el valor que configuraste en el panel. Si no coincide, rechazá la petición con <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-xs text-emerald-300">401</code>.
               </p>

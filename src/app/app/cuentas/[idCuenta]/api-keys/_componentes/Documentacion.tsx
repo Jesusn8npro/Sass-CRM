@@ -20,7 +20,7 @@ export function Documentacion() {
   }
 
   const baseUrl =
-    typeof window !== "undefined" ? window.location.origin : "https://app.sass-crm.com";
+    typeof window !== "undefined" ? window.location.origin : "https://app.inyectaia.com";
 
   const ejemploEnviar = `curl -X POST "${baseUrl}/api/v1/conversaciones/${idCuenta}/mensaje" \\
   -H "Authorization: Bearer sk_live_TU_CLAVE_ACA" \\
@@ -90,7 +90,7 @@ export function Documentacion() {
             ¿Querés ver todos los endpoints, los códigos de error y schemas
             completos?{" "}
             <a
-              href="https://docs.sass-crm.com/api"
+              href="https://inyectaia.com/docs"
               target="_blank"
               rel="noreferrer"
               className="font-semibold text-emerald-600 hover:underline dark:text-emerald-400"

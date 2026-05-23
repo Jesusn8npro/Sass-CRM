@@ -118,7 +118,7 @@ export async function crearOrdenPayPal(p: {
       application_context: {
         shipping_preference: "NO_SHIPPING",
         user_action: "PAY_NOW",
-        brand_name: "Sass-CRM",
+        brand_name: "INYECTAIA",
       },
     },
   });

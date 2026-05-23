@@ -87,7 +87,7 @@ async function disparar1(
 ): Promise<void> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "Sass-CRM-Webhook/1.0",
+    "User-Agent": "INYECTAIA-Webhook/1.0",
   };
   if (webhook.secret) headers["x-webhook-secret"] = webhook.secret;
 

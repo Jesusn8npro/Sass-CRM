@@ -15,7 +15,7 @@ import { log } from "../logger";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY?.trim() || null;
 const RESEND_FROM =
-  process.env.RESEND_FROM?.trim() || "Sass-CRM <hola@sass-crm.com>";
+  process.env.RESEND_FROM?.trim() || "INYECTAIA <hola@inyectaia.com>";
 
 let _cliente: Resend | null = null;
 
