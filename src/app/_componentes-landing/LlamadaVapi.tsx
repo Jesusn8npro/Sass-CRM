@@ -8,15 +8,20 @@ import "./landing.css";
 type Estado = "idle" | "connecting" | "active" | "ended" | "error";
 
 // Detecta browsers de apps (WhatsApp, Instagram, FB) que bloquean getUserMedia
-function detectarNavegadorApp(): boolean {
+function esNavegadorApp(): boolean {
   if (typeof navigator === "undefined") return false;
   return /Instagram|FBAN|FBAV|Twitter|Line\/|WhatsApp|Snapchat|MicroMessenger/.test(
     navigator.userAgent,
   );
 }
 
+function esIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPhone|iPad|iPod/.test(navigator.userAgent);
+}
+
 // ── Barras de voz reactivas ────────────────────────────────────────────────
-const BAR_PHASES = [0, 0.4, 0.8, 0.2, 0.6]; // desfases para aspecto orgánico
+const BAR_PHASES = [0, 0.4, 0.8, 0.2, 0.6];
 
 function BarrasVoz({ volumen, activo }: { volumen: number; activo: boolean }) {
   return (
@@ -87,16 +92,43 @@ function IcoKeyboard() {
     </svg>
   );
 }
-function IcoSafari() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15l-4-4 1.41-1.41L11 14.17l6.59-6.59L19 9l-8 8z"/>
-    </svg>
-  );
-}
 
 // ── Modal de consentimiento ────────────────────────────────────────────────
-function ModalTerminos({ onAceptar, onCancelar }: { onAceptar: () => void; onCancelar: () => void }) {
+// El getUserMedia se llama DENTRO del onClick del botón Aceptar,
+// garantizando que esté en el contexto directo del gesto del usuario.
+// Esta es la única forma que funciona consistentemente en iOS y Android.
+function ModalTerminos({
+  onConcedido,
+  onDenegado,
+  onCancelar,
+}: {
+  onConcedido: () => void;
+  onDenegado: (nombre: string) => void;
+  onCancelar: () => void;
+}) {
+  const [cargando, setCargando] = useState(false);
+
+  const handleAceptar = async () => {
+    if (cargando) return;
+    // ── Verificar soporte ──────────────────────────────────────────
+    if (!navigator.mediaDevices?.getUserMedia) {
+      onDenegado("NotSupported");
+      return;
+    }
+    setCargando(true);
+    // ── getUserMedia directamente en el click (contexto de gesto) ──
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Permiso concedido y cacheado. Cerramos los tracks para liberar el mic
+      // antes de que VAPI abra su propio stream (evita conflicto en Android).
+      stream.getTracks().forEach((t) => t.stop());
+      onConcedido();
+    } catch (e: unknown) {
+      const nombre = e instanceof Error ? e.name : "Unknown";
+      onDenegado(nombre);
+    }
+  };
+
   return (
     <div className="voice-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
       <div className="voice-modal">
@@ -111,12 +143,14 @@ function ModalTerminos({ onAceptar, onCancelar }: { onAceptar: () => void; onCan
             .
           </p>
           <p style={{ fontSize: 12, marginTop: 8, color: "var(--ink-faint)" }}>
-            Se solicitará acceso al micrófono de tu dispositivo.
+            {cargando ? "Solicitando acceso al micrófono…" : "Se solicitará acceso al micrófono de tu dispositivo."}
           </p>
         </div>
         <div className="voice-modal-actions">
-          <button className="voice-modal-cancel" onClick={onCancelar}>Cancelar</button>
-          <button className="voice-modal-accept" onClick={onAceptar}><IcoPhone /> Aceptar e iniciar</button>
+          <button className="voice-modal-cancel" onClick={onCancelar} disabled={cargando}>Cancelar</button>
+          <button className="voice-modal-accept" onClick={handleAceptar} disabled={cargando}>
+            <IcoPhone /> {cargando ? "Verificando…" : "Aceptar e iniciar"}
+          </button>
         </div>
       </div>
     </div>
@@ -134,22 +168,15 @@ export function BotonLlamadaVapi() {
   const [errorMsg, setErrorMsg] = useState("");
   const vapiRef = useRef<InstanceType<typeof Vapi> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Guardamos el stream del priming para liberarlo cuando VAPI arranque
-  const streamRef = useRef<MediaStream | null>(null);
-  // Detectado una sola vez al montar
-  const esAppBrowser = useRef(detectarNavegadorApp());
-
-  const liberarStream = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-  }, []);
+  const enAppBrowser = useRef(esNavegadorApp());
 
   const limpiar = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     setVolumen(0);
-    liberarStream();
-  }, [liberarStream]);
+  }, []);
 
+  // Inicia VAPI — el permiso de micrófono ya fue concedido y cacheado
+  // por el modal antes de llamar a esta función.
   const ejecutarLlamada = useCallback(async () => {
     const publicKey = process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY;
     const assistantId = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID;
@@ -159,44 +186,6 @@ export function BotonLlamadaVapi() {
       return;
     }
 
-    // ── Fix iOS in-app browser: WhatsApp/Instagram/FB no tienen getUserMedia ──
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setErrorMsg(
-        esAppBrowser.current
-          ? 'Abrí esta página en Safari. Tocá ··· → "Abrir en Safari".'
-          : "Tu navegador no soporta llamadas de voz. Usá Safari.",
-      );
-      setEstado("error");
-      return;
-    }
-
-    // ── Fix iOS Safari: getUserMedia PRIMERO, ANTES de cualquier setState.  ──
-    // iOS revoca el contexto de "gesto de usuario" al re-renderizar. Si hacemos
-    // setEstado("connecting") antes del await, el permiso de mic puede fallar.
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      // NO cerramos el stream todavía. Lo mantenemos abierto para que iOS sepa
-      // que el permiso ya está concedido cuando VAPI pida su propio stream.
-      streamRef.current = stream;
-    } catch (permErr: unknown) {
-      const nombre = permErr instanceof Error ? permErr.name : "";
-      const esIos = /iPhone|iPad|iPod/.test(navigator.userAgent);
-      if (nombre === "NotAllowedError" || nombre === "PermissionDeniedError") {
-        setErrorMsg(
-          esIos
-            ? "Permiso de micrófono denegado.\n📱 iPhone: Configuración → Privacidad → Micrófono → Safari ✓\nO: Configuración → Safari → Micrófono → Permitir"
-            : "Permiso denegado. Habilitá el micrófono en tu navegador e intentá de nuevo.",
-        );
-      } else if (nombre === "NotFoundError" || nombre === "DevicesNotFoundError") {
-        setErrorMsg("No se encontró micrófono en tu dispositivo.");
-      } else {
-        setErrorMsg("No se pudo acceder al micrófono. Revisá los permisos e intentá de nuevo.");
-      }
-      setEstado("error");
-      return;
-    }
-
-    // ── Permiso obtenido — ahora sí actualizamos estado e iniciamos VAPI ──
     setEstado("connecting");
     setDuracion(0);
     setVolumen(0);
@@ -208,8 +197,6 @@ export function BotonLlamadaVapi() {
       vapi.on("call-start", () => {
         setEstado("active");
         setDuracion(0);
-        // VAPI ya tiene su propio stream de audio: liberamos el nuestro
-        liberarStream();
         timerRef.current = setInterval(() => setDuracion((s) => s + 1), 1000);
       });
 
@@ -240,10 +227,48 @@ export function BotonLlamadaVapi() {
       setEstado("error");
       limpiar();
     }
-  }, [limpiar, liberarStream]);
+  }, [limpiar]);
 
+  // Verifica soporte básico antes de abrir el modal
   const iniciarLlamada = useCallback(() => {
+    if (enAppBrowser.current || !navigator.mediaDevices?.getUserMedia) {
+      setErrorMsg(
+        enAppBrowser.current
+          ? 'Abrí esta página en Safari o Chrome. Tocá ··· → "Abrir en Safari" / "Abrir en Chrome".'
+          : "Tu navegador no soporta llamadas de voz. Abrí en Safari (iPhone) o Chrome (Android).",
+      );
+      setEstado("error");
+      return;
+    }
     setMostrarTerminos(true);
+  }, []);
+
+  const handlePermisoConcedido = useCallback(() => {
+    setMostrarTerminos(false);
+    ejecutarLlamada();
+  }, [ejecutarLlamada]);
+
+  const handlePermisoDenegado = useCallback((nombre: string) => {
+    setMostrarTerminos(false);
+    const ios = esIOS();
+    if (nombre === "NotSupported") {
+      setErrorMsg(
+        enAppBrowser.current
+          ? 'Abrí esta página en Safari o Chrome. Tocá ··· → "Abrir en Safari".'
+          : "Tu navegador no soporta llamadas. Abrí en Safari o Chrome.",
+      );
+    } else if (nombre === "NotAllowedError" || nombre === "PermissionDeniedError") {
+      setErrorMsg(
+        ios
+          ? "Permiso denegado. Para habilitarlo:\n📱 Configuración → Privacidad → Micrófono → Safari ✓"
+          : "Permiso denegado. Tocá el ícono 🔒 en la barra de dirección → Micrófono → Permitir.",
+      );
+    } else if (nombre === "NotFoundError" || nombre === "DevicesNotFoundError") {
+      setErrorMsg("No se encontró micrófono en tu dispositivo.");
+    } else {
+      setErrorMsg("No se pudo acceder al micrófono. Revisá los permisos e intentá de nuevo.");
+    }
+    setEstado("error");
   }, []);
 
   const colgar = useCallback(async () => {
@@ -260,14 +285,15 @@ export function BotonLlamadaVapi() {
     vapiRef.current.setMuted(next);
   }, [silenciado]);
 
-  const resetearError = useCallback(() => {
-    setErrorMsg("");
+  const resetear = useCallback(() => {
     setEstado("idle");
+    setErrorMsg("");
   }, []);
 
   useEffect(() => () => { limpiar(); vapiRef.current?.stop(); }, [limpiar]);
 
-  const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const fmt = (s: number) =>
+    `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
   const enLlamada = estado === "active" || estado === "connecting";
   const hablando = estado === "active" && !silenciado && volumen > 0.04;
 
@@ -293,7 +319,8 @@ export function BotonLlamadaVapi() {
       {/* ── Modal de términos ──────────────────────────────── */}
       {mostrarTerminos && (
         <ModalTerminos
-          onAceptar={() => { setMostrarTerminos(false); ejecutarLlamada(); }}
+          onConcedido={handlePermisoConcedido}
+          onDenegado={handlePermisoDenegado}
           onCancelar={() => setMostrarTerminos(false)}
         />
       )}
@@ -315,7 +342,11 @@ export function BotonLlamadaVapi() {
           </div>
           <button
             className="voice-panel-close"
-            onClick={() => { if (enLlamada) colgar(); setPanelAbierto(false); setTimeout(resetearError, 400); }}
+            onClick={() => {
+              if (enLlamada) colgar();
+              setPanelAbierto(false);
+              setTimeout(resetear, 400);
+            }}
             aria-label="Cerrar"
           >×</button>
         </div>
@@ -332,37 +363,34 @@ export function BotonLlamadaVapi() {
             </div>
 
             {estado === "error" && (
-              <div style={{ textAlign: "center" }}>
-                <p style={{ color: "#ff3e6c", fontSize: 13, whiteSpace: "pre-line", lineHeight: 1.5 }}>
-                  {errorMsg || "Error al acceder al micrófono. Intentá de nuevo."}
+              <div style={{ textAlign: "center", width: "100%" }}>
+                <p style={{ color: "#ff3e6c", fontSize: 12, whiteSpace: "pre-line", lineHeight: 1.6, margin: "0 0 12px" }}>
+                  {errorMsg}
                 </p>
-                {/* Botón especial para browsers de apps (WhatsApp, Instagram…) */}
-                {esAppBrowser.current && (
+                {enAppBrowser.current && (
                   <a
                     href={typeof window !== "undefined" ? window.location.href : "/"}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="voice-call-btn-start"
-                    style={{ marginTop: 10, display: "inline-flex", textDecoration: "none" }}
+                    style={{ display: "inline-flex", textDecoration: "none", marginBottom: 8 }}
                   >
-                    <IcoSafari /> Abrir en Safari
+                    Abrir en Safari / Chrome
                   </a>
                 )}
+                <br />
+                <button
+                  onClick={resetear}
+                  style={{ background: "none", color: "var(--ink-faint)", fontSize: 12, textDecoration: "underline", cursor: "pointer", border: "none" }}
+                >
+                  Intentar de nuevo
+                </button>
               </div>
             )}
 
-            {estado !== "error" && (
+            {estado === "idle" && (
               <button className="voice-call-btn-start" onClick={iniciarLlamada}>
                 <IcoPhone /> Iniciar llamada
-              </button>
-            )}
-            {estado === "error" && (
-              <button
-                className="voice-call-btn-start"
-                onClick={resetearError}
-                style={{ marginTop: 6, background: "rgba(255,255,255,0.08)", color: "var(--ink)", boxShadow: "none" }}
-              >
-                Intentar de nuevo
               </button>
             )}
           </div>
@@ -406,7 +434,7 @@ export function BotonLlamadaVapi() {
         {/* Ended */}
         {estado === "ended" && (
           <div className="voice-input">
-            <button className="voice-call-btn-start" onClick={resetearError}>
+            <button className="voice-call-btn-start" onClick={resetear}>
               <IcoPhone /> Llamar de nuevo
             </button>
           </div>
