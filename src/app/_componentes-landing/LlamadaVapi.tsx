@@ -7,6 +7,29 @@ import "./landing.css";
 // ── tipos ──────────────────────────────────────────────────────────────────
 type Estado = "idle" | "connecting" | "active" | "ended" | "error";
 
+// ── Barras de voz reactivas ────────────────────────────────────────────────
+const BAR_COUNT = 5;
+const BAR_PHASES = [0, 0.4, 0.8, 0.2, 0.6]; // desfases para aspecto orgánico
+
+function BarrasVoz({ volumen, activo }: { volumen: number; activo: boolean }) {
+  return (
+    <div className="voice-bars" aria-hidden="true">
+      {BAR_PHASES.map((fase, i) => {
+        // Cada barra tiene un tamaño ligeramente distinto basado en el volumen
+        const amp = activo ? Math.max(0.08, volumen * (0.7 + fase * 0.5)) : 0.08;
+        const h = Math.round(4 + amp * 28);
+        return (
+          <div
+            key={i}
+            className={`voice-bar${activo && volumen > 0.05 ? " speaking" : ""}`}
+            style={{ height: h }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Pinwheel SVG ──────────────────────────────────────────────────────────
 function Pinwheel({ size = 36, spin = true }: { size?: number; spin?: boolean }) {
   return (
@@ -66,13 +89,17 @@ function ModalTerminos({ onAceptar, onCancelar }: { onAceptar: () => void; onCan
       <div className="voice-modal">
         <h3 id="modal-titulo" className="voice-modal-title">Antes de comenzar</h3>
         <div className="voice-modal-body">
-          <p>Al iniciar esta llamada de voz, acepta que:</p>
-          <ul>
-            <li>La conversación será <strong>grabada y transcrita</strong> para mejorar el servicio.</li>
-            <li>Se pueden capturar <strong>datos de su negocio</strong> mencionados durante la llamada (nombre, sector, necesidades).</li>
-            <li>La información se almacena de forma segura y no se comparte con terceros sin su consentimiento.</li>
-            <li>Puede interrumpir la llamada en cualquier momento.</li>
-          </ul>
+          <p>
+            Esta llamada de voz será grabada y procesada por nuestra IA para mejorar el servicio.
+            Al continuar aceptas nuestras{" "}
+            <a href="/privacidad" target="_blank" style={{ color: "var(--cyan)", textDecoration: "underline" }}>
+              políticas de privacidad
+            </a>
+            .
+          </p>
+          <p style={{ fontSize: 12, marginTop: 8, color: "var(--ink-faint)" }}>
+            Se solicitará acceso al micrófono de tu dispositivo.
+          </p>
         </div>
         <div className="voice-modal-actions">
           <button className="voice-modal-cancel" onClick={onCancelar}>Cancelar</button>
@@ -90,11 +117,13 @@ export function BotonLlamadaVapi() {
   const [silenciado, setSilenciado] = useState(false);
   const [duracion, setDuracion] = useState(0);
   const [mostrarTerminos, setMostrarTerminos] = useState(false);
+  const [volumen, setVolumen] = useState(0);
   const vapiRef = useRef<InstanceType<typeof Vapi> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const limpiar = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    setVolumen(0);
   }, []);
 
   const ejecutarLlamada = useCallback(async () => {
@@ -105,6 +134,20 @@ export function BotonLlamadaVapi() {
     try {
       setEstado("connecting");
       setDuracion(0);
+      setVolumen(0);
+
+      // Solicitar permiso de micrófono explícitamente antes de iniciar VAPI.
+      // Esto es crítico en iOS Safari: requiere que getUserMedia ocurra dentro
+      // del mismo gesto de usuario (tap) que disparó esta función.
+      // El stream se cierra inmediatamente — VAPI crea el suyo propio al arrancar.
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        stream.getTracks().forEach((t) => t.stop());
+      } catch (permErr) {
+        console.warn("[vapi] permiso mic denegado:", permErr);
+        setEstado("error");
+        return;
+      }
 
       const vapi = new Vapi(publicKey);
       vapiRef.current = vapi;
@@ -116,6 +159,12 @@ export function BotonLlamadaVapi() {
       });
 
       vapi.on("call-end", () => { setEstado("ended"); limpiar(); });
+
+      // Nivel de voz del usuario en tiempo real (0–1) — disponible en @vapi-ai/web
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (vapi as any).on("volume-level", (vol: number) => {
+        setVolumen(vol);
+      });
 
       vapi.on("error", (e: unknown) => {
         console.error("VAPI error:", e);
@@ -161,6 +210,7 @@ export function BotonLlamadaVapi() {
 
   const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
   const enLlamada = estado === "active" || estado === "connecting";
+  const hablando = estado === "active" && !silenciado && volumen > 0.04;
 
   return (
     <>
@@ -211,7 +261,7 @@ export function BotonLlamadaVapi() {
           >×</button>
         </div>
 
-        {/* Hero idle / connecting */}
+        {/* Hero idle / error */}
         {(estado === "idle" || estado === "error") && (
           <div className="voice-hero">
             <div className="voice-pinwheel-large">
@@ -222,7 +272,9 @@ export function BotonLlamadaVapi() {
               <span>Llamada de voz en directo desde el navegador.<br />Sin instalar nada · 100% gratis para ti.</span>
             </div>
             {estado === "error" && (
-              <p style={{ color: "#ff3e6c", fontSize: 13 }}>Error al conectar. Revisa tu micrófono e inténtalo de nuevo.</p>
+              <p style={{ color: "#ff3e6c", fontSize: 13, textAlign: "center" }}>
+                No se pudo acceder al micrófono. Revisa los permisos del navegador e inténtalo de nuevo.
+              </p>
             )}
             <button className="voice-call-btn-start" onClick={iniciarLlamada}>
               <IcoPhone /> Iniciar llamada
@@ -230,23 +282,27 @@ export function BotonLlamadaVapi() {
           </div>
         )}
 
-        {/* Calling / active state */}
+        {/* Calling / active */}
         {enLlamada && (
           <div className="voice-calling">
             <div className={`voice-pinwheel-large${estado === "active" ? " pulsing" : ""}`}>
               <Pinwheel size={80} spin />
               {estado === "connecting" && (
-                <div className="voice-call-btn-mini">
-                  <IcoPhone />
-                </div>
+                <div className="voice-call-btn-mini"><IcoPhone /></div>
               )}
             </div>
+
             <div className="voice-call-status">
-              {estado === "connecting" ? "Conectando..." : "Llamada en curso"}
+              {estado === "connecting" ? "Conectando..." : hablando ? "Hablando..." : "Escuchando..."}
             </div>
+
             {estado === "active" && (
-              <div className="voice-call-time">{fmt(duracion)}</div>
+              <>
+                <BarrasVoz volumen={volumen} activo={!silenciado} />
+                <div className="voice-call-time">{fmt(duracion)}</div>
+              </>
             )}
+
             <div className="voice-call-actions">
               <button className="voice-mute" onClick={toggleSilencio} title={silenciado ? "Activar mic" : "Silenciar"}>
                 {silenciado ? <IcoMicOff /> : <IcoMic />}
@@ -261,7 +317,7 @@ export function BotonLlamadaVapi() {
           </div>
         )}
 
-        {/* Footer */}
+        {/* Ended */}
         {estado === "ended" && (
           <div className="voice-input">
             <button className="voice-call-btn-start" onClick={() => setEstado("idle")}>

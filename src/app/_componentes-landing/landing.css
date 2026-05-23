@@ -1435,6 +1435,21 @@
 }
 .voice-modal-accept:hover { opacity: 0.88; }
 
+/* Barras de visualización de voz */
+.voice-bars {
+  display: flex; align-items: center; justify-content: center;
+  gap: 4px; height: 36px;
+}
+.voice-bar {
+  width: 4px; min-height: 4px; border-radius: 2px;
+  background: rgba(255,126,43,0.35);
+  transition: height 0.08s ease;
+}
+.voice-bar.speaking {
+  background: #ff7e2b;
+  box-shadow: 0 0 6px rgba(255,126,43,0.5);
+}
+
 .voice-calling {
   padding: 28px 22px;
   display: flex; flex-direction: column; align-items: center; gap: 14px;
