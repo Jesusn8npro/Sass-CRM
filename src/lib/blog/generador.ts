@@ -45,6 +45,7 @@ export interface ArticuloGenerado {
   tags_sugeridos: string[];
   tiempo_lectura_min: number;
   imagen_prompt_sugerido: string;
+  categoria_sugerida: "inteligencia-artificial" | "whatsapp-business" | "marketing" | "casos-de-uso";
   /** 0-2 sugerencias para imágenes ilustrativas dentro del cuerpo.
    *  El orquestador decide cuántas materializar según el modo. */
   imagenes_inline_sugeridas: ImagenInlineSugerida[];
@@ -63,31 +64,37 @@ const ESQUEMA = {
     "seo_keywords",
     "tags_sugeridos",
     "imagen_prompt_sugerido",
+    "categoria_sugerida",
     "imagenes_inline_sugeridas",
   ],
   properties: {
-    titulo: { type: "string", description: "60-120 caracteres" },
-    slug_sugerido: { type: "string", description: "kebab-case, ASCII only" },
-    resumen: { type: "string", description: "140-300 caracteres, gancho SEO" },
+    titulo: { type: "string", description: "60-120 caracteres, en ESPAÑOL" },
+    slug_sugerido: { type: "string", description: "kebab-case, ASCII only, sin tildes" },
+    resumen: { type: "string", description: "140-300 caracteres, gancho SEO, en ESPAÑOL" },
     contenido_md: {
       type: "string",
-      description: "1500-3500 palabras markdown",
+      description: "1500-3500 palabras markdown, TODO en ESPAÑOL NEUTRO",
     },
-    seo_titulo: { type: "string", description: "max 65 chars" },
-    seo_descripcion: { type: "string", description: "max 160 chars" },
+    seo_titulo: { type: "string", description: "max 65 chars, en ESPAÑOL" },
+    seo_descripcion: { type: "string", description: "max 160 chars, en ESPAÑOL" },
     seo_keywords: {
       type: "array",
       items: { type: "string" },
-      description: "3-7 keywords",
+      description: "3-7 keywords en ESPAÑOL",
     },
     tags_sugeridos: {
       type: "array",
       items: { type: "string" },
-      description: "3-6 tags",
+      description: "3-6 tags en ESPAÑOL",
     },
     imagen_prompt_sugerido: {
       type: "string",
-      description: "Prompt en INGLÉS para la imagen de portada (Nano Banana funciona mejor en EN)",
+      description: "Prompt en inglés para el modelo de imagen (Nano Banana). CRÍTICO: cualquier texto que se deba RENDERIZAR DENTRO DE LA IMAGEN debe estar en ESPAÑOL (ej: '5 IDEAS DE IA' NO '5 AI IDEAS'). El prompt es en inglés pero el texto visible en la imagen SIEMPRE en español.",
+    },
+    categoria_sugerida: {
+      type: "string",
+      enum: ["inteligencia-artificial", "whatsapp-business", "marketing", "casos-de-uso"],
+      description: "La categoría del blog que mejor encaja con el artículo. Elegí la más específica.",
     },
     imagenes_inline_sugeridas: {
       type: "array",
@@ -120,8 +127,10 @@ const ESQUEMA = {
 } as const;
 
 const PROMPT_SISTEMA = `Eres un copywriter experto en SEO y marketing digital para SaaS.
-Escribes artículos de blog en ESPAÑOL NEUTRO (válido para España y Latinoamérica),
-optimizados para Google Search, con tono profesional pero cercano y conversacional.
+
+IDIOMA: ESPAÑOL NEUTRO obligatorio en TODO el artículo (título, resumen, contenido, SEO, tags, keywords).
+Válido para España y Latinoamérica. Optimizado para Google Search.
+Tono profesional pero cercano y conversacional.
 
 ESTILO:
 - Párrafos cortos (3-5 líneas máximo).
@@ -153,30 +162,39 @@ SEO — REGLAS OBLIGATORIAS:
 - Densidad de keyword: mencionar la keyword principal cada ~200 palabras, nunca dos veces seguidas.
 
 IMÁGENES:
-- imagen_prompt_sugerido: prompt EN INGLÉS para la PORTADA CLICKBAIT.
-  ESTA ES LA MINIATURA QUE APARECE EN GOOGLE Y REDES — tiene que ROBAR
-  EL CLICK. Reglas obligatorias del prompt:
-    * Incluir TEXTO GRANDE RENDERIZADO con un gancho corto del título
-      (3-7 palabras, ej: "5 IDEAS DE IA", "VENDE MÁS CON WHATSAPP",
-      "EVITA ESTOS 3 ERRORES"). El modelo Nano Banana Pro renderiza
-      texto perfectamente legible — aprovechalo.
+- imagen_prompt_sugerido: prompt EN INGLÉS para el modelo de imagen de portada.
+  ESTA ES LA MINIATURA QUE APARECE EN GOOGLE Y REDES — tiene que ROBAR EL CLICK.
+
+  ⚠️ REGLA CRÍTICA DE IDIOMA: Cualquier texto que escribas para RENDERIZAR
+  DENTRO DE LA IMAGEN debe estar en ESPAÑOL. El prompt técnico va en inglés
+  pero las palabras visibles en la imagen son EN ESPAÑOL siempre.
+  CORRECTO: huge text 'VENDE MÁS CON IA'
+  INCORRECTO: huge text 'SELL MORE WITH AI'
+
+  Reglas del prompt:
+    * Incluir TEXTO GRANDE RENDERIZADO en español: gancho del artículo en
+      3-6 palabras (ej: "5 IDEAS DE IA", "VENDE MÁS CON WHATSAPP",
+      "EVITA ESTOS 3 ERRORES"). Nano Banana Pro renderiza texto perfectamente.
     * Estilo VIRAL/CLICKBAIT moderno: colores vibrantes, contraste alto,
       composición tipo YouTube thumbnail premium o portada Medium 2026.
-    * Elementos visuales que CHOQUEN: un símbolo grande, una flecha,
-      números enormes, un rostro expresivo, o un icono central llamativo.
+    * Elementos visuales que CHOQUEN: símbolo grande, flecha, números enormes,
+      ícono central llamativo.
     * NO clichés genéricos ("person looking at laptop", "hands typing").
-    * Que se entienda LEGIBLE incluso en miniatura de 200x200px.
-  Ejemplo de prompt bien armado:
-    "Bold clickbait blog cover, vibrant gradient orange-to-purple
-     background, huge white text '7 ERRORES DE IA' centered top,
-     a giant red X mark crossing a chatbot icon, modern Y2K style,
-     high contrast, 1024x1024"
+    * Legible incluso en miniatura de 200x200px.
+
+  Ejemplo correcto:
+    "Bold clickbait blog cover, vibrant gradient orange-to-purple background,
+     huge bold white text 'VENDE MÁS CON IA' centered, giant robot icon below,
+     modern Y2K style, high contrast, 1024x1024"
 
 - imagenes_inline_sugeridas: array de EXACTAMENTE 2 imágenes para el
   cuerpo. Estas SÍ van sin texto renderizado — son ilustraciones
   contextuales. Cada una ilustra un concepto específico del H2 al
   que acompaña. Distribuilas en H2 separados (típicamente H2 #2 y
   H2 #4). Prompts en INGLÉS. Alt text en español.
+
+IMPORTANTE: el campo contenido_md NO debe contener imagenes en markdown.
+Las imagenes se agregan solas via imagenes_inline_sugeridas.
 
 CONTEXTO DEL NEGOCIO: SaaS multi-tenant que conecta números de WhatsApp
 a un agente de IA. Vende a PYMEs y agencias en Latinoamérica.
@@ -249,6 +267,14 @@ Devolveme el JSON estructurado con todos los campos requeridos.`;
   if (!Array.isArray(parsed.imagenes_inline_sugeridas)) {
     parsed.imagenes_inline_sugeridas = [];
   }
+
+  // Strip de imágenes placeholder que el AI escribe en el markdown
+  // a pesar de la instrucción — estas aparecen rotas en el artículo.
+  // Las imágenes reales se insertan vía imagenes_inline_sugeridas.
+  parsed.contenido_md = parsed.contenido_md
+    .split("\n")
+    .filter((linea) => !/^!\[.*?\]\(.*?\)/.test(linea.trim()))
+    .join("\n");
 
   return parsed;
 }

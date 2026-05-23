@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS blog_config (
   longitud        text       NOT NULL DEFAULT 'medio',        -- 'corto' | 'medio' | 'largo'
   tier_portada    text       NOT NULL DEFAULT 'pro',          -- 'pro' | 'estandar'
   modo_imagenes   text       NOT NULL DEFAULT 'completo',     -- 'sin-imagenes' | 'solo-portada' | 'completo'
+  minutos         int        NOT NULL DEFAULT 0 CHECK (minutos >= 0 AND minutos <= 59),  -- minuto UTC del disparo
   actualizado_en  timestamptz NOT NULL DEFAULT now()
 );
 

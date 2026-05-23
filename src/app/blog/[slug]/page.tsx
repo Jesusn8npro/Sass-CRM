@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import {
@@ -181,9 +180,14 @@ export default async function PaginaArticulo({ params }: Props) {
 
             {/* Imagen portada */}
             {articulo.imagen_portada_url && (
-              <div className="relative mb-8 aspect-video w-full overflow-hidden rounded-2xl border border-white/[0.06]">
-                <Image src={articulo.imagen_portada_url} alt={articulo.imagen_portada_alt ?? articulo.titulo}
-                  fill priority sizes="(max-width: 768px) 100vw, (max-width: 1400px) 60vw, 800px" className="object-cover" />
+              <div className="mb-8 w-full overflow-hidden rounded-2xl border border-white/[0.06]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={articulo.imagen_portada_url}
+                  alt={articulo.imagen_portada_alt ?? articulo.titulo}
+                  className="w-full aspect-[4/3] sm:aspect-video object-cover"
+                  loading="eager"
+                />
               </div>
             )}
 

@@ -19,6 +19,7 @@
 import {
   BufferJSON,
   initAuthCreds,
+  makeCacheableSignalKeyStore,
   type AuthenticationCreds,
   type AuthenticationState,
   type SignalDataTypeMap,
@@ -181,7 +182,7 @@ export async function useSupabaseAuthState(
     }
   };
 
-  return { state: { creds, keys }, saveCreds };
+  return { state: { creds, keys: makeCacheableSignalKeyStore(keys) }, saveCreds };
 }
 
 /**

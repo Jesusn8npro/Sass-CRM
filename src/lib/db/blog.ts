@@ -262,6 +262,7 @@ export async function obtenerArticuloPorId(
 
 export async function listarTodosLosArticulos(opciones?: {
   estado?: EstadoArticulo;
+  generado_por?: "ia" | "humano" | "mixto";
   limite?: number;
 }): Promise<ArticuloConCategoria[]> {
   const limite = Math.max(1, Math.min(500, opciones?.limite ?? 100));
@@ -271,6 +272,7 @@ export async function listarTodosLosArticulos(opciones?: {
     .order("creado_en", { ascending: false })
     .limit(limite);
   if (opciones?.estado) q = q.eq("estado", opciones.estado);
+  if (opciones?.generado_por) q = q.eq("generado_por", opciones.generado_por);
   const { data, error } = await q;
   if (error) lanzar(error, "listarTodosLosArticulos");
   return ((data ?? []) as Parameters<typeof mapearConCategoria>[0][]).map(

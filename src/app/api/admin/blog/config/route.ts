@@ -2,6 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requerirAdmin } from "@/lib/auth/sesion";
 import { obtenerBlogConfig, actualizarBlogConfig } from "@/lib/db/blogConfig";
 
+const _g = global as typeof global & {
+  __cronBlogSlotsHoy?: Set<string>;
+  __cronBlogDiaHoy?: number;
+};
+
 export const dynamic = "force-dynamic";
 
 export async function GET() {
@@ -41,6 +46,14 @@ export async function PATCH(request: NextRequest) {
     cambios.dias_semana = [...new Set(dias as number[])].sort((a, b) => a - b);
   }
 
+  if (typeof body.minutos === "number" && body.minutos >= 0 && body.minutos <= 59) {
+    cambios.minutos = Math.floor(body.minutos);
+  }
+
+  if (typeof body.tema_manual === "string") {
+    cambios.tema_manual = body.tema_manual.trim() || null;
+  }
+
   if (typeof body.max_por_dia === "number" && body.max_por_dia >= 1 && body.max_por_dia <= 10) {
     cambios.max_por_dia = Math.floor(body.max_por_dia);
   }
@@ -56,5 +69,10 @@ export async function PATCH(request: NextRequest) {
   }
 
   const config = await actualizarBlogConfig(cambios);
+
+  // Al guardar nueva config, limpiar slots para que el nuevo horario pueda disparar
+  _g.__cronBlogSlotsHoy = new Set();
+  _g.__cronBlogDiaHoy = undefined;
+
   return NextResponse.json(config);
 }

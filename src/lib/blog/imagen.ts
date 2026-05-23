@@ -14,6 +14,13 @@
 import crypto from "node:crypto";
 import { generarImagen, type ModeloImagen } from "@/lib/imagenes/nanoBanana";
 import { crearClienteAdmin } from "@/lib/supabase/cliente-servidor";
+import { urlAbsoluta } from "@/lib/blog/siteUrl";
+
+// Envuelve la URL pública de Supabase en el proxy local para que el CDN
+// la cachee y no genere egress en cada visita.
+function proxearUrl(urlSupabase: string): string {
+  return urlAbsoluta(`/api/imagen-proxy?url=${encodeURIComponent(urlSupabase)}`);
+}
 
 export type TierImagen = "estandar" | "pro";
 
@@ -85,7 +92,7 @@ export async function generarImagenPortada(
   }
 
   return {
-    url_publica: urlData.publicUrl,
+    url_publica: proxearUrl(urlData.publicUrl),
     ruta_storage: ruta,
     bytes: pngBytes.length,
     modelo,
@@ -146,7 +153,7 @@ export async function generarImagenInline(
   }
 
   return {
-    url_publica: urlData.publicUrl,
+    url_publica: proxearUrl(urlData.publicUrl),
     ruta_storage: ruta,
     bytes: pngBytes.length,
     alt: altText,
@@ -185,7 +192,7 @@ export async function subirImagenPortadaDesdeBytes(
   }
 
   return {
-    url_publica: urlData.publicUrl,
+    url_publica: proxearUrl(urlData.publicUrl),
     ruta_storage: ruta,
     bytes: bytes.length,
   };

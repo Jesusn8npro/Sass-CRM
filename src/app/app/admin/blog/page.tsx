@@ -28,7 +28,7 @@ const ETIQUETA_ESTADO: Record<
 export default async function PaginaAdminBlog({
   searchParams,
 }: {
-  searchParams: Promise<{ estado?: string }>;
+  searchParams: Promise<{ estado?: string; origen?: string }>;
 }) {
   const params = await searchParams;
   const estado =
@@ -37,7 +37,10 @@ export default async function PaginaAdminBlog({
     params.estado === "archivado"
       ? params.estado
       : undefined;
-  const articulos = await listarTodosLosArticulos({ estado, limite: 200 });
+  const generadoPor =
+    params.origen === "ia" ? "ia" as const :
+    params.origen === "humano" ? "humano" as const : undefined;
+  const articulos = await listarTodosLosArticulos({ estado, generado_por: generadoPor, limite: 200 });
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -51,7 +54,7 @@ export default async function PaginaAdminBlog({
               Artículos del blog
             </h1>
             <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-zinc-500 dark:text-white/40">
-              {articulos.length} {estado ? `· ${estado}` : "totales"}
+              {articulos.length} {estado ? `· ${estado}` : generadoPor === "ia" ? "· 🤖 automáticos" : generadoPor === "humano" ? "· ✍ manuales" : "totales"}
             </p>
           </div>
           <div className="flex gap-2">
@@ -73,27 +76,43 @@ export default async function PaginaAdminBlog({
             >
               ⚙ Automatización
             </Link>
+            <Link
+              href="/app/admin/blog/cron-logs"
+              className="rounded-full border border-zinc-200 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-700 transition-colors hover:border-zinc-400 dark:border-white/15 dark:text-white/70 dark:hover:border-white/30"
+            >
+              📋 Logs
+            </Link>
           </div>
         </div>
       </header>
 
       {/* Filtros */}
       <nav className="mb-6 flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-wider">
-        <FiltroEstado activo={!estado} label="todos" href="/app/admin/blog" />
-        <FiltroEstado
-          activo={estado === "borrador"}
-          label="borradores"
-          href="/app/admin/blog?estado=borrador"
-        />
+        <FiltroEstado activo={!estado && !generadoPor} label="todos" href="/app/admin/blog" />
         <FiltroEstado
           activo={estado === "publicado"}
           label="publicados"
           href="/app/admin/blog?estado=publicado"
         />
         <FiltroEstado
+          activo={estado === "borrador"}
+          label="borradores"
+          href="/app/admin/blog?estado=borrador"
+        />
+        <FiltroEstado
           activo={estado === "archivado"}
           label="archivados"
           href="/app/admin/blog?estado=archivado"
+        />
+        <FiltroEstado
+          activo={generadoPor === "ia"}
+          label="🤖 auto"
+          href="/app/admin/blog?origen=ia"
+        />
+        <FiltroEstado
+          activo={generadoPor === "humano"}
+          label="✍ manual"
+          href="/app/admin/blog?origen=humano"
         />
       </nav>
 

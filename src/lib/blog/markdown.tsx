@@ -306,20 +306,19 @@ export function RenderMarkdown({ md }: { md: string }): ReactNode {
       continue;
     }
 
-    // Imagen inline ![alt](url) — renderiza con next/image para AVIF/WebP
-    // .*? no-greedy + backtracking para manejar alt texts con \] escapados
+    // Imagen inline ![alt](url) — usa <img> para tolerar cualquier host
+    // (el AI puede generar URLs de Supabase, CDN externo o placeholders)
     const imgMatch = /^!\[(.*?)\]\(([^)]+)\)$/.exec(linea.trim());
     if (imgMatch) {
       const alt = imgMatch[1] ?? "";
       const src = imgMatch[2] ?? "";
       bloques.push(
-        <div key={k} className="relative my-6 w-full overflow-hidden rounded-xl aspect-video bg-zinc-100 dark:bg-zinc-800">
-          <Image
+        <div key={k} className="my-6 w-full overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-800">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             src={src}
             alt={alt}
-            fill
-            sizes="(max-width: 768px) 100vw, (max-width: 1280px) 80vw, 768px"
-            className="object-cover"
+            className="w-full h-auto object-cover"
             loading="lazy"
           />
         </div>,
