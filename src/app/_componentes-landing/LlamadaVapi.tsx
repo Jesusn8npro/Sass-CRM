@@ -8,7 +8,6 @@ import "./landing.css";
 type Estado = "idle" | "connecting" | "active" | "ended" | "error";
 
 // ── Barras de voz reactivas ────────────────────────────────────────────────
-const BAR_COUNT = 5;
 const BAR_PHASES = [0, 0.4, 0.8, 0.2, 0.6]; // desfases para aspecto orgánico
 
 function BarrasVoz({ volumen, activo }: { volumen: number; activo: boolean }) {
