@@ -178,13 +178,12 @@ export function BotonLlamadaVapi() {
   // Inicia VAPI — el permiso de micrófono ya fue concedido y cacheado
   // por el modal antes de llamar a esta función.
   const ejecutarLlamada = useCallback(async () => {
-    const publicKey = process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY;
-    const assistantId = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID;
-    if (!publicKey || !assistantId) {
-      setErrorMsg("Configuración de voz incompleta. Contactá al soporte.");
-      setEstado("error");
-      return;
-    }
+    // Fallback hardcodeado: estos son valores públicos (no secretos).
+    // Evita que el widget falle si las env vars no están en el build.
+    const publicKey =
+      process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY || "19eefaea-a077-40ff-8ecc-b23a4a4ab213";
+    const assistantId =
+      process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID || "067a2db2-249d-40cb-9d24-c3e919a0fabe";
 
     setEstado("connecting");
     setDuracion(0);
