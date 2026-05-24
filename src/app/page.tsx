@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Navegacion, PieDePagina } from "./_componentes-landing/Layout";
+import { Navegacion, PieDePagina, BotoneFlotanteWhatsApp } from "./_componentes-landing/Layout";
 import { Hero } from "./_componentes-landing/HeroSection";
 import {
   CasosDeUso,
@@ -190,6 +190,7 @@ export default async function PaginaLanding() {
       <PreguntasFrecuentes />
       <CtaFinal />
       <PieDePagina />
+      <BotoneFlotanteWhatsApp />
       <BotonLlamadaVapi />
     </div>
   );
