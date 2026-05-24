@@ -24,16 +24,18 @@ function esIOS(): boolean {
 const BAR_PHASES = [0, 0.4, 0.8, 0.2, 0.6];
 
 function BarrasVoz({ volumen, activo }: { volumen: number; activo: boolean }) {
+  // Si hay datos de volumen real los usamos; si no, la animación CSS toma el control
+  const hayVolumen = volumen > 0.05;
   return (
-    <div className="voice-bars" aria-hidden="true">
+    <div className={`voice-bars${activo ? " animando" : ""}`} aria-hidden="true">
       {BAR_PHASES.map((fase, i) => {
-        const amp = activo ? Math.max(0.08, volumen * (0.7 + fase * 0.5)) : 0.08;
-        const h = Math.round(4 + amp * 28);
+        const amp = hayVolumen ? Math.max(0.15, volumen * (0.7 + fase * 0.5)) : 0;
+        const h = hayVolumen ? Math.round(4 + amp * 28) : undefined;
         return (
           <div
             key={i}
-            className={`voice-bar${activo && volumen > 0.05 ? " speaking" : ""}`}
-            style={{ height: h }}
+            className={`voice-bar${activo && hayVolumen ? " speaking" : ""}`}
+            style={h !== undefined ? { height: h } : undefined}
           />
         );
       })}
