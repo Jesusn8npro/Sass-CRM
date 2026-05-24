@@ -517,21 +517,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, tipo, ignorado: true });
   }
 
-  // ── Rutas 2 y 3: verificar secret global del assistant ───
-  // Para WhatsApp (ruta 1) el secret se verifica contra la cuenta en DB.
-  // Para outreach y calls desconocidas usamos el ENV VAPI_WEBHOOK_SECRET.
-  if (VAPI_WEBHOOK_SECRET_GLOBAL && !verificarSecretWebhook(headerSecret, VAPI_WEBHOOK_SECRET_GLOBAL)) {
-    console.warn(`[vapi-webhook] ✗ Secret inválido para call no-WhatsApp — callId: ${callId}`);
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // ── Ruta 2: llamada de OUTREACH (prospeccion_llamadas) ────
-  const logOutreach = await obtenerRegistroLlamadaPorVapiId(callId);
-  if (logOutreach) {
-    return manejarWebhookOutreach(message, callId, logOutreach);
-  }
-
-  // ── Ruta 3: llamada de landing demo (llamadas_landing) ────
+  // ── Ruta 2: llamada de landing (llamadas_landing) ────────
+  // Se verifica ANTES del secret global porque el asistente de landing
+  // es propio de la plataforma y puede no tener secret configurado.
+  // La seguridad es implícita: el callId debe existir en nuestra DB.
   const llamadaLanding = await obtenerLlamadaLandingPorCallId(callId);
   if (llamadaLanding) {
     if (message.type === "end-of-call-report") {
@@ -549,8 +538,24 @@ export async function POST(req: NextRequest) {
         datos_negocio: dc ?? undefined,
         terminada_en: terminadaEn,
       });
+
+      console.log(`[vapi-webhook] ✓ Landing call actualizada — callId: ${callId} duracion: ${duracion ?? "?"}s`);
     }
     return NextResponse.json({ ok: true });
+  }
+
+  // ── Rutas 3 y 4: verificar secret global del assistant ───
+  // Para WhatsApp (ruta 1) y landing (ruta 2) ya se manejaron arriba.
+  // Para outreach y calls desconocidas usamos el ENV VAPI_WEBHOOK_SECRET.
+  if (VAPI_WEBHOOK_SECRET_GLOBAL && !verificarSecretWebhook(headerSecret, VAPI_WEBHOOK_SECRET_GLOBAL)) {
+    console.warn(`[vapi-webhook] ✗ Secret inválido para call no-WhatsApp — callId: ${callId}`);
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // ── Ruta 3: llamada de OUTREACH (prospeccion_llamadas) ────
+  const logOutreach = await obtenerRegistroLlamadaPorVapiId(callId);
+  if (logOutreach) {
+    return manejarWebhookOutreach(message, callId, logOutreach);
   }
 
   // ── Ruta 4: llamada desconocida (test desde dashboard Vapi,
