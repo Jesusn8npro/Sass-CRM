@@ -64,7 +64,7 @@ const MEGA_SERVICES = [
 const NAV_LINKS = [
   { href: "/servicios", label: "Servicios", mega: true },
   { href: "#como", label: "Cómo funciona" },
-  { href: "#demo", label: "Demo" },
+  { href: "/demo", label: "Demo" },
   { href: "/nosotros", label: "Sobre nosotros" },
   { href: "/trabajos", label: "Trabajos" },
   { href: "#precios", label: "Precios" },
@@ -74,7 +74,7 @@ const NAV_LINKS = [
 const DRAWER_LINKS = [
   { href: "/servicios", label: "Servicios" },
   { href: "#como", label: "Cómo funciona" },
-  { href: "#demo", label: "Demo" },
+  { href: "/demo", label: "Demo" },
   { href: "/nosotros", label: "Sobre nosotros" },
   { href: "/trabajos", label: "Trabajos" },
   { href: "#precios", label: "Precios" },
@@ -163,7 +163,7 @@ export function Navegacion() {
                           <div className="mega-promo-tag">DESTACADO</div>
                           <div className="mega-promo-title">Inyectaia para Agencias</div>
                           <div className="mega-promo-desc">Revende nuestra IA a tus clientes. White-label completo y comisión recurrente del 30%.</div>
-                          <a href="#demo" className="mega-promo-link" onClick={() => setMegaOpen(false)}>Saber más →</a>
+                          <a href="/demo" className="mega-promo-link" onClick={() => setMegaOpen(false)}>Saber más →</a>
                         </div>
                       </div>
                     )}
@@ -225,7 +225,7 @@ export function Navegacion() {
           ))}
         </nav>
         <div className="drawer-foot">
-          <a href="#demo" className="l-btn l-btn-primary" onClick={() => setDrawerOpen(false)}>
+          <a href="/demo" className="l-btn l-btn-primary" onClick={() => setDrawerOpen(false)}>
             <span>Empezar gratis →</span>
           </a>
           <a href="https://wa.me/34600000000" className="l-btn l-btn-ghost">💬 Hablar por WhatsApp</a>
