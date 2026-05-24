@@ -48,3 +48,18 @@ export async function obtenerLlamadaLandingPorCallId(
   if (error) lanzar(error, "obtenerLlamadaLandingPorCallId");
   return (data as LlamadaLanding) ?? null;
 }
+
+export async function listarLlamadasLanding(opts?: {
+  limite?: number;
+  offset?: number;
+}): Promise<{ filas: LlamadaLanding[]; total: number }> {
+  const limite = opts?.limite ?? 50;
+  const offset = opts?.offset ?? 0;
+  const { data, error, count } = await db()
+    .from("llamadas_landing")
+    .select("*", { count: "exact" })
+    .order("creado_en", { ascending: false })
+    .range(offset, offset + limite - 1);
+  if (error) lanzar(error, "listarLlamadasLanding");
+  return { filas: (data ?? []) as LlamadaLanding[], total: count ?? 0 };
+}
