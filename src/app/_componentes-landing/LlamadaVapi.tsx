@@ -300,6 +300,15 @@ export function BotonLlamadaVapi() {
 
   return (
     <>
+      {/* ── Backdrop móvil ────────────────────────────────── */}
+      {panelAbierto && (
+        <div
+          className="voice-panel-backdrop"
+          onClick={() => { if (enLlamada) colgar(); setPanelAbierto(false); setTimeout(resetear, 400); }}
+          aria-hidden="true"
+        />
+      )}
+
       {/* ── Voice trigger — derecha ────────────────────────── */}
       <div
         className={`voice-trigger${panelAbierto ? " hidden" : ""}`}

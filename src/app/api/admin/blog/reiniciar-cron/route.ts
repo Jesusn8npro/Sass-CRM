@@ -25,6 +25,7 @@ export async function POST() {
     arrancoEn: Date.now(),
     ultimoChequeo: null,
     ultimoChequeoResultado: null,
+    ultimoErrorMsg: null,
     ultimaGenEn: null,
     chequeosTotales: 0,
     ultimoChequeoCtx: null,

@@ -30,7 +30,8 @@ export interface CronBlogStatus {
   activo: boolean;
   arrancoEn: number;
   ultimoChequeo: number | null;
-  ultimoChequeoResultado: "disparó" | "fuera-horario" | "cooldown" | "desactivado" | null;
+  ultimoChequeoResultado: "disparó" | "fuera-horario" | "cooldown" | "desactivado" | "error-db" | null;
+  ultimoErrorMsg: string | null;
   ultimaGenEn: number | null;
   chequeosTotales: number;
   ultimoChequeoCtx: {
@@ -43,19 +44,25 @@ export interface CronBlogStatus {
 const _g = global as typeof global & {
   __cronBlogActivo?: boolean;
   __cronBlogStatus?: CronBlogStatus;
+  __cronBlogInterval?: ReturnType<typeof setInterval>;
   // Slots "hora:minuto" que ya dispararon hoy (se resetea al cambiar de día Bogotá)
   __cronBlogSlotsHoy?: Set<string>;
   __cronBlogDiaHoy?: number;
 };
 
 function arrancarCronBlog(): void {
-  if (_g.__cronBlogActivo) return;
+  // Siempre limpiar el interval anterior (maneja HMR en dev)
+  if (_g.__cronBlogInterval) {
+    clearInterval(_g.__cronBlogInterval);
+    _g.__cronBlogInterval = undefined;
+  }
   _g.__cronBlogActivo = true;
   _g.__cronBlogStatus = {
     activo: true,
     arrancoEn: Date.now(),
     ultimoChequeo: null,
     ultimoChequeoResultado: null,
+    ultimoErrorMsg: null,
     ultimaGenEn: null,
     chequeosTotales: 0,
     ultimoChequeoCtx: null,
@@ -156,13 +163,20 @@ function arrancarCronBlog(): void {
         });
       }
     } catch (err) {
-      console.error("[cron:blog] error en verificación:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[cron:blog] error en verificación:", msg);
+      const s = _g.__cronBlogStatus;
+      if (s) {
+        s.ultimoChequeo = s.ultimoChequeo ?? Date.now();
+        s.ultimoChequeoResultado = "error-db";
+        s.ultimoErrorMsg = msg;
+      }
     }
   }
 
   // Primer chequeo a los 15s del arranque, luego cada 1 minuto
   setTimeout(() => void verificarYGenerar(), 15_000);
-  setInterval(() => void verificarYGenerar(), INTERVALO_MS);
+  _g.__cronBlogInterval = setInterval(() => void verificarYGenerar(), INTERVALO_MS);
 
   console.log("[instrumentation] cron de blog activo (cada 1 min)");
 }

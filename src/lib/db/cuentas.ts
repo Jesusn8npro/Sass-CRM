@@ -1,6 +1,7 @@
 import { db, lanzar } from "./cliente";
 import { PROMPT_SISTEMA_DEFAULT } from "../promptSistema";
 import { sembrarEtapasSiVacias } from "./etapas";
+import { cache, TTL } from "@/lib/cache";
 import type { CampoCaptura, Cuenta, EstadoConexion } from "./tipos";
 
 /**
@@ -8,6 +9,11 @@ import type { CampoCaptura, Cuenta, EstadoConexion } from "./tipos";
  * Si no se pasa usuarioId, lista TODAS (uso interno del bot).
  */
 export async function listarCuentas(usuarioId?: string): Promise<Cuenta[]> {
+  // Lista global (sin userId) usada por el bot cada 20-30s — cacheable
+  if (!usuarioId) {
+    const cached = cache.get<Cuenta[]>("cuentas:activas");
+    if (cached) return cached;
+  }
   let q = db()
     .from("cuentas")
     .select("*")
@@ -16,17 +22,24 @@ export async function listarCuentas(usuarioId?: string): Promise<Cuenta[]> {
   if (usuarioId) q = q.eq("usuario_id", usuarioId);
   const { data, error } = await q;
   if (error) lanzar(error, "listarCuentas");
-  return (data ?? []) as Cuenta[];
+  const result = (data ?? []) as Cuenta[];
+  if (!usuarioId) cache.set("cuentas:activas", result, TTL.CUENTAS_LISTA);
+  return result;
 }
 
 export async function obtenerCuenta(id: string): Promise<Cuenta | null> {
+  const cacheKey = `cuenta:${id}`;
+  const cached = cache.get<Cuenta>(cacheKey);
+  if (cached) return cached;
   const { data, error } = await db()
     .from("cuentas")
     .select("*")
     .eq("id", id)
     .maybeSingle();
   if (error) lanzar(error, "obtenerCuenta");
-  return (data as Cuenta) ?? null;
+  const result = (data as Cuenta) ?? null;
+  if (result) cache.set(cacheKey, result, TTL.CUENTA);
+  return result;
 }
 
 export async function obtenerCuentaPorAssistantId(assistantId: string): Promise<Cuenta | null> {
@@ -153,6 +166,9 @@ export async function actualizarCuenta(
     .select()
     .single();
   if (error) lanzar(error, "actualizarCuenta");
+  // Invalidar cache para que la próxima lectura traiga datos frescos
+  cache.del(`cuenta:${id}`);
+  cache.del("cuentas:activas");
   return data as Cuenta;
 }
 
@@ -162,6 +178,8 @@ export async function archivarCuenta(id: string): Promise<void> {
     .update({ esta_archivada: true })
     .eq("id", id);
   if (error) lanzar(error, "archivarCuenta");
+  cache.del(`cuenta:${id}`);
+  cache.del("cuentas:activas");
 }
 
 export async function actualizarEstadoCuenta(

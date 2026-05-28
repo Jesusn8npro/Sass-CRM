@@ -320,7 +320,7 @@ export async function arrancarBotEnProceso(): Promise<void> {
       } catch (err) {
         console.error("[bot] error procesando bandejas de salida:", err);
       }
-    }, 8_000); // era 2s → 8s: misma experiencia real, -75% de queries
+    }, 20_000); // era 8s → 20s: -60% queries, delay máx 20s imperceptible en WhatsApp
 
     await emitirHeartbeats();
     estado.intervaloHeartbeat = setInterval(() => {
@@ -335,12 +335,12 @@ export async function arrancarBotEnProceso(): Promise<void> {
       }
     }, 30_000); // era 3s → 30s: detectar cuentas nuevas cada 30s es más que suficiente
 
-    // Seguimientos programados: cada 30s revisa los que ya están due
+    // Seguimientos programados: cada 60s revisa los que ya están due
     estado.intervaloSeguimientos = setInterval(() => {
       void procesarSeguimientosPendientes().catch((err) => {
         console.error("[bot] error procesando seguimientos:", err);
       });
-    }, 30_000);
+    }, 60_000);
 
     // Auto-seguimientos: cada 2 min revisa qué conversaciones merecen
     // un recordatorio automatico segun los pasos configurados.
@@ -357,12 +357,12 @@ export async function arrancarBotEnProceso(): Promise<void> {
       });
     }, 60_000);
 
-    // Llamadas Vapi programadas: cada 30s revisa las que ya están due
+    // Llamadas Vapi programadas: cada 60s revisa las que ya están due
     estado.intervaloLlamadasProgramadas = setInterval(() => {
       void procesarLlamadasProgramadas().catch((err) => {
         console.error("[bot] error procesando llamadas programadas:", err);
       });
-    }, 30_000);
+    }, 60_000);
 
     // Orquestador de cold outreach: cada 5 min busca leads nuevos,
     // dispara llamadas Vapi o secuencias de email, y despacha follow-ups.

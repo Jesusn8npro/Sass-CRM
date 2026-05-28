@@ -9,7 +9,8 @@ interface CronStatus {
   status: {
     arrancoEn: number;
     ultimoChequeo: number | null;
-    ultimoChequeoResultado: "disparó" | "fuera-horario" | "cooldown" | "desactivado" | null;
+    ultimoChequeoResultado: "disparó" | "fuera-horario" | "cooldown" | "desactivado" | "error-db" | null;
+    ultimoErrorMsg: string | null;
     ultimaGenEn: number | null;
     chequeosTotales: number;
     ultimoChequeoCtx: {
@@ -66,8 +67,6 @@ export default function PaginaCronLogs() {
   const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
   const [arrancando, setArrancando] = useState(false);
   const [msgArranque, setMsgArranque] = useState<string | null>(null);
-  const [limpiando, setLimpiando] = useState(false);
-  const [msgLimpieza, setMsgLimpieza] = useState<string | null>(null);
 
   interface PendingSlot { savedAt: number; horas: number[]; minutos: number; dias: number[] }
   const [pendingSlot, setPendingSlot] = useState<PendingSlot | null>(null);
@@ -125,21 +124,6 @@ export default function PaginaCronLogs() {
       setMsgArranque("Error al arrancar");
     } finally {
       setArrancando(false);
-    }
-  }
-
-  async function limpiarSlots() {
-    setLimpiando(true);
-    setMsgLimpieza(null);
-    try {
-      const r = await fetch("/api/admin/blog/limpiar-slots", { method: "POST" });
-      const d = await r.json() as { ok: boolean; slotsLimpiados: number };
-      setMsgLimpieza(`✓ Slots liberados (${d.slotsLimpiados} horarios). El cron puede volver a disparar.`);
-      await cargar();
-    } catch {
-      setMsgLimpieza("Error al limpiar");
-    } finally {
-      setLimpiando(false);
     }
   }
 
@@ -213,30 +197,23 @@ export default function PaginaCronLogs() {
                   <p>Arrancó: {new Date(cronStatus.status.arrancoEn).toLocaleString("es")}</p>
                   <p>Chequeos totales: <span className="text-zinc-800 dark:text-zinc-200">{cronStatus.status.chequeosTotales}</span></p>
                   <p>Último chequeo: <span className="text-zinc-800 dark:text-zinc-200">{cronStatus.status.ultimoChequeo ? new Date(cronStatus.status.ultimoChequeo).toLocaleString("es") : "—"}</span></p>
-                  <p>Resultado: <span className={`font-bold ${cronStatus.status.ultimoChequeoResultado === "disparó" ? "text-emerald-600 dark:text-emerald-400" : cronStatus.status.ultimoChequeoResultado === "fuera-horario" ? "text-amber-600 dark:text-amber-400" : cronStatus.status.ultimoChequeoResultado === "cooldown" ? "text-orange-500" : "text-zinc-500"}`}>
+                  <p>Resultado: <span className={`font-bold ${
+                    cronStatus.status.ultimoChequeoResultado === "disparó" ? "text-emerald-600 dark:text-emerald-400"
+                    : cronStatus.status.ultimoChequeoResultado === "fuera-horario" ? "text-amber-600 dark:text-amber-400"
+                    : cronStatus.status.ultimoChequeoResultado === "cooldown" ? "text-orange-500"
+                    : cronStatus.status.ultimoChequeoResultado === "error-db" ? "text-red-500 dark:text-red-400"
+                    : "text-zinc-500"}`}>
                     {cronStatus.status.ultimoChequeoResultado ?? "—"}
                     {cronStatus.status.ultimoChequeoResultado === "cooldown" && " (slot ya disparó hoy)"}
                   </span></p>
+                  {cronStatus.status.ultimoChequeoResultado === "error-db" && cronStatus.status.ultimoErrorMsg && (
+                    <p className="mt-1 break-all font-mono text-[10px] text-red-400">
+                      ↳ {cronStatus.status.ultimoErrorMsg}
+                    </p>
+                  )}
                 </div>
               )}
 
-              {/* Botón limpiar slots */}
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => void limpiarSlots()}
-                  disabled={limpiando}
-                  className="rounded-full border border-orange-400/60 bg-orange-50 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.2em] text-orange-700 transition hover:bg-orange-100 disabled:opacity-60 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-300"
-                >
-                  {limpiando ? "Liberando…" : "↺ Liberar slots de hoy"}
-                </button>
-                {msgLimpieza && (
-                  <span className="font-mono text-[11px] text-emerald-500">{msgLimpieza}</span>
-                )}
-              </div>
-              <p className="mt-2 font-mono text-[10px] text-zinc-400 dark:text-white/25">
-                Cada horario se dispara una vez por día. Si dice &quot;cooldown&quot;, presioná ↺ para que pueda volver a disparar.
-              </p>
             </div>
 
             {/* Diagnóstico UTC — columna derecha */}

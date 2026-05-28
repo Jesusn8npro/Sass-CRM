@@ -71,6 +71,9 @@ export async function generarImagen(
   const res = await cliente().models.generateContent({
     model: modelo,
     contents: partes,
+    config: {
+      responseModalities: ["TEXT", "IMAGE"],
+    },
   });
 
   const candidato = res.candidates?.[0];

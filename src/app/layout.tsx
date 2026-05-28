@@ -41,28 +41,17 @@ export const metadata: Metadata = {
   ),
 };
 
-const scriptInicializaTema = `
-(function() {
-  try {
-    var t = localStorage.getItem('tema');
-    if (!t) {
-      t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'oscuro' : 'claro';
-    }
-    if (t === 'oscuro') document.documentElement.classList.add('dark');
-  } catch (e) {}
-})();
-`.trim();
-
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="es" className={`${inter.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable}`} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: scriptInicializaTema }} />
+        {/* Render-blocking: corre antes del primer paint para evitar flash de tema */}
+        <script src="/tema-init.js" />
         {/* Preconnect a Supabase Storage — las imágenes del blog vienen de ahí */}
-        <link rel="preconnect" href="https://hecrpmywujicgwcqmxbp.supabase.co" />
-        <link rel="dns-prefetch" href="https://hecrpmywujicgwcqmxbp.supabase.co" />
+        <link rel="preconnect" href="https://wvkmxacnsnuuwcggbopv.supabase.co" />
+        <link rel="dns-prefetch" href="https://wvkmxacnsnuuwcggbopv.supabase.co" />
         {/* Speculation Rules — prerender páginas del blog al hover (Chromium 121+) */}
         <script
           type="speculationrules"

@@ -1,14 +1,20 @@
 import { db, lanzar } from "./cliente";
+import { cache, TTL } from "@/lib/cache";
 import type { UsuarioApp } from "./tipos";
 
 export async function obtenerUsuarioApp(id: string): Promise<UsuarioApp | null> {
+  const cacheKey = `usuario:${id}`;
+  const cached = cache.get<UsuarioApp>(cacheKey);
+  if (cached) return cached;
   const { data, error } = await db()
     .from("usuarios")
     .select("*")
     .eq("id", id)
     .maybeSingle();
   if (error) lanzar(error, "obtenerUsuarioApp");
-  return (data as UsuarioApp) ?? null;
+  const result = (data as UsuarioApp) ?? null;
+  if (result) cache.set(cacheKey, result, TTL.USUARIO);
+  return result;
 }
 
 export async function actualizarNombreUsuario(
@@ -23,6 +29,7 @@ export async function actualizarNombreUsuario(
     .select()
     .single();
   if (error) lanzar(error, "actualizarNombreUsuario");
+  cache.del(`usuario:${id}`);
   return data as UsuarioApp;
 }
 
