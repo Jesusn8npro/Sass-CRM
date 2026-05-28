@@ -21,7 +21,10 @@ const cliente = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY ?? "",
 });
 
-const logger = pino({ level: "silent" });
+// Logger Baileys interno para downloadMediaMessage. Nivel "warn" para
+// ver mensajes de fallo de descifrado / sesión sin spamear el terminal
+// con cada chunk descargado.
+const logger = pino({ level: "warn" });
 
 function extensionParaMime(
   mime: string | null | undefined,

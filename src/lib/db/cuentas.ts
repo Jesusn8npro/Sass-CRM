@@ -182,6 +182,21 @@ export async function archivarCuenta(id: string): Promise<void> {
   cache.del("cuentas:activas");
 }
 
+/**
+ * (ADMIN) Borrado físico de una cuenta. Cascadea a todos los dominios:
+ * conversaciones, mensajes, baileys_auth, productos, etc (FK ON DELETE
+ * CASCADE en migration 00). Las llamadas/pagos quedan con cuenta_id=NULL
+ * por SET NULL — se conservan para audit.
+ *
+ * Operación irreversible. El caller (route handler) debe validar admin.
+ */
+export async function eliminarCuentaAdmin(id: string): Promise<void> {
+  const { error } = await db().from("cuentas").delete().eq("id", id);
+  if (error) lanzar(error, "eliminarCuentaAdmin");
+  cache.del(`cuenta:${id}`);
+  cache.del("cuentas:activas");
+}
+
 export async function actualizarEstadoCuenta(
   id: string,
   parametros: {
