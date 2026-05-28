@@ -25,7 +25,14 @@ import {
   type SignalDataTypeMap,
   type SignalKeyStore,
 } from "@whiskeysockets/baileys";
+import pino from "pino";
 import { crearClienteAdmin } from "../supabase/cliente-servidor";
+
+// Logger silencioso compartido. `makeCacheableSignalKeyStore` lo requiere
+// para reportar miss/hit de cache — sin logger entra en un fallback que
+// puede causar desincronización de prekeys (síntoma: media entrante no
+// se descifra → "audio no pudo descargarse").
+const loggerBaileys = pino({ level: "silent" });
 
 const TIPO_CREDS = "creds";
 const ID_CREDS = "main";
@@ -182,7 +189,10 @@ export async function useSupabaseAuthState(
     }
   };
 
-  return { state: { creds, keys: makeCacheableSignalKeyStore(keys) }, saveCreds };
+  return {
+    state: { creds, keys: makeCacheableSignalKeyStore(keys, loggerBaileys) },
+    saveCreds,
+  };
 }
 
 /**

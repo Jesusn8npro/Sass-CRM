@@ -136,6 +136,10 @@ export function detectarTipoMedia(msg: WAMessage): {
 /**
  * Descarga el contenido multimedia de un mensaje y lo sube al bucket
  * `media-chats` de Supabase Storage.
+ *
+ * Reintenta una vez si la primera pasada falla — la mayoría de errores
+ * "media not found" / "bad MAC" se resuelven en el segundo intento
+ * porque Baileys regenera la sesión Signal entremedio.
  */
 export async function descargarYGuardarMedia(
   sock: WASocket,
@@ -144,26 +148,50 @@ export async function descargarYGuardarMedia(
   tipo: TipoMensaje,
   mime: string | null,
 ): Promise<MediaDescargado | null> {
-  try {
-    const inner = desempacarMensaje(msg.message);
-    const msgParaDescargar: WAMessage = inner
-      ? { ...msg, message: inner }
-      : msg;
+  const inner = desempacarMensaje(msg.message);
+  const msgParaDescargar: WAMessage = inner
+    ? { ...msg, message: inner }
+    : msg;
 
-    const buffer = await downloadMediaMessage(
-      msgParaDescargar,
-      "buffer",
-      {},
-      {
-        reuploadRequest: sock.updateMediaMessage,
-        logger,
-      },
-    );
-    if (!buffer || buffer.length === 0) {
-      console.warn("[media] buffer vacío al descargar, se ignora");
-      return null;
+  let buffer: Buffer | null = null;
+  let ultimoError: unknown = null;
+  for (let intento = 1; intento <= 2; intento++) {
+    try {
+      buffer = await downloadMediaMessage(
+        msgParaDescargar,
+        "buffer",
+        {},
+        {
+          reuploadRequest: sock.updateMediaMessage,
+          logger,
+        },
+      );
+      if (buffer && buffer.length > 0) break;
+      buffer = null;
+      console.warn(
+        `[media:${tipo}] buffer vacío en intento ${intento}/2 (mime=${mime ?? "?"})`,
+      );
+    } catch (err) {
+      ultimoError = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[media:${tipo}] intento ${intento}/2 falló (mime=${mime ?? "?"}): ${msg.slice(0, 200)}`,
+      );
     }
+    // Backoff corto entre intentos — da tiempo a que Baileys re-handshake
+    if (intento < 2) {
+      await new Promise((r) => setTimeout(r, 600));
+    }
+  }
 
+  if (!buffer || buffer.length === 0) {
+    if (ultimoError) {
+      console.error(`[media:${tipo}] descarga falló definitivamente:`, ultimoError);
+    }
+    return null;
+  }
+
+  try {
     const fallbackExt =
       tipo === "audio"
         ? "ogg"
@@ -192,7 +220,7 @@ export async function descargarYGuardarMedia(
       tamano: buffer.length,
     };
   } catch (err) {
-    console.error("[media] error descargando:", err);
+    console.error(`[media:${tipo}] error subiendo a Storage:`, err);
     return null;
   }
 }
