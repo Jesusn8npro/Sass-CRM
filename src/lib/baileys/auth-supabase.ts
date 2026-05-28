@@ -19,12 +19,18 @@
 import {
   BufferJSON,
   initAuthCreds,
+  makeCacheableSignalKeyStore,
   type AuthenticationCreds,
   type AuthenticationState,
   type SignalDataTypeMap,
   type SignalKeyStore,
 } from "@whiskeysockets/baileys";
+import pino from "pino";
 import { crearClienteAdmin } from "../supabase/cliente-servidor";
+
+// Logger silencioso para makeCacheableSignalKeyStore. La cache reduce
+// egress ~90% al evitar lecturas repetidas de pre-keys y session keys.
+const loggerBaileys = pino({ level: "silent" });
 
 const TIPO_CREDS = "creds";
 const ID_CREDS = "main";
@@ -181,13 +187,10 @@ export async function useSupabaseAuthState(
     }
   };
 
-  // IMPORTANTE: NO envolver `keys` con `makeCacheableSignalKeyStore`.
-  // Esa cache en RAM se desincroniza con las claves Signal frescas que
-  // llegan al recibir media (audio/imagen) y genera "Bad MAC" → audio
-  // no se descifra. Lectura directa de DB es más egress pero correcta.
-  // Histórico: commit 1e268e3 introdujo la cache para reducir egress 90%
-  // y rompió audios entrantes. Revertido en commit posterior.
-  return { state: { creds, keys }, saveCreds };
+  return {
+    state: { creds, keys: makeCacheableSignalKeyStore(keys, loggerBaileys) },
+    saveCreds,
+  };
 }
 
 /**

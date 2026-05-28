@@ -7,7 +7,6 @@
 import { type WAMessage, type WASocket } from "@whiskeysockets/baileys";
 import { type TipoMensaje } from "../baseDatos";
 import {
-  borrarMediaChat,
   descargarYGuardarMedia,
   detectarTipoMedia,
   transcribirAudio,
@@ -55,13 +54,14 @@ export async function procesarMediaEntrante(
     if (texto) {
       console.log(`${prefijo} ✓ transcripción (${dur}ms): "${texto.slice(0, 80)}"`);
       contenido = texto;
-      // El audio ya está como texto en `mensajes.contenido`. Borramos
-      // el archivo del bucket para no acumular storage indefinidamente.
-      // Best-effort: si falla, no rompemos el flujo.
-      void borrarMediaChat(descargado.rutaRelativa).catch((err) => {
-        console.warn(`${prefijo} no se pudo borrar audio post-transcripción:`, err);
-      });
-      return { tipo: info.tipo, contenido, mediaPath: null };
+      // Conservamos el archivo en el bucket para que se pueda reproducir
+      // en el dashboard junto con la transcripción. El media_path queda
+      // guardado en mensajes y se sirve por /api/media/.
+      return {
+        tipo: info.tipo,
+        contenido,
+        mediaPath: descargado.rutaRelativa,
+      };
     } else {
       contenido = "[audio sin transcripción]";
     }
