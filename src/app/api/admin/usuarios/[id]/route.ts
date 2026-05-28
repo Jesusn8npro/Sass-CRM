@@ -9,6 +9,7 @@ import {
   obtenerSuperAdminPorEmail,
   registrarAccionAdmin,
 } from "@/lib/baseDatos";
+import { eliminarUsuarioAdmin, setRolUsuarioAdmin } from "@/lib/db/usuarios";
 import { parsearJSON, requerirAdmin } from "@/lib/auth/sesion";
 
 export const dynamic = "force-dynamic";
@@ -49,12 +50,14 @@ export async function GET(_req: NextRequest, { params }: Contexto) {
 }
 
 interface CuerpoPatch {
-  /** "suspender" | "reactivar" | "dar_saldo" | "set_cuentas_extra" */
+  /** "suspender" | "reactivar" | "dar_saldo" | "set_cuentas_extra" | "set_rol" */
   accion: string;
   cuentaId?: string;
   cantidadCreditos?: number;
   /** Para set_cuentas_extra: cantidad nueva de cuentas extra (0-100). */
   cuentasExtra?: number;
+  /** Para set_rol: 'cliente' | 'admin_plataforma'. */
+  rol?: "cliente" | "admin_plataforma";
 }
 
 /**
@@ -136,6 +139,32 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     }
     return NextResponse.json({ ok: true });
   }
+  if (cuerpo.accion === "set_rol") {
+    const rolNuevo = cuerpo.rol;
+    if (rolNuevo !== "cliente" && rolNuevo !== "admin_plataforma") {
+      return NextResponse.json(
+        { error: "rol debe ser 'cliente' o 'admin_plataforma'" },
+        { status: 400 },
+      );
+    }
+    if (id === auth.id && rolNuevo === "cliente") {
+      return NextResponse.json(
+        { error: "No podés removerte el rol admin a vos mismo" },
+        { status: 400 },
+      );
+    }
+    await setRolUsuarioAdmin(id, rolNuevo);
+    const sa = await obtenerSuperAdminPorEmail(auth.email);
+    if (sa) {
+      void registrarAccionAdmin({
+        superAdminId: sa.id,
+        origen: "panel",
+        accion: "usuario_set_rol",
+        payload: { usuario_id: id, rol: rolNuevo },
+      });
+    }
+    return NextResponse.json({ ok: true });
+  }
   if (cuerpo.accion === "set_cuentas_extra") {
     const extra = Number(cuerpo.cuentasExtra);
     if (!Number.isFinite(extra) || extra < 0 || extra > 100) {
@@ -159,4 +188,43 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
   }
 
   return NextResponse.json({ error: "Acción inválida" }, { status: 400 });
+}
+
+/**
+ * DELETE /api/admin/usuarios/[id] — borrado profundo del usuario:
+ * cascadea a cuentas → mensajes/conversaciones/pagos/etc. Operación
+ * irreversible. No se permite auto-borrado.
+ */
+export async function DELETE(_req: NextRequest, { params }: Contexto) {
+  const auth = await requerirAdmin();
+  if (auth instanceof NextResponse) return auth;
+  const { id } = await params;
+
+  if (id === auth.id) {
+    return NextResponse.json(
+      { error: "No podés borrarte a vos mismo" },
+      { status: 400 },
+    );
+  }
+
+  const usuario = await obtenerUsuarioApp(id);
+  if (!usuario) {
+    return NextResponse.json(
+      { error: "Usuario no encontrado" },
+      { status: 404 },
+    );
+  }
+
+  await eliminarUsuarioAdmin(id);
+
+  const sa = await obtenerSuperAdminPorEmail(auth.email);
+  if (sa) {
+    void registrarAccionAdmin({
+      superAdminId: sa.id,
+      origen: "panel",
+      accion: "usuario_eliminar",
+      payload: { usuario_id: id, email: usuario.email },
+    });
+  }
+  return NextResponse.json({ ok: true });
 }

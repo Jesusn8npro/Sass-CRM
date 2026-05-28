@@ -94,6 +94,106 @@ export async function marcarReporteDiarioEnviado(
  * SELECT…luego UPDATE: si dos procesos corren en paralelo, solo uno
  * ganará la fila (el segundo no encontrará filas que cumplan el WHERE).
  */
+/**
+ * (ADMIN) Lista TODOS los super-admins, activos o no, para el panel.
+ */
+export async function listarSuperAdminsAdmin(): Promise<SuperAdmin[]> {
+  const { data, error } = await db()
+    .from("super_admins")
+    .select("*")
+    .order("creado_en", { ascending: true });
+  if (error) lanzar(error, "listarSuperAdminsAdmin");
+  return (data ?? []) as SuperAdmin[];
+}
+
+/**
+ * (ADMIN) Crea un super-admin nuevo. `telefono_whatsapp` se sanitiza a
+ * solo dígitos (E.164 sin "+"). Email se normaliza a lowercase trim.
+ * Si ya existe un super-admin con ese email o teléfono, devuelve error.
+ */
+export async function crearSuperAdminAdmin(p: {
+  email: string;
+  telefonoWhatsapp: string;
+  nombre?: string | null;
+}): Promise<SuperAdmin> {
+  const email = p.email.trim().toLowerCase();
+  const telefono = p.telefonoWhatsapp.replace(/[^0-9]/g, "");
+  if (!email || !email.includes("@")) {
+    throw new Error("[db:crearSuperAdmin] email inválido");
+  }
+  if (telefono.length < 8) {
+    throw new Error("[db:crearSuperAdmin] telefono_whatsapp inválido (mín 8 dígitos)");
+  }
+  const { data, error } = await db()
+    .from("super_admins")
+    .insert({
+      email,
+      telefono_whatsapp: telefono,
+      nombre: p.nombre?.trim() || null,
+      activo: true,
+    })
+    .select()
+    .single();
+  if (error) lanzar(error, "crearSuperAdminAdmin");
+  return data as SuperAdmin;
+}
+
+/**
+ * (ADMIN) Actualiza email/telefono/nombre/activo de un super-admin.
+ * Cada campo es opcional. Sanitiza telefono igual que en crear.
+ */
+export async function actualizarSuperAdminAdmin(
+  id: string,
+  cambios: Partial<{
+    email: string;
+    telefono_whatsapp: string;
+    nombre: string | null;
+    activo: boolean;
+  }>,
+): Promise<SuperAdmin> {
+  const upd: Record<string, unknown> = {};
+  if (cambios.email !== undefined) {
+    const v = cambios.email.trim().toLowerCase();
+    if (!v || !v.includes("@")) {
+      throw new Error("[db:actualizarSuperAdmin] email inválido");
+    }
+    upd.email = v;
+  }
+  if (cambios.telefono_whatsapp !== undefined) {
+    const v = cambios.telefono_whatsapp.replace(/[^0-9]/g, "");
+    if (v.length < 8) {
+      throw new Error("[db:actualizarSuperAdmin] telefono inválido");
+    }
+    upd.telefono_whatsapp = v;
+  }
+  if (cambios.nombre !== undefined) {
+    upd.nombre = cambios.nombre?.trim() || null;
+  }
+  if (cambios.activo !== undefined) upd.activo = cambios.activo;
+  if (Object.keys(upd).length === 0) {
+    const { data } = await db().from("super_admins").select("*").eq("id", id).single();
+    return data as SuperAdmin;
+  }
+  const { data, error } = await db()
+    .from("super_admins")
+    .update(upd)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) lanzar(error, "actualizarSuperAdminAdmin");
+  return data as SuperAdmin;
+}
+
+/**
+ * (ADMIN) Borra un super-admin. Operación irreversible.
+ * Las admin_acciones quedan huérfanas (sin FK al super-admin si existe)
+ * — eso es decisión del schema actual.
+ */
+export async function eliminarSuperAdminAdmin(id: string): Promise<void> {
+  const { error } = await db().from("super_admins").delete().eq("id", id);
+  if (error) lanzar(error, "eliminarSuperAdminAdmin");
+}
+
 export async function reclamarSuperAdminsPendientesReporte(
   inicioDia: Date,
 ): Promise<SuperAdmin[]> {

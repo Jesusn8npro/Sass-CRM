@@ -264,3 +264,67 @@ export async function marcarOnboardingCompleto(
     .eq("id", usuarioId);
   if (error) lanzar(error, "marcarOnboardingCompleto");
 }
+
+// ============================================================
+// ADMIN — borrado profundo de usuario
+// ============================================================
+
+/**
+ * Borra un usuario y TODOS sus datos (cuentas, conversaciones, pagos,
+ * api keys, etc) en cascada. Pasos:
+ *   1) Romper FKs no-CASCADE (asignado_a, invitado_por → NULL)
+ *   2) auth.admin.deleteUser → cascadea public.usuarios → cascadea cuentas
+ *      → cascadea TODO lo del tenant (mensajes, mensajes, baileys_auth, etc).
+ *
+ * El caller (route handler) debe validar admin + que el target ID no
+ * sea el del propio admin (no auto-borrado).
+ */
+export async function eliminarUsuarioAdmin(usuarioId: string): Promise<void> {
+  const cliente = db();
+  // 1) Romper refs no-CASCADE
+  await cliente
+    .from("conversaciones")
+    .update({ asignado_a: null })
+    .eq("asignado_a", usuarioId);
+  await cliente
+    .from("cuenta_miembros")
+    .update({ invitado_por: null })
+    .eq("invitado_por", usuarioId);
+
+  // 2) Borrar de auth.users — cascadea a public.usuarios y de ahí a TODO
+  const { error } = await cliente.auth.admin.deleteUser(usuarioId);
+  if (error) {
+    // Si el user ya no existe en auth (huérfano en public.usuarios), intentamos
+    // borrar directamente desde public.
+    if (error.status === 404) {
+      const { error: errPub } = await cliente
+        .from("usuarios")
+        .delete()
+        .eq("id", usuarioId);
+      if (errPub) lanzar(errPub, "eliminarUsuarioAdmin:public");
+    } else {
+      lanzar(error, "eliminarUsuarioAdmin:auth");
+    }
+  }
+
+  // Invalidar caches
+  cache.del(`usuario:${usuarioId}`);
+  cache.del("cuentas:activas");
+}
+
+/**
+ * (ADMIN) Cambia el rol de un usuario. Solo valores admitidos:
+ * 'cliente' | 'admin_plataforma'. La capa de auth lee `usuarios.rol`
+ * para gate del panel /app/admin.
+ */
+export async function setRolUsuarioAdmin(
+  usuarioId: string,
+  rol: "cliente" | "admin_plataforma",
+): Promise<void> {
+  const { error } = await db()
+    .from("usuarios")
+    .update({ rol })
+    .eq("id", usuarioId);
+  if (error) lanzar(error, "setRolUsuarioAdmin");
+  cache.del(`usuario:${usuarioId}`);
+}

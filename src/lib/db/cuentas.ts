@@ -199,6 +199,10 @@ export async function actualizarEstadoCuenta(
   }
   const { error } = await db().from("cuentas").update(cambios).eq("id", id);
   if (error) lanzar(error, "actualizarEstadoCuenta");
+  // Invalidar cache — estado/cadena_qr/telefono son críticos para el bot:
+  // si cachea valores viejos puede ignorar mensajes entrantes hasta el TTL.
+  cache.del(`cuenta:${id}`);
+  cache.del("cuentas:activas");
 }
 
 export async function actualizarHeartbeatCuenta(id: string): Promise<void> {
