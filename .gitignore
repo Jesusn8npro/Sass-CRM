@@ -47,3 +47,7 @@ next-env.d.ts
 
 # Workflow privado de referencia
 EjemploN8N
+
+# Material local del usuario (no va al repo)
+Guiais/
+exportacion_viejo.json
