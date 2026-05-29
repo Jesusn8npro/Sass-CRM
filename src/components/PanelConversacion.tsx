@@ -319,7 +319,7 @@ export function PanelConversacion({
   const enLinea = Date.now() - ultimoMsg < 5 * 60 * 1000;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
       <ChatHeader
         idCuenta={idCuenta}
         cuenta={cuenta}
@@ -347,7 +347,7 @@ export function PanelConversacion({
 
       <div
         ref={refScroll}
-        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-100 px-3 py-4 md:px-6 md:py-6 dark:bg-zinc-900"
+        className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-100 px-3 py-4 md:px-6 md:py-6 dark:bg-zinc-900"
         style={{
           backgroundImage:
             "radial-gradient(circle at 1px 1px, rgba(120,120,120,0.18) 1px, transparent 0)",
