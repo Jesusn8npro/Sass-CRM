@@ -20,6 +20,7 @@ import {
   type Cuenta,
 } from "../baseDatos";
 import { construirPromptSistema } from "../construirPrompt";
+import { consultarTablasExternas } from "../db/supabaseExterno";
 import {
   mensajeFueraDeServicioCliente,
   verificarLimiteMensajes,
@@ -172,7 +173,7 @@ export async function generarYEnviarRespuesta(
     ? await buscarConocimientoRelevante(cuenta.id, ultimosUsuario, { k: 5 })
     : [];
 
-  const promptCompleto = construirPromptSistema(
+  let promptCompleto = construirPromptSistema(
     cuenta,
     conocimiento,
     biblioteca,
@@ -181,6 +182,19 @@ export async function generarYEnviarRespuesta(
     citasActivas,
     chunksRAG,
   );
+
+  // Si la cuenta conectó su Supabase y habilitó tablas, le avisamos al
+  // agente qué puede consultar en vivo (la acción consultar_datos).
+  const bdExternaActiva =
+    cuenta.agente_bd_externa_habilitada &&
+    Array.isArray(cuenta.agente_tablas_permitidas) &&
+    cuenta.agente_tablas_permitidas.length > 0;
+  if (bdExternaActiva) {
+    promptCompleto +=
+      `\n\n## BASE DE DATOS DEL NEGOCIO (en vivo, solo lectura)\n` +
+      `Podés consultar estas tablas reales del negocio: ${cuenta.agente_tablas_permitidas.join(", ")}.\n` +
+      `Cuando el cliente pregunte por datos que vivan ahí (precios, stock, disponibilidad, estado de pedidos, su cuenta, etc.) y no los tengas, activá "consultar_datos" con las tablas relevantes ANTES de dar cifras. Nunca inventes números: consultalos.`;
+  }
 
   if (chunksRAG.length > 0) {
     console.log(
@@ -259,6 +273,37 @@ export async function generarYEnviarRespuesta(
     } catch {}
     return;
   }
+  // Round-trip de datos: si el agente pidió leer la base del negocio,
+  // traemos las filas y le volvemos a preguntar para que responda con
+  // datos reales. Una sola vuelta (sin recursión) para acotar latencia/costo.
+  if (bdExternaActiva && respuesta.consultar_datos?.activar) {
+    const tablas = respuesta.consultar_datos.tablas ?? [];
+    console.log(
+      `${prefijo} 🗄️ consultar_datos: ${tablas.join(", ") || "(sin tablas)"} — ${respuesta.consultar_datos.motivo || ""}`,
+    );
+    try {
+      const datos = await consultarTablasExternas(cuenta.id, tablas);
+      if (Object.keys(datos).length > 0) {
+        const promptConDatos =
+          `${promptCompleto}\n\n## DATOS CONSULTADOS AHORA EN LA BASE DEL NEGOCIO\n` +
+          `Respondé al cliente usando estos datos reales (no los pegues crudos; redactá natural). No vuelvas a activar consultar_datos.\n` +
+          JSON.stringify(datos).slice(0, 12000);
+        respuesta = await generarRespuesta(
+          historial,
+          promptConDatos,
+          cuenta.modelo,
+          { temperatura: cuenta.temperatura, max_tokens: cuenta.max_tokens },
+          cuenta.id,
+        );
+      }
+    } catch (err) {
+      // Si la consulta falla, seguimos con la primera respuesta (sin datos).
+      console.error(
+        `${prefijo} ✗ error consultando base externa: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   const duracion = Date.now() - inicio;
   // Log detallado de qué tools activó la IA — esencial para diagnosticar
   // por qué no captura datos. Si todo viene en false, hay que revisar

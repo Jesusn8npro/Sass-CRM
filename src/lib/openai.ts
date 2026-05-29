@@ -168,6 +168,14 @@ export interface RespuestaIA {
     cita_id: string;
     motivo: string;
   };
+  /** Pedir al sistema que lea tablas de la base externa del negocio antes
+   * de responder. Dispara un round-trip: se traen las filas y se vuelve a
+   * llamar al modelo con esos datos. Solo tablas habilitadas. */
+  consultar_datos: {
+    activar: boolean;
+    tablas: string[];
+    motivo: string;
+  };
 }
 
 

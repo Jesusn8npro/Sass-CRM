@@ -193,6 +193,7 @@ export function SidebarPanel({
           <ItemNav icono={<IconoConocimiento />}      etiqueta="Conocimiento" href={`${b}/conocimiento`}      actual={pathname} />
           <ItemNav icono={<IconoPlantillas />}        etiqueta="Plantillas"   href={`${b}/plantillas`}        actual={pathname} />
           <ItemNav icono={<IconoWebhooks />}          etiqueta="Integraciones" href={`${b}/webhooks`}         actual={pathname} matchPaths={["webhooks", "api-keys"]} />
+          <ItemNav icono={<IconoConocimiento />}      etiqueta="Tu Supabase"  href={`${b}/supabase-externo`}  actual={pathname} matchPaths={["supabase-externo"]} />
         </SeccionNav>
 
         {/* ── MI CUENTA ────────────────────────────────────── */}

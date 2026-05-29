@@ -44,6 +44,14 @@ import {
   type Cuenta,
 } from "../baseDatos";
 import { db } from "../db/cliente";
+import {
+  actualizarFilasExternas,
+  contarFilasExternas,
+  crearFilaExterna,
+  eliminarFilasExternas,
+  leerFilasExternas,
+  listarTablasExternas,
+} from "../db/supabaseExterno";
 import { conReintentos } from "../reintentos";
 
 const cliente = new OpenAI({
@@ -454,6 +462,120 @@ const TOOLS: ToolDef[] = [
           },
         },
         required: ["nombre"],
+        additionalProperties: false,
+      },
+    },
+  },
+];
+
+// ============================================================
+// TOOLS del SUPABASE EXTERNO del dueño (acceso total a su BD).
+// Solo se exponen si la cuenta tiene supabase_externo_url configurado.
+// ============================================================
+const TOOLS_EXTERNAS: ToolDef[] = [
+  {
+    type: "function",
+    function: {
+      name: "bd_listar_tablas",
+      description:
+        "Lista las tablas del Supabase propio del negocio (la base de datos del dueño, no el CRM del bot). Usar cuando el dueño pregunte 'qué tablas tengo', 'qué hay en mi base', o ANTES de leer/crear/editar para saber los nombres exactos de las tablas.",
+      parameters: { type: "object", properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "bd_leer_filas",
+      description:
+        "Lee filas de una tabla del Supabase propio del negocio. Podés filtrar por igualdad (ej: { categoria: 'bebidas' }). Usar cuando el dueño quiera ver datos de SU base ('mostrame los productos de mi web', 'cuántos pedidos hay', 'buscá el cliente con id X').",
+      parameters: {
+        type: "object",
+        properties: {
+          tabla: { type: "string", description: "Nombre exacto de la tabla (de bd_listar_tablas)." },
+          filtros: {
+            type: "object",
+            description: "Filtros de igualdad columna→valor. Ej: { estado: 'activo', id: 12 }. Opcional.",
+            additionalProperties: true,
+          },
+          limite: { type: "number", description: "Máximo de filas a traer (1-50). Default 50." },
+        },
+        required: ["tabla"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "bd_crear_fila",
+      description:
+        "Crea una fila nueva en una tabla del Supabase propio del negocio. Usar cuando el dueño diga 'agregá un producto a mi web', 'creá un registro en X con estos datos'. Pasá los valores como objeto columna→valor.",
+      parameters: {
+        type: "object",
+        properties: {
+          tabla: { type: "string", description: "Nombre exacto de la tabla." },
+          valores: {
+            type: "object",
+            description: "Datos de la fila columna→valor. Ej: { nombre: 'Camisa', precio: 50000 }.",
+            additionalProperties: true,
+          },
+        },
+        required: ["tabla", "valores"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "bd_actualizar_filas",
+      description:
+        "Actualiza filas de una tabla del Supabase propio del negocio que coincidan con los filtros. EXIGE al menos un filtro. Si la operación afecta MÁS DE UNA fila, la tool devuelve un preview con la cantidad y NO ejecuta hasta que confirmes con el dueño y vuelvas a llamar con confirmado=true. Para una sola fila ejecuta directo.",
+      parameters: {
+        type: "object",
+        properties: {
+          tabla: { type: "string", description: "Nombre exacto de la tabla." },
+          filtros: {
+            type: "object",
+            description: "Filtros de igualdad para elegir qué filas actualizar. Ej: { id: 12 }. Obligatorio (al menos uno).",
+            additionalProperties: true,
+          },
+          valores: {
+            type: "object",
+            description: "Columnas a cambiar columna→nuevo valor. Ej: { precio: 60000, stock: 3 }.",
+            additionalProperties: true,
+          },
+          confirmado: {
+            type: "boolean",
+            description: "Pasar true SOLO después de que el dueño confirme cuando la operación afecta varias filas.",
+          },
+        },
+        required: ["tabla", "filtros", "valores"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "bd_eliminar_filas",
+      description:
+        "Borra filas de una tabla del Supabase propio del negocio que coincidan con los filtros. EXIGE al menos un filtro. SIEMPRE devuelve primero un preview con la cantidad de filas a borrar y NO ejecuta hasta que confirmes con el dueño y vuelvas a llamar con confirmado=true. El borrado es irreversible.",
+      parameters: {
+        type: "object",
+        properties: {
+          tabla: { type: "string", description: "Nombre exacto de la tabla." },
+          filtros: {
+            type: "object",
+            description: "Filtros de igualdad para elegir qué filas borrar. Ej: { id: 12 }. Obligatorio (al menos uno).",
+            additionalProperties: true,
+          },
+          confirmado: {
+            type: "boolean",
+            description: "Pasar true SOLO después de que el dueño confirme el borrado explícitamente.",
+          },
+        },
+        required: ["tabla", "filtros"],
         additionalProperties: false,
       },
     },
@@ -1300,6 +1422,102 @@ async function toolCrearProducto(
 }
 
 // ============================================================
+// IMPLEMENTACIÓN — Supabase externo del dueño
+// ============================================================
+
+function objArg(v: unknown): Record<string, unknown> {
+  return v && typeof v === "object" && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : {};
+}
+
+async function toolBdListarTablas(
+  cuentaId: string,
+): Promise<{ ok: boolean; mensaje?: string; tablas?: string[] }> {
+  const tablas = await listarTablasExternas(cuentaId);
+  if (tablas.length === 0) {
+    return {
+      ok: false,
+      mensaje:
+        "No tenés un Supabase propio conectado (o no se descubrieron tablas). Conectalo en la sección 'Tu Supabase' del panel.",
+    };
+  }
+  return { ok: true, tablas };
+}
+
+async function toolBdLeerFilas(cuentaId: string, args: Record<string, unknown>) {
+  const tabla = typeof args.tabla === "string" ? args.tabla.trim() : "";
+  if (!tabla) return { ok: false, mensaje: "Falta el nombre de la tabla." };
+  const limite =
+    typeof args.limite === "number" && Number.isFinite(args.limite)
+      ? args.limite
+      : undefined;
+  return leerFilasExternas(cuentaId, tabla, objArg(args.filtros), limite);
+}
+
+async function toolBdCrearFila(cuentaId: string, args: Record<string, unknown>) {
+  const tabla = typeof args.tabla === "string" ? args.tabla.trim() : "";
+  if (!tabla) return { ok: false, mensaje: "Falta el nombre de la tabla." };
+  const valores = objArg(args.valores);
+  if (Object.keys(valores).length === 0) {
+    return { ok: false, mensaje: "Faltan los valores de la fila a crear." };
+  }
+  return crearFilaExterna(cuentaId, tabla, valores);
+}
+
+async function toolBdActualizarFilas(cuentaId: string, args: Record<string, unknown>) {
+  const tabla = typeof args.tabla === "string" ? args.tabla.trim() : "";
+  if (!tabla) return { ok: false, mensaje: "Falta el nombre de la tabla." };
+  const filtros = objArg(args.filtros);
+  const valores = objArg(args.valores);
+  if (Object.keys(filtros).length === 0) {
+    return { ok: false, mensaje: "Necesito al menos un filtro para actualizar (evita modificar toda la tabla)." };
+  }
+  if (Object.keys(valores).length === 0) {
+    return { ok: false, mensaje: "Faltan los valores nuevos a aplicar." };
+  }
+  const confirmado = args.confirmado === true;
+  const conteo = await contarFilasExternas(cuentaId, tabla, filtros);
+  if (!conteo.ok) return { ok: false, mensaje: conteo.mensaje ?? "No pude contar las filas." };
+  const n = conteo.count ?? 0;
+  if (n === 0) {
+    return { ok: false, mensaje: `Ninguna fila de "${tabla}" coincide con esos filtros. No se actualizó nada.` };
+  }
+  if (n > 1 && !confirmado) {
+    return {
+      ok: false,
+      requiere_confirmacion: true,
+      mensaje: `Esto va a actualizar ${n} filas de "${tabla}". Confirmá con el dueño antes de ejecutar; si confirma, volvé a llamar bd_actualizar_filas con los mismos parámetros y confirmado=true.`,
+    };
+  }
+  return actualizarFilasExternas(cuentaId, tabla, filtros, valores);
+}
+
+async function toolBdEliminarFilas(cuentaId: string, args: Record<string, unknown>) {
+  const tabla = typeof args.tabla === "string" ? args.tabla.trim() : "";
+  if (!tabla) return { ok: false, mensaje: "Falta el nombre de la tabla." };
+  const filtros = objArg(args.filtros);
+  if (Object.keys(filtros).length === 0) {
+    return { ok: false, mensaje: "Necesito al menos un filtro para borrar (evita vaciar toda la tabla)." };
+  }
+  const confirmado = args.confirmado === true;
+  const conteo = await contarFilasExternas(cuentaId, tabla, filtros);
+  if (!conteo.ok) return { ok: false, mensaje: conteo.mensaje ?? "No pude contar las filas." };
+  const n = conteo.count ?? 0;
+  if (n === 0) {
+    return { ok: false, mensaje: `Ninguna fila de "${tabla}" coincide con esos filtros. No se borró nada.` };
+  }
+  if (!confirmado) {
+    return {
+      ok: false,
+      requiere_confirmacion: true,
+      mensaje: `Esto va a BORRAR ${n} fila(s) de "${tabla}" y es irreversible. Confirmá con el dueño; si confirma, volvé a llamar bd_eliminar_filas con los mismos parámetros y confirmado=true.`,
+    };
+  }
+  return eliminarFilasExternas(cuentaId, tabla, filtros);
+}
+
+// ============================================================
 // DISPATCHER de tools
 // ============================================================
 async function ejecutarTool(
@@ -1351,6 +1569,16 @@ async function ejecutarTool(
       return toolCancelarCita(cuentaId, args);
     case "obtener_conversacion_cliente":
       return toolObtenerConversacionCliente(cuentaId, args);
+    case "bd_listar_tablas":
+      return toolBdListarTablas(cuentaId);
+    case "bd_leer_filas":
+      return toolBdLeerFilas(cuentaId, args);
+    case "bd_crear_fila":
+      return toolBdCrearFila(cuentaId, args);
+    case "bd_actualizar_filas":
+      return toolBdActualizarFilas(cuentaId, args);
+    case "bd_eliminar_filas":
+      return toolBdEliminarFilas(cuentaId, args);
     default:
       return { error: `tool desconocida: ${nombre}` };
   }
@@ -1453,7 +1681,27 @@ CONTEXTO ACTUAL
 - Hora: ${new Date().toLocaleString("es-AR")}
 - Cuenta: "${cuenta.etiqueta}" — tel WhatsApp ${cuenta.telefono ?? "(no conectado)"}
 - Agente principal: ${cuenta.agente_nombre || "(sin nombre)"}, rol "${cuenta.agente_rol || "(sin rol)"}", tono ${cuenta.agente_tono}
-- Tu número (operador): ${cuenta.telefono_operador_privado ?? "(no configurado)"}`;
+- Tu número (operador): ${cuenta.telefono_operador_privado ?? "(no configurado)"}${
+    cuenta.supabase_externo_url
+      ? `
+
+═══════════════════════════════════════════
+SUPABASE PROPIO DEL NEGOCIO — acceso total del dueño
+═══════════════════════════════════════════
+El dueño conectó la base de datos de su propio negocio/web. Tenés acceso TOTAL a TODAS sus tablas (leer, crear, editar, borrar) con estas tools:
+• bd_listar_tablas — ver qué tablas hay. Llamala PRIMERO si no sabés el nombre exacto.
+• bd_leer_filas — consultar datos ("mostrame los productos de mi web", "buscá el pedido id 7").
+• bd_crear_fila — agregar un registro ("creá un producto en mi web: ...").
+• bd_actualizar_filas — modificar registros que coincidan con filtros.
+• bd_eliminar_filas — borrar registros que coincidan con filtros.
+
+REGLAS DE SEGURIDAD (obligatorias):
+1. update y delete SIEMPRE requieren al menos un filtro — nunca sobre toda la tabla.
+2. Antes de BORRAR (cualquier cantidad) o de EDITAR VARIAS filas: la tool te devuelve un preview con la cantidad afectada y NO ejecuta. Mostrale al dueño cuántas filas afecta y pedile confirmación clara ("¿confirmás borrar esas 3 filas?"). Solo cuando confirme, volvé a llamar la tool con confirmado=true.
+3. Editar UNA sola fila ejecuta directo (no requiere confirmación).
+4. Si no estás seguro de los nombres de columnas, leé primero con bd_leer_filas.`
+      : ""
+  }`;
 
 /**
  * Punto de entrada — llamado desde manejador.ts cuando el remitente es el operador.
@@ -1522,6 +1770,11 @@ async function chatConTools(
     { role: "user", content: preguntaUsuario },
   ];
 
+  // Solo exponemos las tools del Supabase externo si la cuenta lo tiene conectado.
+  const toolsActivas = cuenta.supabase_externo_url
+    ? [...TOOLS, ...TOOLS_EXTERNAS]
+    : TOOLS;
+
   let totalIn = 0;
   let totalOut = 0;
   const MAX_LOOPS = 5;
@@ -1537,7 +1790,7 @@ async function chatConTools(
         cliente.chat.completions.create({
           model: MODELO,
           messages: mensajes,
-          tools: TOOLS,
+          tools: toolsActivas,
           tool_choice: "auto",
           temperature: 0.3,
           max_tokens: 1500,

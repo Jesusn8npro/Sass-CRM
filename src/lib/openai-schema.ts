@@ -297,6 +297,27 @@ export const ESQUEMA_RESPUESTA = {
       required: ["activar", "cita_id", "motivo"],
       additionalProperties: false,
     },
+    consultar_datos: {
+      type: "object",
+      description:
+        "Consultar la base de datos REAL del negocio (solo lectura) ANTES de responder con cifras concretas. Activá esto cuando el cliente pregunte por información que vive en esas tablas (precios, stock, disponibilidad, estado de un pedido, datos de su cuenta, etc.) y no la tengas ya en el contexto. El sistema trae las filas y te vuelve a preguntar para que respondas con datos reales. NO inventes números: si los necesitás, consultalos. Solo se permiten las tablas que el negocio habilitó (te las listo en el prompt). Si no hace falta consultar nada, activar=false.",
+      properties: {
+        activar: { type: "boolean" },
+        tablas: {
+          type: "array",
+          description:
+            "Nombres exactos de las tablas habilitadas que querés leer. Vacío si activar=false.",
+          items: { type: "string" },
+        },
+        motivo: {
+          type: "string",
+          description:
+            "Qué buscás (ej: 'precio y stock del acordeón Hohner que pidió'). Vacío si activar=false.",
+        },
+      },
+      required: ["activar", "tablas", "motivo"],
+      additionalProperties: false,
+    },
   },
   required: [
     "partes",
@@ -311,6 +332,7 @@ export const ESQUEMA_RESPUESTA = {
     "cambiar_estado",
     "reprogramar_cita",
     "cancelar_cita",
+    "consultar_datos",
   ],
   additionalProperties: false,
 } as const;

@@ -206,6 +206,18 @@ export interface Cuenta {
   /** Límites mensuales de gasto en USD por proveedor externo.
    *  Ej: { vapi: 50, openai: 30 }. 0 = sin límite. */
   limites_gasto: Record<string, number>;
+  // ===== Supabase externo del negocio (migraciones 38/39) =====
+  /** URL del proyecto Supabase del negocio del cliente. null = no conectado. */
+  supabase_externo_url: string | null;
+  /** service_role key CIFRADA (AES-256-GCM). Nunca exponer al cliente. */
+  supabase_externo_service_key: string | null;
+  supabase_externo_validado_en: string | null;
+  /** Tablas descubiertas al validar la conexión. */
+  supabase_externo_tablas: string[];
+  /** Si el agente puede consultar la base externa al responder. */
+  agente_bd_externa_habilitada: boolean;
+  /** Subconjunto de supabase_externo_tablas que el agente puede leer. */
+  agente_tablas_permitidas: string[];
   creada_en: string;
   actualizada_en: string;
 }
