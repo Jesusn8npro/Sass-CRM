@@ -45,6 +45,7 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
   const [confirmarAbierto, setConfirmarAbierto] = useState(false);
   const refDeepLinkAplicado = useRef(false);
   const [filtroAgente, setFiltroAgente] = useState<"todas" | "mias" | "sin">("todas");
+  const [busqueda, setBusqueda] = useState("");
   const [miUsuarioId, setMiUsuarioId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -133,7 +134,7 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
     conversaciones.find((c) => c.id === idConvSeleccionada) ?? null;
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full min-h-0 overflow-hidden lg:h-screen">
       <div
         className={`flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40 lg:flex lg:w-[340px] lg:shrink-0 ${
           idConvSeleccionada ? "hidden lg:flex" : "flex w-full"
@@ -255,10 +256,53 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
           </div>
         )}
 
+        {!modoSeleccion && (
+          <div className="border-b border-zinc-100 px-3 py-2 dark:border-zinc-800">
+            <div className="relative">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="text"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar por nombre o teléfono…"
+                className="w-full rounded-full border border-zinc-200 bg-zinc-50 py-1.5 pl-8 pr-8 text-xs text-zinc-700 placeholder:text-zinc-400 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+              />
+              {busqueda && (
+                <button
+                  type="button"
+                  onClick={() => setBusqueda("")}
+                  aria-label="Limpiar búsqueda"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         <ListaConversaciones
           conversaciones={conversaciones.filter((c) => {
-            if (filtroAgente === "mias") return miUsuarioId ? c.asignado_a === miUsuarioId : true;
-            if (filtroAgente === "sin") return c.asignado_a === null;
+            if (filtroAgente === "mias" && !(miUsuarioId ? c.asignado_a === miUsuarioId : true)) return false;
+            if (filtroAgente === "sin" && c.asignado_a !== null) return false;
+            const q = busqueda.trim().toLowerCase();
+            if (q) {
+              const nombre = (c.nombre ?? "").toLowerCase();
+              const tel = (c.telefono ?? "").toLowerCase();
+              const nombreCap = (c.datos_capturados?.nombre ?? "").toLowerCase();
+              if (!nombre.includes(q) && !tel.includes(q) && !nombreCap.includes(q)) {
+                return false;
+              }
+            }
             return true;
           })}
           idSeleccionada={idConvSeleccionada}
