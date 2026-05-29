@@ -309,13 +309,33 @@ export const ESQUEMA_RESPUESTA = {
             "Nombres exactos de las tablas habilitadas que querés leer. Vacío si activar=false.",
           items: { type: "string" },
         },
+        filtros: {
+          type: "array",
+          description:
+            "Filtros de igualdad para acotar la consulta SOLO a los datos del cliente actual. OBLIGATORIO para datos personales/de cuenta (si está registrado, sus cursos, sus pedidos): poné el email O el teléfono del PROPIO cliente. Ej: [{\"columna\":\"email\",\"valor\":\"shalom@gmail.com\"}]. Dejá el array vacío SOLO para catálogo público (lista de cursos, precios). NUNCA consultes datos personales sin filtro — traería datos de otros clientes.",
+          items: {
+            type: "object",
+            properties: {
+              columna: {
+                type: "string",
+                description: "Nombre de la columna por la que filtrar (ej: email, telefono, user_id).",
+              },
+              valor: {
+                type: "string",
+                description: "Valor a buscar — siempre un dato del PROPIO cliente actual.",
+              },
+            },
+            required: ["columna", "valor"],
+            additionalProperties: false,
+          },
+        },
         motivo: {
           type: "string",
           description:
             "Qué buscás (ej: 'precio y stock del acordeón Hohner que pidió'). Vacío si activar=false.",
         },
       },
-      required: ["activar", "tablas", "motivo"],
+      required: ["activar", "tablas", "filtros", "motivo"],
       additionalProperties: false,
     },
   },

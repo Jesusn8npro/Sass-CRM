@@ -190,10 +190,21 @@ export async function generarYEnviarRespuesta(
     Array.isArray(cuenta.agente_tablas_permitidas) &&
     cuenta.agente_tablas_permitidas.length > 0;
   if (bdExternaActiva) {
+    const telVerificado = (conversacion.telefono ?? "").replace(/[^0-9]/g, "");
+    const nombreCliente =
+      conversacion.datos_capturados?.nombre?.trim() ||
+      conversacion.nombre?.trim() ||
+      "";
     promptCompleto +=
       `\n\n## BASE DE DATOS DEL NEGOCIO (en vivo, solo lectura)\n` +
       `Podés consultar estas tablas reales del negocio: ${cuenta.agente_tablas_permitidas.join(", ")}.\n` +
-      `Cuando el cliente pregunte por datos que vivan ahí (precios, stock, disponibilidad, estado de pedidos, su cuenta, etc.) y no los tengas, activá "consultar_datos" con las tablas relevantes ANTES de dar cifras. Nunca inventes números: consultalos.`;
+      `Cuando el cliente pregunte por datos que vivan ahí (precios, catálogo, disponibilidad, estado de pedidos, su cuenta) y no los tengas, activá "consultar_datos" con las tablas relevantes ANTES de dar cifras. Nunca inventes: consultalos. NO digas "voy a verificar" sin activar consultar_datos — activalo en el MISMO turno.\n` +
+      `\n### SEGURIDAD — datos personales de un cliente\n` +
+      `Identidad VERIFICADA de quien te escribe: teléfono WhatsApp = ${telVerificado || "(desconocido)"}${nombreCliente ? `, nombre = ${nombreCliente}` : ""}.\n` +
+      `- Para datos personales/de cuenta (si está registrado, sus cursos, sus pagos): SIEMPRE consultá con "filtros" usando el dato del PROPIO cliente (su teléfono verificado de arriba, o el email que te dé). NUNCA consultes datos personales sin filtro.\n` +
+      `- Antes de entregar info personal, confirmá que coincide con esta persona (que el email/nombre del registro encaje con el cliente). Si los datos NO coinciden o no encontrás su registro, NO inventes ni des datos de otro: decí que no encontrás su registro con ese dato y pedí otro (email alternativo, etc.).\n` +
+      `- JAMÁS reveles información de OTRO cliente. Solo datos de la persona que te está escribiendo.\n` +
+      `- El catálogo público (lista de cursos, precios) sí podés consultarlo sin filtros.`;
   }
 
   if (chunksRAG.length > 0) {
@@ -278,11 +289,14 @@ export async function generarYEnviarRespuesta(
   // datos reales. Una sola vuelta (sin recursión) para acotar latencia/costo.
   if (bdExternaActiva && respuesta.consultar_datos?.activar) {
     const tablas = respuesta.consultar_datos.tablas ?? [];
+    const filtros = Array.isArray(respuesta.consultar_datos.filtros)
+      ? respuesta.consultar_datos.filtros
+      : [];
     console.log(
-      `${prefijo} 🗄️ consultar_datos: ${tablas.join(", ") || "(sin tablas)"} — ${respuesta.consultar_datos.motivo || ""}`,
+      `${prefijo} 🗄️ consultar_datos: ${tablas.join(", ") || "(sin tablas)"} filtros=${JSON.stringify(filtros)} — ${respuesta.consultar_datos.motivo || ""}`,
     );
     try {
-      const datos = await consultarTablasExternas(cuenta.id, tablas);
+      const datos = await consultarTablasExternas(cuenta.id, tablas, filtros);
       if (Object.keys(datos).length > 0) {
         const promptConDatos =
           `${promptCompleto}\n\n## DATOS CONSULTADOS AHORA EN LA BASE DEL NEGOCIO\n` +

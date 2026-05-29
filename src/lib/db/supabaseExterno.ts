@@ -261,7 +261,11 @@ export async function obtenerCredencialesExternas(
  * Seguridad:
  *   - Deny-by-default: solo se consultan tablas en `agente_tablas_permitidas`.
  *   - Solo lectura (select). Nunca escribe.
- *   - Límite de filas por tabla para no inflar el contexto del LLM.
+ *   - Filtros de igualdad para acotar la consulta a los datos del PROPIO
+ *     cliente (ej: email/teléfono). Con filtros el tope baja a 10 filas; sin
+ *     filtros (catálogo público) usa el tope general.
+ *   - Si una columna de filtro no existe en una tabla, esa tabla se OMITE
+ *     (no se devuelve completa) — evita fugas de datos de otros clientes.
  *
  * Devuelve un mapa { tabla: filas[] }. Si la cuenta no tiene la integración
  * habilitada o no hay credenciales, devuelve {} (el agente responde sin datos).
@@ -269,6 +273,7 @@ export async function obtenerCredencialesExternas(
 export async function consultarTablasExternas(
   cuentaId: string,
   tablasSolicitadas: string[],
+  filtros: { columna: string; valor: string }[] = [],
 ): Promise<Record<string, Record<string, unknown>[]>> {
   const config = await obtenerConfigExterna(cuentaId);
   if (!config.conectado || !config.agenteHabilitado) return {};
@@ -284,15 +289,23 @@ export async function consultarTablasExternas(
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  const filtrosValidos = filtros.filter(
+    (f) => f && typeof f.columna === "string" && f.columna.trim() !== "" && f.valor != null && String(f.valor) !== "",
+  );
+  const tope = filtrosValidos.length > 0 ? 10 : LIMITE_FILAS_CONSULTA;
+
   const resultado: Record<string, Record<string, unknown>[]> = {};
   for (const tabla of objetivo) {
-    const { data, error } = await cliente
-      .from(tabla)
-      .select("*")
-      .limit(LIMITE_FILAS_CONSULTA);
+    let q = cliente.from(tabla).select("*").limit(tope);
+    for (const f of filtrosValidos) {
+      q = q.eq(f.columna, f.valor) as typeof q;
+    }
+    const { data, error } = await q;
     if (!error && data) {
       resultado[tabla] = data as Record<string, unknown>[];
     }
+    // error (ej: columna de filtro inexistente) → omitimos la tabla. No
+    // devolvemos la tabla entera para no exponer datos de otros clientes.
   }
   return resultado;
 }
