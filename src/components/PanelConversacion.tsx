@@ -345,7 +345,15 @@ export function PanelConversacion({
         onConversacionBorrada={onConversacionBorrada}
       />
 
-      <div ref={refScroll} className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-6 md:py-6">
+      <div
+        ref={refScroll}
+        className="min-h-0 flex-1 overflow-y-auto bg-zinc-50 px-3 py-4 md:px-6 md:py-6 dark:bg-zinc-950"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at 1px 1px, rgba(120,120,120,0.10) 1px, transparent 0)",
+          backgroundSize: "18px 18px",
+        }}
+      >
         {mensajes.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <p className="text-sm text-zinc-400 dark:text-zinc-600">
