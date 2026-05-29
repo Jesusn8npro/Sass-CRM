@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Conversacion, Cuenta, ModoConversacion } from "@/lib/baseDatos";
 import { BotonLlamar } from "./BotonLlamar";
+import { BotonSeguimiento } from "./BotonSeguimiento";
 import { InterruptorModo } from "./InterruptorModo";
 
 const COLOR_ESTADO: Record<string, string> = {
@@ -283,6 +284,11 @@ export function ChatHeader({
           cuenta={cuenta}
           telefono={conversacion.telefono}
           nombre={conversacion.nombre}
+        />
+
+        <BotonSeguimiento
+          idCuenta={idCuenta}
+          idConversacion={conversacion.id}
         />
 
         <InterruptorModo

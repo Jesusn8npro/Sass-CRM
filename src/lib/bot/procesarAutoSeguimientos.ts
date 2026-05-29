@@ -50,6 +50,7 @@ interface ConversacionRevisar {
 interface UltimoMensaje {
   rol: string;
   creado_en: string;
+  es_historico?: boolean | null;
 }
 
 const cliente = new OpenAI({
@@ -139,7 +140,7 @@ async function tratarConversacion(
   // seguimiento (el reset debería haber pasado en manejador.ts).
   const { data: ultimo } = await db()
     .from("mensajes")
-    .select("rol, creado_en")
+    .select("rol, creado_en, es_historico")
     .eq("conversacion_id", conv.id)
     .order("creado_en", { ascending: false })
     .limit(1)
@@ -147,6 +148,10 @@ async function tratarConversacion(
 
   const u = ultimo as UltimoMensaje | null;
   if (!u) return;
+  // BLINDAJE: si el último mensaje es importado del historial de WhatsApp,
+  // NO hacemos auto-seguimiento. Esto evita que conectar/importar chats
+  // dispare envíos masivos a clientes viejos (el incidente que pasó).
+  if (u.es_historico) return;
   if (u.rol === "usuario") {
     if (conv.auto_seg_paso_enviado > 0) {
       await avanzarPasoAutoSeguimiento(conv.id, 0);
