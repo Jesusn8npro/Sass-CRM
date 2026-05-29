@@ -153,22 +153,27 @@ export function PanelSupabaseExterno({ idCuenta }: { idCuenta: string }) {
                       ⚠️ No marques tablas sensibles como pagos o transacciones.
                     </p>
                   </div>
-                  <div className="flex shrink-0 flex-col items-center gap-1">
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={habilitado}
-                      onClick={() => setHabilitado((h) => !h)}
-                      className={`relative h-6 w-11 rounded-full transition-colors ${habilitado ? "bg-emerald-600" : "bg-zinc-300 dark:bg-zinc-700"}`}
-                    >
-                      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${habilitado ? "translate-x-5" : "translate-x-0.5"}`} />
-                    </button>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={habilitado}
+                    onClick={() => setHabilitado((h) => !h)}
+                    title={habilitado ? "Tocá para desactivar" : "Tocá para activar"}
+                    className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+                      habilitado
+                        ? "border-emerald-500 bg-emerald-500 text-white shadow-sm shadow-emerald-500/30"
+                        : "border-zinc-300 bg-transparent text-zinc-500 dark:border-zinc-600 dark:text-zinc-400"
+                    }`}
+                  >
                     <span
-                      className={`text-[10px] font-bold uppercase tracking-wider ${habilitado ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}`}
+                      className={`relative h-4 w-7 rounded-full transition-colors ${habilitado ? "bg-white/40" : "bg-zinc-300 dark:bg-zinc-600"}`}
                     >
-                      {habilitado ? "Activado" : "Desactivado"}
+                      <span
+                        className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${habilitado ? "translate-x-3.5" : "translate-x-0.5"}`}
+                      />
                     </span>
-                  </div>
+                    {habilitado ? "Activado" : "Desactivado"}
+                  </button>
                 </div>
 
                 <div>
