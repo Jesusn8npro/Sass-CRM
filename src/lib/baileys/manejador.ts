@@ -374,45 +374,24 @@ export function registrarManejadores(
           //   2. senderPn coincide con sock.user.id (= telefono propio)
           //   3. NO hubo respuesta del bot en esta conv en los ultimos 30s
           //      (= no es eco tardio de un msg del bot)
+          // Auto-handoff: si llegamos acá con un fromMe que NO es eco de un
+          // envío nuestro (ya filtrado arriba) ni de un humano del panel
+          // (yaVinculado), entonces es un mensaje tipeado MANUALMENTE desde el
+          // celular conectado. Pasamos la conversación a HUMANO para que la IA
+          // deje de responder — el dueño está atendiendo en persona.
+          // (Antes dependía de senderPn === miNumero, poco confiable con @lid,
+          //  y de un guard de 30s que bloqueaba el caso real.)
           if (!yaVinculado) {
-            const miJid = sock.user?.id ?? "";
-            const miNumero = miJid.split(":")[0]?.split("@")[0] ?? "";
-            const senderPnNumero = clave.senderPn
-              ?.split(":")[0]
-              ?.split("@")[0];
-            const esDelTelefonoConectado =
-              !!miNumero && !!senderPnNumero && miNumero === senderPnNumero;
-
-            // Chequeo extra: si hubo msg bot/humano hace <30s, este
-            // "fromMe" es probablemente eco tardio. No tocar el modo.
-            let huboRespuestaRecienteDelBot = false;
             try {
-              const fresca = await obtenerConversacionPorId(conversacion.id);
-              if (fresca?.ultimo_mensaje_en) {
-                const dt =
-                  Date.now() - new Date(fresca.ultimo_mensaje_en).getTime();
-                huboRespuestaRecienteDelBot = dt < 30_000;
-              }
-            } catch {}
-
-            if (esDelTelefonoConectado && !huboRespuestaRecienteDelBot) {
-              try {
-                const convFresca = await obtenerConversacionPorId(
-                  conversacion.id,
+              const convFresca = await obtenerConversacionPorId(conversacion.id);
+              if (convFresca && convFresca.modo === "IA") {
+                await cambiarModo(conversacion.id, "HUMANO");
+                console.log(
+                  `${prefijo} 🤝 auto-handoff: mensaje manual desde el cel → modo HUMANO`,
                 );
-                if (convFresca && convFresca.modo === "IA") {
-                  await cambiarModo(conversacion.id, "HUMANO");
-                  console.log(
-                    `${prefijo} 🤝 auto-handoff: operador escribió desde su cel → modo HUMANO`,
-                  );
-                }
-              } catch (err) {
-                console.error(`${prefijo} error en auto-handoff:`, err);
               }
-            } else {
-              console.log(
-                `${prefijo} ⏭ skip auto-handoff (esDelCel=${esDelTelefonoConectado}, msgBotReciente=${huboRespuestaRecienteDelBot})`,
-              );
+            } catch (err) {
+              console.error(`${prefijo} error en auto-handoff:`, err);
             }
           }
           continue;
