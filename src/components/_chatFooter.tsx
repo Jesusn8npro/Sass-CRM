@@ -52,7 +52,7 @@ export function ChatFooter({
         </div>
       )}
       {esIA ? (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
+        <div className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4">
           <span className="h-1.5 w-1.5 animate-pulso-suave rounded-full bg-emerald-500" />
           <p className="text-sm text-emerald-800 dark:text-emerald-200/80">
             El bot responde automáticamente. Cambia a Humano para escribir tú.
