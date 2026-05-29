@@ -33,9 +33,10 @@ export async function procesarMensajeHistorico(
 ): Promise<void> {
   const remoteJid = m.key?.remoteJid;
   if (!remoteJid || !m.key?.id) return;
-  if (remoteJid.endsWith("@g.us")) return;
-  if (remoteJid.endsWith("@broadcast")) return;
-  if (remoteJid.endsWith("@newsletter")) return;
+  // Solo chats 1:1 reales. Descartamos grupos (@g.us), difusión (@broadcast),
+  // canales (@newsletter) y los IDs privados nuevos (@lid) que NO son
+  // teléfonos válidos — eran los que aparecían como números corruptos.
+  if (!remoteJid.endsWith("@s.whatsapp.net")) return;
 
   // Timestamp original del mensaje (Long o number, en segundos).
   const tsRaw = m.messageTimestamp;

@@ -362,7 +362,7 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
   // Al reactivar una cuenta (esta_activa: false → true), disparamos una
   // reconexión inmediata para que el QR aparezca en ~2-3s en vez de esperar
   // el ciclo de sincronizar() (cada 30s).
-  if (esta_activa === true) {
+  if (esta_activa === true && process.env.BOT_ENABLED !== "false") {
     void obtenerGestor().sincronizar();
   }
   return NextResponse.json({ cuenta: actualizada });

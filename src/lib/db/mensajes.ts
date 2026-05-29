@@ -50,6 +50,28 @@ export async function insertarMensaje(
       .from("conversaciones")
       .update({ ultimo_mensaje_en: new Date().toISOString() })
       .eq("id", conversacionId);
+  } else if (opciones.creado_en) {
+    // Histórico: subimos ultimo_mensaje_en SOLO si este mensaje es más nuevo
+    // (o la conversación no tenía marca). Así las conversaciones importadas
+    // quedan ordenadas por su mensaje más reciente, sin que un mensaje viejo
+    // pise una marca más nueva ya existente.
+    const { data: conv } = await db()
+      .from("conversaciones")
+      .select("ultimo_mensaje_en")
+      .eq("id", conversacionId)
+      .maybeSingle();
+    const actual =
+      (conv as { ultimo_mensaje_en?: string | null } | null)?.ultimo_mensaje_en ??
+      null;
+    if (
+      !actual ||
+      new Date(opciones.creado_en).getTime() > new Date(actual).getTime()
+    ) {
+      await db()
+        .from("conversaciones")
+        .update({ ultimo_mensaje_en: opciones.creado_en })
+        .eq("id", conversacionId);
+    }
   }
 
   // Webhook saliente "mensaje_enviado" — solo para mensajes que SALIERON

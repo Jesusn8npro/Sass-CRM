@@ -72,7 +72,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   // el QR nuevo aparezca en ~2-3s en vez de esperar el ciclo de
   // sincronizar() (cada 30s). Si se pausó (esta_activa=false), sincronizar
   // la ignora — no regenera QR, queda apagada como se pidió.
-  if (!pausar) {
+  if (!pausar && process.env.BOT_ENABLED !== "false") {
     void obtenerGestor().sincronizar();
   }
 
