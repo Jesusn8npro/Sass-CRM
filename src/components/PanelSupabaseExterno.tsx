@@ -146,18 +146,29 @@ export function PanelSupabaseExterno({ idCuenta }: { idCuenta: string }) {
               <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold">Acceso del agente de IA</p>
-                    <p className="mt-0.5 text-xs text-zinc-500">Permití que el agente consulte estas tablas para responder con datos reales al vender.</p>
+                    <p className="text-sm font-semibold">Acceso del agente de chat (clientes)</p>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      Solo LECTURA, y solo de las tablas que marques abajo. Sirve para que el agente
+                      responda a tus clientes con datos reales (cursos, precios, verificar su registro).
+                      ⚠️ No marques tablas sensibles como pagos o transacciones.
+                    </p>
                   </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={habilitado}
-                    onClick={() => setHabilitado((h) => !h)}
-                    className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors ${habilitado ? "bg-emerald-600" : "bg-zinc-300 dark:bg-zinc-700"}`}
-                  >
-                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${habilitado ? "translate-x-5" : "translate-x-0.5"}`} />
-                  </button>
+                  <div className="flex shrink-0 flex-col items-center gap-1">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={habilitado}
+                      onClick={() => setHabilitado((h) => !h)}
+                      className={`relative h-6 w-11 rounded-full transition-colors ${habilitado ? "bg-emerald-600" : "bg-zinc-300 dark:bg-zinc-700"}`}
+                    >
+                      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${habilitado ? "translate-x-5" : "translate-x-0.5"}`} />
+                    </button>
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wider ${habilitado ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}`}
+                    >
+                      {habilitado ? "Activado" : "Desactivado"}
+                    </span>
+                  </div>
                 </div>
 
                 <div>
