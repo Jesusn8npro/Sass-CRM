@@ -166,11 +166,9 @@ export function PanelSupabaseExterno({ idCuenta }: { idCuenta: string }) {
                     }`}
                   >
                     <span
-                      className={`relative h-4 w-7 rounded-full transition-colors ${habilitado ? "bg-white/40" : "bg-zinc-300 dark:bg-zinc-600"}`}
+                      className={`flex h-4 w-7 items-center rounded-full px-0.5 transition-colors ${habilitado ? "justify-end bg-white/40" : "justify-start bg-zinc-300 dark:bg-zinc-600"}`}
                     >
-                      <span
-                        className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${habilitado ? "translate-x-3.5" : "translate-x-0.5"}`}
-                      />
+                      <span className="h-3 w-3 rounded-full bg-white shadow" />
                     </span>
                     {habilitado ? "Activado" : "Desactivado"}
                   </button>
