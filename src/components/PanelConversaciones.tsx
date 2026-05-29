@@ -136,7 +136,7 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
   return (
     <div className="flex h-full min-h-0 overflow-hidden lg:h-screen">
       <div
-        className={`flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40 lg:flex lg:w-[340px] lg:shrink-0 ${
+        className={`h-full min-h-0 flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40 lg:flex lg:w-[340px] lg:shrink-0 ${
           idConvSeleccionada ? "hidden lg:flex" : "flex w-full"
         }`}
       >
@@ -290,6 +290,7 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
           </div>
         )}
 
+        <div className="min-h-0 flex-1 overflow-y-auto">
         <ListaConversaciones
           conversaciones={conversaciones.filter((c) => {
             if (filtroAgente === "mias" && !(miUsuarioId ? c.asignado_a === miUsuarioId : true)) return false;
@@ -362,6 +363,7 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
             });
           }}
         />
+        </div>
       </div>
 
       <div
