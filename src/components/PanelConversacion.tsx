@@ -347,11 +347,11 @@ export function PanelConversacion({
 
       <div
         ref={refScroll}
-        className="min-h-0 flex-1 overflow-y-auto bg-zinc-50 px-3 py-4 md:px-6 md:py-6 dark:bg-zinc-950"
+        className="min-h-0 flex-1 overflow-y-auto bg-zinc-100 px-3 py-4 md:px-6 md:py-6 dark:bg-zinc-900"
         style={{
           backgroundImage:
-            "radial-gradient(circle at 1px 1px, rgba(120,120,120,0.10) 1px, transparent 0)",
-          backgroundSize: "18px 18px",
+            "radial-gradient(circle at 1px 1px, rgba(120,120,120,0.18) 1px, transparent 0)",
+          backgroundSize: "16px 16px",
         }}
       >
         {mensajes.length === 0 ? (
