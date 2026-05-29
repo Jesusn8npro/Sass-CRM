@@ -182,20 +182,20 @@ export function BurbujaMensaje({ mensaje, idCuenta }: Props) {
       <div className="flex flex-col gap-1 animate-aparecer">
         <div className={`flex ${lado}`}>
           <div
-            className={`relative overflow-hidden rounded-2xl ${radio} border shadow-sm ${colores}`}
+            className={`relative max-w-[78%] overflow-hidden rounded-2xl ${radio} border shadow-sm ${colores}`}
           >
             {mensaje.tipo === "imagen" ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={src}
                 alt={caption || "Imagen"}
-                className="block max-h-[320px] w-auto"
+                className="block max-h-[320px] w-auto max-w-full"
               />
             ) : (
               <video
                 src={src}
                 controls
-                className="block max-h-[320px] w-auto"
+                className="block max-h-[320px] w-auto max-w-full"
               />
             )}
             {/* Hora como overlay solo si NO hay caption (ahí va en la burbuja de abajo) */}

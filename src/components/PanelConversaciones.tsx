@@ -134,7 +134,7 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
     conversaciones.find((c) => c.id === idConvSeleccionada) ?? null;
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden lg:h-screen">
+    <div className="flex h-full min-h-0 overflow-hidden">
       <div
         className={`h-full min-h-0 flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40 lg:flex lg:w-[340px] lg:shrink-0 ${
           idConvSeleccionada ? "hidden lg:flex" : "flex w-full"

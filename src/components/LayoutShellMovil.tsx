@@ -101,7 +101,7 @@ export function LayoutShellMovil({
           </div>
         </div>
 
-        <main className="flex-1 overflow-x-hidden overflow-y-auto pb-16 lg:pb-0">{children}</main>
+        <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-16 lg:pb-0">{children}</main>
       </div>
 
       <BottomNavMovil idCuenta={idCuenta} onAbrirMenu={() => setAbierto(true)} />
