@@ -353,7 +353,7 @@ export function PanelConversacion({
             </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex min-h-full flex-col justify-end gap-3">
             <div className="mx-auto flex flex-col items-center gap-2">
               <button
                 type="button"
