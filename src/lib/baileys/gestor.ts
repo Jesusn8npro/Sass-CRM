@@ -176,7 +176,11 @@ class GestorCuentas {
       // "escribiendo..." funcione: WhatsApp solo lo muestra cuando
       // estamos online ante el contacto.
       markOnlineOnConnect: true,
-      syncFullHistory: false,
+      // true = al emparejar el QR, WhatsApp envía un historial amplio
+      // (varios meses) que se guarda vía 'messaging-history.set'. Hace el
+      // primer sync más pesado, pero permite ver conversaciones anteriores
+      // del cliente, no solo las nuevas.
+      syncFullHistory: true,
       // Sin esto, cuando el receptor pide reupload de un audio/imagen
       // después de unos minutos, Baileys responde null y WhatsApp
       // muestra "este audio ya no está disponible". Devolviendo el
