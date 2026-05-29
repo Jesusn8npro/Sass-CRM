@@ -7,6 +7,7 @@ import {
 } from "@/lib/baseDatos";
 import { calcularBotVivo } from "@/lib/latidoBot";
 import { parsearJSON, verificarAccesoCuenta } from "@/lib/auth/sesion";
+import { obtenerGestor } from "@/lib/baileys/gestor";
 
 /** Sanea la lista de campos a capturar que viene del cliente.
  * Filtra los inválidos en lugar de fallar — más amistoso para la UI. */
@@ -357,6 +358,12 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
   });
   if (!actualizada) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  }
+  // Al reactivar una cuenta (esta_activa: false → true), disparamos una
+  // reconexión inmediata para que el QR aparezca en ~2-3s en vez de esperar
+  // el ciclo de sincronizar() (cada 30s).
+  if (esta_activa === true) {
+    void obtenerGestor().sincronizar();
   }
   return NextResponse.json({ cuenta: actualizada });
 }

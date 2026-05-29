@@ -36,12 +36,14 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   }
   const pausar = body.pausar === true;
 
-  // Soltar el socket en memoria — sin esto sincronizar() nunca regenera QR
-  // porque el socket "roto" sigue en el Map y la cuenta se queda atascada.
-  obtenerGestor().liberarSocket(idCuenta);
+  // Cierre INTENCIONAL: llama sock.logout() para que WhatsApp desvincule el
+  // dispositivo del teléfono (no solo soltar el socket local). El guard de
+  // 'loggedOut' evita falsas alertas de "cuenta caída".
+  await obtenerGestor().cerrarSesionIntencional(idCuenta);
 
-  // Limpiar credenciales de Supabase para forzar QR nuevo en el próximo ciclo
-  void borrarSesionBaileysDeCuenta(idCuenta).catch(() => {});
+  // Limpiar credenciales de Supabase para forzar QR nuevo. Awaited para que
+  // el sincronizar() de abajo no reconecte con creds viejas.
+  await borrarSesionBaileysDeCuenta(idCuenta).catch(() => {});
 
   await actualizarEstadoCuenta(idCuenta, {
     estado: "desconectado",
@@ -64,6 +66,14 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     fs.rmSync(dirAuth, { recursive: true, force: true });
   } catch (err) {
     console.warn(`[api] no se pudo limpiar auth/${idCuenta}:`, err);
+  }
+
+  // Si NO se pausó la cuenta, disparamos una reconexión inmediata para que
+  // el QR nuevo aparezca en ~2-3s en vez de esperar el ciclo de
+  // sincronizar() (cada 30s). Si se pausó (esta_activa=false), sincronizar
+  // la ignora — no regenera QR, queda apagada como se pidió.
+  if (!pausar) {
+    void obtenerGestor().sincronizar();
   }
 
   return NextResponse.json({ ok: true, pausada: pausar });

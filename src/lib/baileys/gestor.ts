@@ -97,6 +97,12 @@ class GestorCuentas {
    * limpia automaticamente.
    */
   private pausasPorConflicto = new Map<string, number>();
+  /**
+   * Cuentas que el usuario desconectó a propósito (con logout). Sirve para
+   * que el handler de 'loggedOut' NO mande falsas alertas de "cuenta caída"
+   * cuando el cierre fue intencional.
+   */
+  private cierresIntencionales = new Set<string>();
 
   async iniciar(): Promise<void> {
     await this.sincronizar();
@@ -277,25 +283,31 @@ class GestorCuentas {
         // de conflicto detectado si llega al umbral.
 
         if (codigo === DisconnectReason.loggedOut) {
+          // ¿El usuario lo desconectó a propósito? Entonces no son alertas
+          // reales — saltamos las notificaciones de "cuenta caída".
+          const intencional = this.cierresIntencionales.has(cuenta.id);
+          this.cierresIntencionales.delete(cuenta.id);
           console.log(
-            `${prefijo} sesión cerrada por WhatsApp. Limpiando creds.`,
+            `${prefijo} sesión cerrada${intencional ? " (intencional)" : " por WhatsApp"}. Limpiando creds.`,
           );
           // Log admin: loggedOut es crítico (cuenta sale de servicio
-          // hasta que el dueño escanee QR de nuevo). Fire-and-forget.
-          void (async () => {
-            try {
-              const { registrarEvento } = await import("../db/eventosLog");
-              registrarEvento({
-                cuentaId: cuenta.id,
-                nivel: "critical",
-                contexto: "baileys.gestor.loggedOut",
-                mensaje: `Sesión WhatsApp cerrada (código ${codigo}). Requiere re-escaneo de QR.`,
-                metadata: { etiqueta: cuenta.etiqueta, codigo },
-              });
-            } catch {
-              /* ignorar */
-            }
-          })();
+          // hasta que el dueño escanee QR de nuevo). Solo si NO fue intencional.
+          if (!intencional) {
+            void (async () => {
+              try {
+                const { registrarEvento } = await import("../db/eventosLog");
+                registrarEvento({
+                  cuentaId: cuenta.id,
+                  nivel: "critical",
+                  contexto: "baileys.gestor.loggedOut",
+                  mensaje: `Sesión WhatsApp cerrada (código ${codigo}). Requiere re-escaneo de QR.`,
+                  metadata: { etiqueta: cuenta.etiqueta, codigo },
+                });
+              } catch {
+                /* ignorar */
+              }
+            })();
+          }
           void actualizarEstadoCuenta(cuenta.id, {
             estado: "desconectado",
             cadena_qr: null,
@@ -304,16 +316,18 @@ class GestorCuentas {
           // Borrar la sesión de Supabase para que el siguiente arranque
           // genere QR limpio.
           void borrarSesionBaileysDeCuenta(cuenta.id).catch(() => {});
-          // Notificar al dueño (in-app + email si está Resend).
-          void notificarCuentaDesconectada(
-            cuenta.id,
-            cuenta.etiqueta,
-            `WhatsApp cerró la sesión (código ${DisconnectReason.loggedOut}). Posibles causas: superaste 4 dispositivos vinculados, 14+ días sin abrir WhatsApp en el móvil, o cerraste sesión manualmente desde "Dispositivos vinculados".`,
-          ).catch((err) => {
-            console.error(`${prefijo} error notificando desconexión:`, err);
-          });
-          // Email transaccional dedicado de WhatsApp caído (fire-and-forget).
-          void enviarWhatsAppCaido(cuenta.id);
+          if (!intencional) {
+            // Notificar al dueño (in-app + email si está Resend).
+            void notificarCuentaDesconectada(
+              cuenta.id,
+              cuenta.etiqueta,
+              `WhatsApp cerró la sesión (código ${DisconnectReason.loggedOut}). Posibles causas: superaste 4 dispositivos vinculados, 14+ días sin abrir WhatsApp en el móvil, o cerraste sesión manualmente desde "Dispositivos vinculados".`,
+            ).catch((err) => {
+              console.error(`${prefijo} error notificando desconexión:`, err);
+            });
+            // Email transaccional dedicado de WhatsApp caído (fire-and-forget).
+            void enviarWhatsAppCaido(cuenta.id);
+          }
           // Sacar el socket del Map con un tick de diferencia para no
           // re-entrar en el mismo event handler. sincronizar() lo va a
           // crear de cero en el próximo ciclo (3s) y generará QR nuevo.
@@ -513,6 +527,33 @@ class GestorCuentas {
     if (entrada.temporizadorReconexion) clearTimeout(entrada.temporizadorReconexion);
     try { entrada.sock.end(undefined); } catch { /* ignorar */ }
     this.sockets.delete(cuentaId);
+  }
+
+  /**
+   * Cierre de sesión INTENCIONAL del usuario: llama sock.logout() para que
+   * WhatsApp DESVINCULE el dispositivo del teléfono (no solo soltar el socket
+   * local como liberarSocket). Marca el cierre como intencional para que el
+   * handler de 'loggedOut' no mande falsas alertas de "cuenta caída".
+   * logout() tiene un timeout de 4s para no colgar la request si no responde.
+   */
+  async cerrarSesionIntencional(cuentaId: string): Promise<void> {
+    this.cierresIntencionales.add(cuentaId);
+    const entrada = this.sockets.get(cuentaId);
+    if (entrada) {
+      if (entrada.temporizadorReconexion) clearTimeout(entrada.temporizadorReconexion);
+      try {
+        await Promise.race([
+          entrada.sock.logout(),
+          new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+        ]);
+      } catch {
+        /* ignorar — igual soltamos el socket abajo */
+      }
+      try { entrada.sock.end(undefined); } catch { /* ignorar */ }
+      this.sockets.delete(cuentaId);
+    }
+    // Safety: si el evento 'loggedOut' no llega, limpiamos la marca igual.
+    setTimeout(() => this.cierresIntencionales.delete(cuentaId), 15_000);
   }
 
   obtenerSocket(cuentaId: string): WASocket | null {
