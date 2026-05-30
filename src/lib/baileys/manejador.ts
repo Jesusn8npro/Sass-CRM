@@ -167,6 +167,69 @@ export function registrarManejadores(
 ): void {
   const prefijo = `[bot:${etiquetaCuenta}]`;
 
+  // ============================================================
+  // Buffer con detección de "escribiendo" (composing).
+  // Esperamos a que el cliente DEJE de tipear antes de responder: cada
+  // mensaje Y cada evento "composing" re-arman el timer. Tope máximo para
+  // no esperar indefinidamente si la persona escribe sin parar.
+  // ============================================================
+  const MAX_ESPERA_BUFFER_MS = 60_000;
+  const infoBuffer = new Map<
+    string,
+    { remoteJid: string; jidParaEnviar: string; bufferSegundos: number; expiraMax: number }
+  >();
+  const convPorJid = new Map<string, string>();
+
+  function armarBufferRespuesta(
+    idConv: string,
+    remoteJid: string,
+    jidParaEnviar: string,
+    bufferSegundos: number,
+  ): void {
+    cancelarTimer(idConv);
+    const ahora = Date.now();
+    const previo = infoBuffer.get(idConv);
+    const expiraMax = previo?.expiraMax ?? ahora + MAX_ESPERA_BUFFER_MS;
+    infoBuffer.set(idConv, { remoteJid, jidParaEnviar, bufferSegundos, expiraMax });
+    convPorJid.set(remoteJid, idConv);
+    const espera = Math.max(500, Math.min(bufferSegundos * 1000, expiraMax - ahora));
+    const timer = setTimeout(async () => {
+      timersBuffer.delete(idConv);
+      infoBuffer.delete(idConv);
+      convPorJid.delete(remoteJid);
+      const cuentaFresca = await obtenerCuenta(cuentaId);
+      if (!cuentaFresca || cuentaFresca.esta_archivada) return;
+      const convFresca = await obtenerConversacionPorId(idConv);
+      if (!convFresca || convFresca.modo !== "IA") return;
+      try {
+        await generarYEnviarRespuesta(sock, cuentaFresca, convFresca, jidParaEnviar, prefijo);
+      } catch (err) {
+        console.error(`${prefijo} error en respuesta diferida:`, err);
+      }
+    }, espera);
+    timersBuffer.set(idConv, timer);
+  }
+
+  // Mientras el cliente esté "escribiendo" (o grabando audio), extendemos el
+  // buffer para no interrumpirlo. Cuando deja de tipear, el timer corre normal.
+  sock.ev.on(
+    "presence.update",
+    ({ id, presences }: { id: string; presences?: Record<string, { lastKnownPresence?: string }> }) => {
+      const idConv = convPorJid.get(id);
+      if (!idConv || !timersBuffer.has(idConv)) return;
+      const info = infoBuffer.get(idConv);
+      if (!info) return;
+      const escribiendo =
+        !!presences &&
+        Object.values(presences).some(
+          (p) => p?.lastKnownPresence === "composing" || p?.lastKnownPresence === "recording",
+        );
+      if (escribiendo) {
+        armarBufferRespuesta(idConv, info.remoteJid, info.jidParaEnviar, info.bufferSegundos);
+      }
+    },
+  );
+
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     // Aceptamos "notify" (mensajes en tiempo real) Y "append"
     // (mensajes que WhatsApp re-entrega tras reconectar).
@@ -628,31 +691,23 @@ export function registrarManejadores(
           `${prefijo} ✓ generando respuesta IA para ${conversacion.nombre ?? telefonoMostrable}...`,
         );
 
-        // Buffering opcional
+        // Buffering con detección de "escribiendo": esperamos a que el cliente
+        // deje de tipear antes de responder. Cada mensaje y cada "composing"
+        // re-arman el timer (debounce), hasta un tope máximo.
         if (cuenta.buffer_segundos > 0) {
-          cancelarTimer(conversacion.id);
-          const idConv = conversacion.id;
-          const timer = setTimeout(async () => {
-            timersBuffer.delete(idConv);
-            const cuentaFresca = await obtenerCuenta(cuentaId);
-            if (!cuentaFresca || cuentaFresca.esta_archivada) return;
-            const convFresca = await obtenerConversacionPorId(idConv);
-            if (!convFresca || convFresca.modo !== "IA") return;
-            try {
-              await generarYEnviarRespuesta(
-                sock,
-                cuentaFresca,
-                convFresca,
-                jidParaEnviar,
-                prefijo,
-              );
-            } catch (err) {
-              console.error(`${prefijo} error en respuesta diferida:`, err);
-            }
-          }, cuenta.buffer_segundos * 1000);
-          timersBuffer.set(conversacion.id, timer);
+          try {
+            void sock.presenceSubscribe(remoteJid);
+          } catch {
+            /* presence opcional — si falla, igual funciona por mensajes */
+          }
+          armarBufferRespuesta(
+            conversacion.id,
+            remoteJid,
+            jidParaEnviar,
+            cuenta.buffer_segundos,
+          );
           console.log(
-            `${prefijo} buffer ${cuenta.buffer_segundos}s armado para ${conversacion.nombre ?? telefonoMostrable}`,
+            `${prefijo} buffer ${cuenta.buffer_segundos}s armado (espera a que deje de escribir) para ${conversacion.nombre ?? telefonoMostrable}`,
           );
           continue;
         }
