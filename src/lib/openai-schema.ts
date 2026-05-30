@@ -318,14 +318,19 @@ export const ESQUEMA_RESPUESTA = {
             properties: {
               columna: {
                 type: "string",
-                description: "Nombre de la columna por la que filtrar (ej: email, telefono, user_id).",
+                description: "Nombre de la columna por la que filtrar (ej: email, telefono, usuario_id, id).",
               },
               valor: {
                 type: "string",
-                description: "Valor a buscar — siempre un dato del PROPIO cliente actual.",
+                description: "Valor exacto a buscar (=). Para encadenar: poné acá el id/email que obtuviste en una consulta anterior. Dejá \"\" si vas a usar 'valores'.",
+              },
+              valores: {
+                type: "array",
+                items: { type: "string" },
+                description: "Lista de valores para traer VARIOS registros de una (IN), ej: varios ids de tutoriales que obtuviste antes. Dejá [] si usás 'valor'.",
               },
             },
-            required: ["columna", "valor"],
+            required: ["columna", "valor", "valores"],
             additionalProperties: false,
           },
         },

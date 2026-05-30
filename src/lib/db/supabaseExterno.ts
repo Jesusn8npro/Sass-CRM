@@ -282,7 +282,7 @@ export async function obtenerCredencialesExternas(
 export async function consultarTablasExternas(
   cuentaId: string,
   tablasSolicitadas: string[],
-  filtros: { columna: string; valor: string }[] = [],
+  filtros: { columna: string; valor: string; valores?: string[] }[] = [],
 ): Promise<Record<string, Record<string, unknown>[]>> {
   const config = await obtenerConfigExterna(cuentaId);
   if (!config.conectado || !config.agenteHabilitado) return {};
@@ -299,15 +299,24 @@ export async function consultarTablasExternas(
   });
 
   const filtrosValidos = filtros.filter(
-    (f) => f && typeof f.columna === "string" && f.columna.trim() !== "" && f.valor != null && String(f.valor) !== "",
+    (f) =>
+      f &&
+      typeof f.columna === "string" &&
+      f.columna.trim() !== "" &&
+      ((f.valor != null && String(f.valor) !== "") ||
+        (Array.isArray(f.valores) && f.valores.length > 0)),
   );
-  const tope = filtrosValidos.length > 0 ? 10 : LIMITE_FILAS_CONSULTA;
+  const tope = filtrosValidos.length > 0 ? 30 : LIMITE_FILAS_CONSULTA;
 
   const resultado: Record<string, Record<string, unknown>[]> = {};
   for (const tabla of objetivo) {
     let q = cliente.from(tabla).select("*").limit(tope);
     for (const f of filtrosValidos) {
-      q = q.eq(f.columna, f.valor) as typeof q;
+      if (Array.isArray(f.valores) && f.valores.length > 0) {
+        q = q.in(f.columna, f.valores) as typeof q;
+      } else {
+        q = q.eq(f.columna, f.valor) as typeof q;
+      }
     }
     const { data, error } = await q;
     if (!error && data) {

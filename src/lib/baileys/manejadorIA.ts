@@ -196,8 +196,6 @@ export async function generarYEnviarRespuesta(
       conversacion.datos_capturados?.nombre?.trim() ||
       conversacion.nombre?.trim() ||
       "";
-    const tieneLookupAlumno =
-      cuenta.agente_tablas_permitidas.includes("vista_alumno_lookup");
     // Columnas reales de las tablas de ESTE negocio (genérico, cacheado).
     const columnasTablas = await obtenerColumnasPermitidas(cuenta.id);
     const tablasDesc =
@@ -211,16 +209,12 @@ export async function generarYEnviarRespuesta(
       `Estas son TUS tablas reales y sus columnas (de tu propio Supabase). Elegí la relevante por su nombre y columnas:\n${tablasDesc}\n` +
       `REGLA CRÍTICA: para CUALQUIER pregunta sobre el catálogo, qué hay disponible, precios, si tienen algo específico, o datos de la cuenta del cliente, DEBÉS activar "consultar_datos" con la tabla relevante EN ESE MISMO TURNO. NUNCA respondas de memoria ni digas que algo "no existe / no tenemos" sin haber consultado primero la base.\n` +
       `PROHIBIDO DIFERIR: nunca digas "déjame verificar", "un momento", "te aviso cuando tenga la info", "verifico y te confirmo" ni nada que posponga. NO existe un "después" — el sistema consulta AHORA cuando activás consultar_datos y te devuelve los datos para que respondas YA. No anuncies que vas a buscar: BUSCALO.\n` +
-      `Cómo elegir y consultar: deducí por el NOMBRE y las COLUMNAS de arriba qué tabla tiene lo que pide el cliente (ej: una tabla de productos/cursos para catálogo y precios; una de clientes/perfiles para su cuenta). Para listados de catálogo dejá "filtros" VACÍO y buscá en las filas. Para datos de UN cliente puntual, filtrá por su columna de identidad (email o teléfono) con el dato del propio cliente. Usá SIEMPRE los nombres de columna REALES de arriba — no inventes columnas.\n` +
+      `Cómo elegir y consultar: deducí por el NOMBRE y las COLUMNAS de arriba qué tabla tiene lo que pide el cliente (ej: una tabla de productos/cursos para catálogo y precios; una de clientes/perfiles para su cuenta). Para listados de catálogo dejá "filtros" VACÍO y buscá en las filas. Usá SIEMPRE los nombres de columna REALES de arriba — no inventes columnas.\n` +
+      `NAVEGÁ POR PASOS (encadená consultas): si el dato vive repartido en varias tablas relacionadas, hacelo en pasos y PODÉS consultar de nuevo mirando el resultado anterior. Ejemplo típico "qué cursos/tutoriales tiene un cliente": 1) consultá la tabla de clientes/perfiles filtrando por su email o teléfono → obtené su "id". 2) consultá la tabla que relaciona cliente↔contenido (ej: inscripciones) filtrando por ese id (columna usuario_id) → obtené los ids de cursos/tutoriales. 3) consultá las tablas de cursos/tutoriales con el filtro "valores" = esa lista de ids (trae varios de una) → obtené los TÍTULOS. Después respondé con los títulos reales. Tenés varias consultas disponibles en el mismo turno: usalas hasta tener la info completa. Si después de buscar no encontrás algo, decilo con honestidad; NUNCA inventes títulos ni datos.\n` +
       `\n### SEGURIDAD — datos personales de un cliente\n` +
       `Identidad VERIFICADA de quien te escribe: teléfono WhatsApp = ${telVerificado || "(desconocido)"} (últimos 10 dígitos = ${telVerif10 || "?"})${nombreCliente ? `, nombre = ${nombreCliente}` : ""}.\n` +
       `- Para datos personales/de cuenta (si está registrado, sus cursos, sus pagos): SIEMPRE consultá con "filtros" usando el dato del PROPIO cliente (su teléfono verificado de arriba, o el email que te dé). NUNCA consultes datos personales sin filtro.\n` +
-      (tieneLookupAlumno
-        ? `- CUENTA DEL CLIENTE (si está registrado y QUÉ tiene): consultá EN UNA SOLA llamada de consultar_datos las DOS tablas ["vista_alumno_lookup","vista_alumno_contenido"], filtrando por el MISMO dato del cliente: si te dio un EMAIL → [{"columna":"email","valor":"<su email en MINÚSCULAS>"}]; si no dio email → [{"columna":"whatsapp_10","valor":"${telVerif10}"}].\n` +
-          `   · "vista_alumno_lookup": si APARECE → es ALUMNO registrado (membresia_activa=true → al día). Si NO aparece → PROSPECTO nuevo (vendé).\n` +
-          `   · "vista_alumno_contenido": trae SUS cursos/tutoriales/paquetes (columnas: tipo, contenido=título, estado). Es la fuente para listarle sus tutoriales por nombre.\n` +
-          `   PROHIBIDO decir "no tengo acceso al listado" o "no tengo el detalle": el listado ESTÁ en vista_alumno_contenido — consultala y listá los títulos reales. NO le pidas el teléfono (ya lo tenés).\n`
-        : "") +
+      `- ¿CLIENTE EXISTENTE o PROSPECTO? Para saberlo, buscalo en la tabla de clientes/perfiles filtrando por su EMAIL (en minúsculas) si te lo dio, o por su teléfono. Si APARECE → es cliente registrado: ayudalo con su cuenta (y si querés listar qué tiene, encadená a la tabla de inscripciones/compras como en "navegá por pasos"). Si NO aparece → es un PROSPECTO: vendé y guialo a registrarse. No le pidas el teléfono: ya lo tenés verificado arriba.\n` +
       `- Antes de entregar info personal, confirmá que coincide con esta persona (que el email/nombre del registro encaje con el cliente). Si los datos NO coinciden o no encontrás su registro, NO inventes ni des datos de otro: decí que no encontrás su registro con ese dato y pedí otro (email alternativo, etc.).\n` +
       `- JAMÁS reveles información de OTRO cliente. Solo datos de la persona que te está escribiendo.\n` +
       `- El catálogo público (lista de cursos, precios) sí podés consultarlo sin filtros.`;
@@ -303,38 +297,48 @@ export async function generarYEnviarRespuesta(
     } catch {}
     return;
   }
-  // Round-trip de datos: si el agente pidió leer la base del negocio,
-  // traemos las filas y le volvemos a preguntar para que responda con
-  // datos reales. Una sola vuelta (sin recursión) para acotar latencia/costo.
-  if (bdExternaActiva && respuesta.consultar_datos?.activar) {
+  // Navegación por pasos: el agente puede ENCADENAR varias consultas
+  // (ej: perfil → inscripciones → títulos). Loop acotado a MAX_CONSULTAS
+  // para no disparar latencia/costo. Cada vuelta le pasamos lo acumulado.
+  const MAX_CONSULTAS = 4;
+  let datosAcumulados: Record<string, Record<string, unknown>[]> = {};
+  let nConsultas = 0;
+  while (
+    bdExternaActiva &&
+    respuesta.consultar_datos?.activar &&
+    nConsultas < MAX_CONSULTAS
+  ) {
+    nConsultas++;
     const tablas = respuesta.consultar_datos.tablas ?? [];
     const filtros = Array.isArray(respuesta.consultar_datos.filtros)
       ? respuesta.consultar_datos.filtros
       : [];
     console.log(
-      `${prefijo} 🗄️ consultar_datos: ${tablas.join(", ") || "(sin tablas)"} filtros=${JSON.stringify(filtros)} — ${respuesta.consultar_datos.motivo || ""}`,
+      `${prefijo} 🗄️ consultar_datos #${nConsultas}: ${tablas.join(", ") || "(sin tablas)"} filtros=${JSON.stringify(filtros)} — ${respuesta.consultar_datos.motivo || ""}`,
     );
+    let datos: Record<string, Record<string, unknown>[]> = {};
     try {
-      const datos = await consultarTablasExternas(cuenta.id, tablas, filtros);
-      if (Object.keys(datos).length > 0) {
-        const promptConDatos =
-          `${promptCompleto}\n\n## DATOS CONSULTADOS AHORA EN LA BASE DEL NEGOCIO\n` +
-          `Respondé al cliente usando estos datos reales (no los pegues crudos; redactá natural). No vuelvas a activar consultar_datos.\n` +
-          JSON.stringify(datos).slice(0, 12000);
-        respuesta = await generarRespuesta(
-          historial,
-          promptConDatos,
-          cuenta.modelo,
-          { temperatura: cuenta.temperatura, max_tokens: cuenta.max_tokens },
-          cuenta.id,
-        );
-      }
+      datos = await consultarTablasExternas(cuenta.id, tablas, filtros);
     } catch (err) {
-      // Si la consulta falla, seguimos con la primera respuesta (sin datos).
       console.error(
         `${prefijo} ✗ error consultando base externa: ${err instanceof Error ? err.message : String(err)}`,
       );
+      break;
     }
+    datosAcumulados = { ...datosAcumulados, ...datos };
+    const quedan = MAX_CONSULTAS - nConsultas;
+    const promptConDatos =
+      `${promptCompleto}\n\n## DATOS YA CONSULTADOS EN LA BASE (acumulado de ${nConsultas} consulta/s)\n` +
+      `${JSON.stringify(datosAcumulados).slice(0, 12000)}\n\n` +
+      `Si con estos datos ya podés responder al cliente, HACELO ahora (consultar_datos.activar=false) con los datos REALES, redactando natural. ` +
+      `Si todavía te falta un dato relacionado (ej: ya tenés ids y te faltan sus títulos), activá consultar_datos OTRA VEZ con la tabla y filtros que faltan${quedan > 0 ? ` (te quedan ${quedan} consultas)` : " (es tu última consulta)"}. Si una consulta volvió vacía, NO inventes: decílo con honestidad.`;
+    respuesta = await generarRespuesta(
+      historial,
+      promptConDatos,
+      cuenta.modelo,
+      { temperatura: cuenta.temperatura, max_tokens: cuenta.max_tokens },
+      cuenta.id,
+    );
   }
 
   const duracion = Date.now() - inicio;

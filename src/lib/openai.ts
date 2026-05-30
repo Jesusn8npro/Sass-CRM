@@ -174,7 +174,7 @@ export interface RespuestaIA {
   consultar_datos: {
     activar: boolean;
     tablas: string[];
-    filtros: { columna: string; valor: string }[];
+    filtros: { columna: string; valor: string; valores: string[] }[];
     motivo: string;
   };
 }
