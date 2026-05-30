@@ -10,6 +10,8 @@ import { crearClienteMiddleware } from "@/lib/supabase/cliente-middleware";
  */
 
 const API_PUBLICA_ALLOWLIST = [
+  // Público: para verificar qué commit está desplegado (diagnóstico de deploy).
+  "/api/version",
   "/api/wa-cloud/webhook",
   "/api/vapi/webhook",
   "/api/apify/webhook",
