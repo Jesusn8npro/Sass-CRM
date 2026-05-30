@@ -159,11 +159,11 @@ export function SeccionContexto({ cuenta, onActualizada }: PropsSeccionBase) {
   }
 
   return (
-    <Tarjeta titulo="Información del negocio (hechos)" descripcion="DATOS objetivos sobre tu negocio: qué vendés, dónde, horarios, formas de pago, garantías, políticas. NO confundir con el Prompt del agente — eso va en la pestaña 'Configuración IA' y define el COMPORTAMIENTO (cómo responde, qué tono, qué reglas). Acá solo van HECHOS.">
+    <Tarjeta titulo="📋 Información del negocio — los DATOS (QUÉ vendés)" descripcion="Acá van los HECHOS de tu negocio: productos, precios, horarios, formas de pago, garantías. Pensalo como la 'ficha de datos'. 👉 El CÓMO se comporta el agente (tono, reglas) va aparte, en 'Configuración IA → Prompt del agente'.">
       <form onSubmit={handleSubmit(guardar)} className="flex flex-col gap-3">
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          ✅ <strong>Va acá:</strong> dirección, horarios, métodos de pago, garantías, envío, devoluciones, condiciones del servicio, datos de contacto.<br />
-          ❌ <strong>NO va acá:</strong> "el agente debe ser amable", "no des descuentos", "siempre cierra ofreciendo demo" — eso son reglas de comportamiento, van al Prompt del agente (Configuración IA).
+          ✅ <strong>Va acá (DATOS):</strong> dirección, horarios, métodos de pago, garantías, envío, devoluciones, condiciones del servicio, datos de contacto.<br />
+          ❌ <strong>NO va acá:</strong> "el agente debe ser amable", "no des descuentos", "siempre cierra ofreciendo demo" — eso son REGLAS de comportamiento, van al Prompt del agente (Configuración IA).
         </p>
         <textarea {...register("contexto_negocio")} rows={10} placeholder={`Vendemos acordeones nuevos y usados.\nEstamos en Bogotá, Colombia. Enviamos a todo el país.\nAceptamos pago contra entrega, transferencia y tarjeta.\nGarantía de 1 año contra defectos de fábrica.\nHorario: L-V 9am a 6pm, S 10am a 2pm.`} aria-invalid={!!errors.contexto_negocio} className={`${textareaClases()} ${errors.contexto_negocio ? "border-red-500" : ""}`} />
         {errors.contexto_negocio && <p className="text-xs text-red-600 dark:text-red-400" role="alert">{errors.contexto_negocio.message}</p>}

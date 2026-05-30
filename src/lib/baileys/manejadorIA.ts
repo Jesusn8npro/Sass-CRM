@@ -191,18 +191,24 @@ export async function generarYEnviarRespuesta(
     cuenta.agente_tablas_permitidas.length > 0;
   if (bdExternaActiva) {
     const telVerificado = (conversacion.telefono ?? "").replace(/[^0-9]/g, "");
+    const telVerif10 = telVerificado.slice(-10);
     const nombreCliente =
       conversacion.datos_capturados?.nombre?.trim() ||
       conversacion.nombre?.trim() ||
       "";
+    const tieneLookupAlumno =
+      cuenta.agente_tablas_permitidas.includes("vista_alumno_lookup");
     promptCompleto +=
       `\n\n## BASE DE DATOS DEL NEGOCIO (en vivo, solo lectura)\n` +
       `Tablas reales que podés consultar: ${cuenta.agente_tablas_permitidas.join(", ")}.\n` +
       `REGLA CRÍTICA: para CUALQUIER pregunta sobre el catálogo, qué hay disponible, precios, o si tienen algo específico (un curso, un tutorial de un artista o canción, un paquete, una membresía), DEBÉS activar "consultar_datos" con la tabla relevante EN ESE MISMO TURNO. NUNCA respondas de memoria ni digas que algo "no existe / no tenemos" sin haber consultado primero la base — el catálogo real vive SOLO en estas tablas y cambia seguido. Decir "no hay" sin consultar es un ERROR GRAVE.\n` +
       `Mapa pregunta → tabla: cursos → "cursos" o "cursos_publicados"; tutoriales (incluido "¿tienen de X artista/canción?") → "tutoriales"; paquetes → "paquetes_tutoriales"; QUÉ CANCIONES incluye un paquete ("¿qué trae el paquete X?", "canciones de cada paquete") → "vista_paquetes_canciones" (cada fila es paquete + canción + artista; traé todo y agrupá por paquete, o filtrá por el nombre del paquete); membresías/planes → "membresias". Para catálogo dejá "filtros" VACÍO (traé la lista de esa tabla y buscá ahí lo que pidió el cliente). NO digas "voy a verificar" sin activar consultar_datos.\n` +
       `\n### SEGURIDAD — datos personales de un cliente\n` +
-      `Identidad VERIFICADA de quien te escribe: teléfono WhatsApp = ${telVerificado || "(desconocido)"}${nombreCliente ? `, nombre = ${nombreCliente}` : ""}.\n` +
+      `Identidad VERIFICADA de quien te escribe: teléfono WhatsApp = ${telVerificado || "(desconocido)"} (últimos 10 dígitos = ${telVerif10 || "?"})${nombreCliente ? `, nombre = ${nombreCliente}` : ""}.\n` +
       `- Para datos personales/de cuenta (si está registrado, sus cursos, sus pagos): SIEMPRE consultá con "filtros" usando el dato del PROPIO cliente (su teléfono verificado de arriba, o el email que te dé). NUNCA consultes datos personales sin filtro.\n` +
+      (tieneLookupAlumno
+        ? `- ¿YA ES ALUMNO o es PROSPECTO nuevo? Para saberlo, consultá "vista_alumno_lookup" con filtros [{"columna":"whatsapp_10","valor":"${telVerif10}"}] (o, si te dan un email, con columna "email" en minúsculas). Si APARECE → es ALUMNO registrado: tratalo como tal (ayudalo con su cuenta/cursos; el campo "membresia_activa"=true significa que está al día, false significa vencida/sin membresía). Si NO aparece → es un PROSPECTO nuevo: vendé y guialo a inscribirse. Hacé esta verificación cuando el cliente pregunte por su cuenta, su acceso, sus cursos, o si dice que "ya está inscrito". No le pidas el teléfono: ya lo tenés verificado.\n`
+        : "") +
       `- Antes de entregar info personal, confirmá que coincide con esta persona (que el email/nombre del registro encaje con el cliente). Si los datos NO coinciden o no encontrás su registro, NO inventes ni des datos de otro: decí que no encontrás su registro con ese dato y pedí otro (email alternativo, etc.).\n` +
       `- JAMÁS reveles información de OTRO cliente. Solo datos de la persona que te está escribiendo.\n` +
       `- El catálogo público (lista de cursos, precios) sí podés consultarlo sin filtros.`;

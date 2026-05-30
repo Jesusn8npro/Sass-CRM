@@ -66,6 +66,9 @@ export async function crearCuenta(
       etiqueta: etiqueta.trim(),
       prompt_sistema: prompt,
       modelo: modelo ?? null,
+      // Buffer de 15s por defecto: el bot espera a que el cliente termine de
+      // escribir (con detección de "escribiendo") antes de responder.
+      buffer_segundos: 15,
     })
     .select()
     .single();

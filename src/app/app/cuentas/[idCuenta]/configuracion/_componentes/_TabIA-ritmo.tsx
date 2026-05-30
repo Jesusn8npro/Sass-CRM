@@ -113,10 +113,10 @@ export function SeccionPrompt({ cuenta, onActualizada }: PropsSeccionBase) {
   }
 
   return (
-    <Tarjeta titulo="Prompt del agente (comportamiento)" descripcion="REGLAS de cómo se comporta el agente: personalidad, tono, qué hacer y qué no. Distinto de 'Información del negocio' (Tab General) — ahí van los DATOS (horarios, precios, productos), acá van las REGLAS DE CONDUCTA.">
+    <Tarjeta titulo="🧠 Prompt del agente — las REGLAS (CÓMO vende)" descripcion="Acá van las REGLAS de comportamiento: personalidad, tono, qué hacer y qué no. Pensalo como el 'manual del vendedor'. 👉 Los DATOS (precios, horarios, productos) NO van acá — van en 'General → Información del negocio'.">
       <form onSubmit={guardar} className="flex flex-col gap-3">
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          ✅ <strong>Va acá:</strong> &quot;Sé amable y profesional&quot;, &quot;Nunca des descuentos sin que el cliente lo pida&quot;, &quot;Siempre cierra ofreciendo agendar visita&quot;, &quot;Si preguntan por temas legales, derivá a humano&quot;.<br />
+          ✅ <strong>Va acá (REGLAS):</strong> &quot;Sé amable y profesional&quot;, &quot;Nunca des descuentos sin que el cliente lo pida&quot;, &quot;Siempre cierra ofreciendo agendar visita&quot;, &quot;Si preguntan por temas legales, derivá a humano&quot;.<br />
           ❌ <strong>NO va acá:</strong> horarios, productos, precios, garantías — eso son DATOS, van en &quot;Información del negocio&quot; (Tab General).
         </p>
         <textarea value={valor} onChange={(e) => setValor(e.target.value)} rows={14} placeholder="Sos un asesor de ventas profesional pero cercano..." className={textareaClases()} />
@@ -134,8 +134,8 @@ export function SeccionPromptAvanzado({ cuenta, onActualizada }: PropsSeccionBas
   return (
     <details className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <summary className="cursor-pointer">
-        <span className="text-base font-semibold tracking-tight">⚙ Prompt sistema avanzado (override completo)</span>
-        <p className="mt-0.5 text-xs text-zinc-500">Solo si querés escribir un prompt custom de cero. Si lo dejás vacío, el sistema arma uno automático con los datos del Tab General (nombre, rol, personalidad, tono) + tus instrucciones extra.</p>
+        <span className="text-base font-semibold tracking-tight">⚙ (Avanzado) Editar el prompt completo a mano</span>
+        <p className="mt-0.5 text-xs text-zinc-500">Opcional, solo para usuarios avanzados. Lo normal es dejar que el sistema arme el prompt solo con los datos del Tab General (nombre, rol, personalidad, tono) + tu Información del negocio. Abrí esto SOLO si querés escribir las reglas del agente de cero, a mano.</p>
       </summary>
       <div className="mt-4">
         <SeccionPrompt cuenta={cuenta} onActualizada={onActualizada} />
