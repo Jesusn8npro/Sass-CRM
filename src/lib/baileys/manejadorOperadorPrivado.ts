@@ -1699,7 +1699,8 @@ REGLAS DE SEGURIDAD (obligatorias):
 1. update y delete SIEMPRE requieren al menos un filtro — nunca sobre toda la tabla.
 2. Antes de BORRAR (cualquier cantidad) o de EDITAR VARIAS filas: la tool te devuelve un preview con la cantidad afectada y NO ejecuta. Mostrale al dueño cuántas filas afecta y pedile confirmación clara ("¿confirmás borrar esas 3 filas?"). Solo cuando confirme, volvé a llamar la tool con confirmado=true.
 3. Editar UNA sola fila ejecuta directo (no requiere confirmación).
-4. Si no estás seguro de los nombres de columnas, leé primero con bd_leer_filas.`
+4. OBLIGATORIO antes de CREAR o EDITAR en una tabla: si todavía no viste sus columnas en esta conversación, PRIMERO llamá bd_leer_filas (1 fila) de esa tabla para ver los nombres EXACTOS de columnas. Construí "valores" usando SOLO esos nombres reales. PROHIBIDO inventar columnas (ej: si la tabla usa "precio_normal", NO pongas "precio"; si no existe "stock" ni "modulos", NO los pongas) — esas filas las rechaza la base.
+5. REPORTÁ ÉXITO SOLO si la tool devolvió ok:true. Si devolvió ok:false o un error (ej: "column X does not exist"), NO digas que se creó/editó — decile al dueño el error EXACTO y qué columna falló, y volvé a intentar con las columnas correctas. NUNCA inventes que algo se guardó si la tool no lo confirmó.`
       : ""
   }`;
 
