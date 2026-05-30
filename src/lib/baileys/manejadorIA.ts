@@ -197,8 +197,9 @@ export async function generarYEnviarRespuesta(
       "";
     promptCompleto +=
       `\n\n## BASE DE DATOS DEL NEGOCIO (en vivo, solo lectura)\n` +
-      `Podés consultar estas tablas reales del negocio: ${cuenta.agente_tablas_permitidas.join(", ")}.\n` +
-      `Cuando el cliente pregunte por datos que vivan ahí (precios, catálogo, disponibilidad, estado de pedidos, su cuenta) y no los tengas, activá "consultar_datos" con las tablas relevantes ANTES de dar cifras. Nunca inventes: consultalos. NO digas "voy a verificar" sin activar consultar_datos — activalo en el MISMO turno.\n` +
+      `Tablas reales que podés consultar: ${cuenta.agente_tablas_permitidas.join(", ")}.\n` +
+      `REGLA CRÍTICA: para CUALQUIER pregunta sobre el catálogo, qué hay disponible, precios, o si tienen algo específico (un curso, un tutorial de un artista o canción, un paquete, una membresía), DEBÉS activar "consultar_datos" con la tabla relevante EN ESE MISMO TURNO. NUNCA respondas de memoria ni digas que algo "no existe / no tenemos" sin haber consultado primero la base — el catálogo real vive SOLO en estas tablas y cambia seguido. Decir "no hay" sin consultar es un ERROR GRAVE.\n` +
+      `Mapa pregunta → tabla: cursos → "cursos" o "cursos_publicados"; tutoriales (incluido "¿tienen de X artista/canción?") → "tutoriales"; paquetes → "paquetes_tutoriales"; membresías/planes → "membresias". Para catálogo dejá "filtros" VACÍO (traé la lista de esa tabla y buscá ahí lo que pidió el cliente). NO digas "voy a verificar" sin activar consultar_datos.\n` +
       `\n### SEGURIDAD — datos personales de un cliente\n` +
       `Identidad VERIFICADA de quien te escribe: teléfono WhatsApp = ${telVerificado || "(desconocido)"}${nombreCliente ? `, nombre = ${nombreCliente}` : ""}.\n` +
       `- Para datos personales/de cuenta (si está registrado, sus cursos, sus pagos): SIEMPRE consultá con "filtros" usando el dato del PROPIO cliente (su teléfono verificado de arriba, o el email que te dé). NUNCA consultes datos personales sin filtro.\n` +

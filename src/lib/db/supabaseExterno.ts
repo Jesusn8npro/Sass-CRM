@@ -16,7 +16,14 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { db } from "./cliente";
+import { cache } from "@/lib/cache";
 import { cifrar, descifrar } from "@/lib/seguridad/cifrado";
+
+/** Invalida el caché de la cuenta para que el bot tome los cambios al instante. */
+function invalidarCacheCuenta(cuentaId: string): void {
+  cache.del(`cuenta:${cuentaId}`);
+  cache.del("cuentas:activas");
+}
 
 /** Máximo de filas que el agente trae por tabla en una consulta. */
 const LIMITE_FILAS_CONSULTA = 50;
@@ -155,6 +162,7 @@ export async function guardarConfigExterna(parametros: {
     if (esErrorColumnaInexistente(error)) throw new ColumnasExternoNoDisponiblesError();
     throw new Error(`[db:guardarConfigExterna] ${error.message ?? String(error)}`);
   }
+  invalidarCacheCuenta(parametros.cuentaId);
 }
 
 /** Devuelve la config pública (sin la key). */
@@ -224,6 +232,7 @@ export async function guardarConfigAgenteExterno(parametros: {
     if (esErrorColumnaInexistente(error)) throw new ColumnasExternoNoDisponiblesError();
     throw new Error(`[db:guardarConfigAgenteExterno] ${error.message ?? String(error)}`);
   }
+  invalidarCacheCuenta(parametros.cuentaId);
 }
 
 /**
@@ -491,4 +500,5 @@ export async function borrarConfigExterna(cuentaId: string): Promise<void> {
     if (esErrorColumnaInexistente(error)) throw new ColumnasExternoNoDisponiblesError();
     throw new Error(`[db:borrarConfigExterna] ${error.message ?? String(error)}`);
   }
+  invalidarCacheCuenta(cuentaId);
 }
