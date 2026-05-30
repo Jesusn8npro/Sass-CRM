@@ -20,7 +20,7 @@ import {
   type Cuenta,
 } from "../baseDatos";
 import { construirPromptSistema } from "../construirPrompt";
-import { consultarTablasExternas } from "../db/supabaseExterno";
+import { consultarTablasExternas, obtenerColumnasPermitidas } from "../db/supabaseExterno";
 import {
   mensajeFueraDeServicioCliente,
   verificarLimiteMensajes,
@@ -198,12 +198,20 @@ export async function generarYEnviarRespuesta(
       "";
     const tieneLookupAlumno =
       cuenta.agente_tablas_permitidas.includes("vista_alumno_lookup");
+    // Columnas reales de las tablas de ESTE negocio (genérico, cacheado).
+    const columnasTablas = await obtenerColumnasPermitidas(cuenta.id);
+    const tablasDesc =
+      Object.keys(columnasTablas).length > 0
+        ? Object.entries(columnasTablas)
+            .map(([t, c]) => `• ${t} (${c.slice(0, 20).join(", ")})`)
+            .join("\n")
+        : cuenta.agente_tablas_permitidas.map((t) => `• ${t}`).join("\n");
     promptCompleto +=
       `\n\n## BASE DE DATOS DEL NEGOCIO (en vivo, solo lectura)\n` +
-      `Tablas reales que podés consultar: ${cuenta.agente_tablas_permitidas.join(", ")}.\n` +
-      `REGLA CRÍTICA: para CUALQUIER pregunta sobre el catálogo, qué hay disponible, precios, si tienen algo específico (un curso, un tutorial de un artista o canción, un paquete, una membresía), o datos de la cuenta del cliente, DEBÉS activar "consultar_datos" con la tabla relevante EN ESE MISMO TURNO. NUNCA respondas de memoria ni digas que algo "no existe / no tenemos" sin haber consultado primero la base.\n` +
-      `PROHIBIDO DIFERIR: nunca digas "déjame verificar", "un momento", "te aviso cuando tenga la info", "déjame verificar con el equipo", "verifico y te confirmo" ni nada que posponga. NO existe un "después" — el sistema consulta AHORA en este mismo turno cuando activás consultar_datos y te devuelve los datos para que respondas YA con el resultado. Si necesitás un dato, activá consultar_datos; no anuncies que vas a buscar, BUSCALO.\n` +
-      `Mapa pregunta → tabla: cursos → "cursos" o "cursos_publicados"; tutoriales (incluido "¿tienen de X artista/canción?") → "tutoriales"; paquetes → "paquetes_tutoriales"; QUÉ CANCIONES incluye un paquete ("¿qué trae el paquete X?", "canciones de cada paquete") → "vista_paquetes_canciones" (cada fila es paquete + canción + artista; traé todo y agrupá por paquete, o filtrá por el nombre del paquete); membresías/planes → "membresias". Para catálogo dejá "filtros" VACÍO (traé la lista de esa tabla y buscá ahí lo que pidió el cliente). NO digas "voy a verificar" sin activar consultar_datos.\n` +
+      `Estas son TUS tablas reales y sus columnas (de tu propio Supabase). Elegí la relevante por su nombre y columnas:\n${tablasDesc}\n` +
+      `REGLA CRÍTICA: para CUALQUIER pregunta sobre el catálogo, qué hay disponible, precios, si tienen algo específico, o datos de la cuenta del cliente, DEBÉS activar "consultar_datos" con la tabla relevante EN ESE MISMO TURNO. NUNCA respondas de memoria ni digas que algo "no existe / no tenemos" sin haber consultado primero la base.\n` +
+      `PROHIBIDO DIFERIR: nunca digas "déjame verificar", "un momento", "te aviso cuando tenga la info", "verifico y te confirmo" ni nada que posponga. NO existe un "después" — el sistema consulta AHORA cuando activás consultar_datos y te devuelve los datos para que respondas YA. No anuncies que vas a buscar: BUSCALO.\n` +
+      `Cómo elegir y consultar: deducí por el NOMBRE y las COLUMNAS de arriba qué tabla tiene lo que pide el cliente (ej: una tabla de productos/cursos para catálogo y precios; una de clientes/perfiles para su cuenta). Para listados de catálogo dejá "filtros" VACÍO y buscá en las filas. Para datos de UN cliente puntual, filtrá por su columna de identidad (email o teléfono) con el dato del propio cliente. Usá SIEMPRE los nombres de columna REALES de arriba — no inventes columnas.\n` +
       `\n### SEGURIDAD — datos personales de un cliente\n` +
       `Identidad VERIFICADA de quien te escribe: teléfono WhatsApp = ${telVerificado || "(desconocido)"} (últimos 10 dígitos = ${telVerif10 || "?"})${nombreCliente ? `, nombre = ${nombreCliente}` : ""}.\n` +
       `- Para datos personales/de cuenta (si está registrado, sus cursos, sus pagos): SIEMPRE consultá con "filtros" usando el dato del PROPIO cliente (su teléfono verificado de arriba, o el email que te dé). NUNCA consultes datos personales sin filtro.\n` +

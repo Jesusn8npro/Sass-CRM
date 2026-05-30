@@ -319,6 +319,50 @@ export async function consultarTablasExternas(
   return resultado;
 }
 
+// Cache de columnas por cuenta (el esquema cambia poco). TTL 1h.
+const cacheColumnas = new Map<string, { cols: Record<string, string[]>; expira: number }>();
+
+/**
+ * Devuelve { tabla: [columnas] } de las tablas permitidas del agente, leyendo
+ * el OpenAPI de PostgREST (`/rest/v1/`). Genérico para CUALQUIER negocio: el
+ * agente recibe las tablas y columnas REALES de su Supabase y decide solo qué
+ * consultar para vender, sin nombres hardcodeados. Cacheado 1h.
+ */
+export async function obtenerColumnasPermitidas(
+  cuentaId: string,
+): Promise<Record<string, string[]>> {
+  const cached = cacheColumnas.get(cuentaId);
+  if (cached && cached.expira > Date.now()) return cached.cols;
+
+  const config = await obtenerConfigExterna(cuentaId);
+  if (!config.conectado || !config.agenteHabilitado || config.tablasPermitidas.length === 0) {
+    return {};
+  }
+  const creds = await obtenerCredencialesExternas(cuentaId);
+  if (!creds) return {};
+
+  const result: Record<string, string[]> = {};
+  try {
+    const resp = await fetch(`${creds.url}/rest/v1/`, {
+      headers: { apikey: creds.serviceKey, Authorization: `Bearer ${creds.serviceKey}` },
+    });
+    if (resp.ok) {
+      const spec = (await resp.json()) as {
+        definitions?: Record<string, { properties?: Record<string, unknown> }>;
+      };
+      const defs = spec.definitions ?? {};
+      for (const t of config.tablasPermitidas) {
+        const props = defs[t]?.properties;
+        if (props) result[t] = Object.keys(props);
+      }
+    }
+  } catch {
+    /* si falla, devolvemos lo que haya (o vacío) — el agente igual puede consultar */
+  }
+  cacheColumnas.set(cuentaId, { cols: result, expira: Date.now() + 60 * 60 * 1000 });
+  return result;
+}
+
 // ============================================================
 // ESCRITURA POR EL DUEÑO (operador privado) — SERVER-ONLY
 //
