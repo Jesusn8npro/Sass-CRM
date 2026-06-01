@@ -42,6 +42,22 @@ import {
 import { procesarAccionesIA } from "./manejadorIA-acciones";
 import { procesarCapturaIA } from "./manejadorIA-captura";
 
+/** Detecta respuestas-cáscara tipo "voy a consultar / dame un momento" que
+ * dejan al cliente esperando algo que el sistema NO va a ejecutar solo (no hay
+ * un "después": o se consulta en este turno con consultar_datos, o no se
+ * consulta). Sirve para forzar al agente a actuar y no colgar la conversación. */
+function pareceMensajeDeEspera(respuesta: RespuestaIA): boolean {
+  const texto = respuesta.partes
+    .filter((p) => p.tipo !== "media")
+    .map((p) => p.contenido)
+    .join(" ")
+    .toLowerCase();
+  if (!texto.trim()) return false;
+  return /\b(voy a (consultar|revisar|verificar|chequear|buscar)|d[eé]jame (consultar|revisar|verificar|chequear|buscar)|permit[ií]me (consultar|revisar|verificar)|dame un momento|un momento por favor|en un momento te|enseguida te (confirmo|digo|respondo|aviso)|ya te (confirmo|aviso|digo|respondo)|te (confirmo|aviso|respondo) en (un|unos)|estoy (consultando|revisando|verificando)|lo (consulto|reviso|verifico) y te)\b/.test(
+    texto,
+  );
+}
+
 // ============================================================
 // Generar respuesta con IA y enviar como múltiples partes
 // ============================================================
@@ -214,7 +230,7 @@ export async function generarYEnviarRespuesta(
       `\n### SEGURIDAD — datos personales de un cliente\n` +
       `Identidad VERIFICADA de quien te escribe: teléfono WhatsApp = ${telVerificado || "(desconocido)"} (últimos 10 dígitos = ${telVerif10 || "?"})${nombreCliente ? `, nombre = ${nombreCliente}` : ""}.\n` +
       `- Para datos personales/de cuenta (si está registrado, sus cursos, sus pagos): SIEMPRE consultá con "filtros" usando el dato del PROPIO cliente (su teléfono verificado de arriba, o el email que te dé). NUNCA consultes datos personales sin filtro.\n` +
-      `- ¿CLIENTE EXISTENTE o PROSPECTO? Para saberlo, buscalo en la tabla de clientes/perfiles filtrando por su EMAIL (en minúsculas) si te lo dio, o por su teléfono. Si APARECE → es cliente registrado: ayudalo con su cuenta (y si querés listar qué tiene, encadená a la tabla de inscripciones/compras como en "navegá por pasos"). Si NO aparece → es un PROSPECTO: vendé y guialo a registrarse. No le pidas el teléfono: ya lo tenés verificado arriba.\n` +
+      `- ¿CLIENTE EXISTENTE o PROSPECTO? Para saberlo, buscalo en la tabla de clientes/perfiles filtrando por la columna de EMAIL REAL de esa tabla (fijate en las columnas de arriba — puede llamarse email, correo o correo_electronico; el valor SIEMPRE en minúsculas) si te lo dio, o por su teléfono. Si APARECE → es cliente registrado: ayudalo con su cuenta (y si querés listar qué tiene, encadená a la tabla de inscripciones/compras como en "navegá por pasos"). Si NO aparece → es un PROSPECTO: vendé y guialo a registrarse. No le pidas el teléfono: ya lo tenés verificado arriba.\n` +
       `- Antes de entregar info personal, confirmá que coincide con esta persona (que el email/nombre del registro encaje con el cliente). Si los datos NO coinciden o no encontrás su registro, NO inventes ni des datos de otro: decí que no encontrás su registro con ese dato y pedí otro (email alternativo, etc.).\n` +
       `- JAMÁS reveles información de OTRO cliente. Solo datos de la persona que te está escribiendo.\n` +
       `- El catálogo público (lista de cursos, precios) sí podés consultarlo sin filtros.`;
@@ -301,44 +317,85 @@ export async function generarYEnviarRespuesta(
   // (ej: perfil → inscripciones → títulos). Loop acotado a MAX_CONSULTAS
   // para no disparar latencia/costo. Cada vuelta le pasamos lo acumulado.
   const MAX_CONSULTAS = 4;
+  const MAX_ANTI_DEFER = 2;
   let datosAcumulados: Record<string, Record<string, unknown>[]> = {};
   let nConsultas = 0;
-  while (
-    bdExternaActiva &&
-    respuesta.consultar_datos?.activar &&
-    nConsultas < MAX_CONSULTAS
-  ) {
-    nConsultas++;
-    const tablas = respuesta.consultar_datos.tablas ?? [];
-    const filtros = Array.isArray(respuesta.consultar_datos.filtros)
-      ? respuesta.consultar_datos.filtros
-      : [];
-    console.log(
-      `${prefijo} 🗄️ consultar_datos #${nConsultas}: ${tablas.join(", ") || "(sin tablas)"} filtros=${JSON.stringify(filtros)} — ${respuesta.consultar_datos.motivo || ""}`,
-    );
-    let datos: Record<string, Record<string, unknown>[]> = {};
-    try {
-      datos = await consultarTablasExternas(cuenta.id, tablas, filtros);
-    } catch (err) {
-      console.error(
-        `${prefijo} ✗ error consultando base externa: ${err instanceof Error ? err.message : String(err)}`,
+  let nAntiDefer = 0;
+  while (true) {
+    // (A) El modelo pidió datos: ejecutamos la consulta y le devolvemos las
+    // filas para que arme la respuesta final (o encadene otra consulta).
+    if (
+      bdExternaActiva &&
+      respuesta.consultar_datos?.activar &&
+      nConsultas < MAX_CONSULTAS
+    ) {
+      nConsultas++;
+      const tablas = respuesta.consultar_datos.tablas ?? [];
+      const filtros = Array.isArray(respuesta.consultar_datos.filtros)
+        ? respuesta.consultar_datos.filtros
+        : [];
+      console.log(
+        `${prefijo} 🗄️ consultar_datos #${nConsultas}: ${tablas.join(", ") || "(sin tablas)"} filtros=${JSON.stringify(filtros)} — ${respuesta.consultar_datos.motivo || ""}`,
       );
-      break;
+      let datos: Record<string, Record<string, unknown>[]> = {};
+      try {
+        datos = await consultarTablasExternas(cuenta.id, tablas, filtros);
+      } catch (err) {
+        console.error(
+          `${prefijo} ✗ error consultando base externa: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        break;
+      }
+      datosAcumulados = { ...datosAcumulados, ...datos };
+      const quedan = MAX_CONSULTAS - nConsultas;
+      const promptConDatos =
+        `${promptCompleto}\n\n## DATOS YA CONSULTADOS EN LA BASE (acumulado de ${nConsultas} consulta/s)\n` +
+        `${JSON.stringify(datosAcumulados).slice(0, 12000)}\n\n` +
+        `Si con estos datos ya podés responder al cliente, HACELO ahora (consultar_datos.activar=false) con los datos REALES, redactando natural. ` +
+        `Si todavía te falta un dato relacionado (ej: ya tenés ids y te faltan sus títulos), activá consultar_datos OTRA VEZ con la tabla y filtros que faltan${quedan > 0 ? ` (te quedan ${quedan} consultas)` : " (es tu última consulta)"}. Si una consulta volvió vacía, NO inventes: decílo con honestidad.`;
+      respuesta = await generarRespuesta(
+        historial,
+        promptConDatos,
+        cuenta.modelo,
+        { temperatura: cuenta.temperatura, max_tokens: cuenta.max_tokens },
+        cuenta.id,
+      );
+      continue;
     }
-    datosAcumulados = { ...datosAcumulados, ...datos };
-    const quedan = MAX_CONSULTAS - nConsultas;
-    const promptConDatos =
-      `${promptCompleto}\n\n## DATOS YA CONSULTADOS EN LA BASE (acumulado de ${nConsultas} consulta/s)\n` +
-      `${JSON.stringify(datosAcumulados).slice(0, 12000)}\n\n` +
-      `Si con estos datos ya podés responder al cliente, HACELO ahora (consultar_datos.activar=false) con los datos REALES, redactando natural. ` +
-      `Si todavía te falta un dato relacionado (ej: ya tenés ids y te faltan sus títulos), activá consultar_datos OTRA VEZ con la tabla y filtros que faltan${quedan > 0 ? ` (te quedan ${quedan} consultas)` : " (es tu última consulta)"}. Si una consulta volvió vacía, NO inventes: decílo con honestidad.`;
-    respuesta = await generarRespuesta(
-      historial,
-      promptConDatos,
-      cuenta.modelo,
-      { temperatura: cuenta.temperatura, max_tokens: cuenta.max_tokens },
-      cuenta.id,
-    );
+    // (B) GUARD ANTI-CUELGUE: el modelo mandó un mensaje de ESPERA ("voy a
+    // consultar / dame un momento") SIN activar la consulta. Eso deja la
+    // conversación colgada. Lo forzamos a consultar YA o a responder directo.
+    if (
+      nAntiDefer < MAX_ANTI_DEFER &&
+      !respuesta.consultar_datos?.activar &&
+      pareceMensajeDeEspera(respuesta)
+    ) {
+      nAntiDefer++;
+      console.warn(
+        `${prefijo} ⏳ respuesta de espera detectada (intento ${nAntiDefer}/${MAX_ANTI_DEFER}) — forzando acción inmediata`,
+      );
+      const datosTxt = Object.keys(datosAcumulados).length
+        ? `\n\n## DATOS YA CONSULTADOS\n${JSON.stringify(datosAcumulados).slice(0, 12000)}`
+        : "";
+      const promptForzado =
+        `${promptCompleto}\n\n## CORRECCIÓN URGENTE — NO DIFIERAS\n` +
+        `Tu respuesta anterior fue un mensaje de ESPERA ("voy a consultar / dame un momento / déjame revisar"). ` +
+        `Eso está PROHIBIDO: deja al cliente colgado porque NO hay un "después" — el sistema no sigue solo. ` +
+        (bdExternaActiva
+          ? `Si necesitás datos de la base, activá consultar_datos AHORA (activar=true) con la tabla y los filtros correctos: el sistema te devuelve las filas en el acto. `
+          : "") +
+        `Si no necesitás datos, respondé YA con lo que sabés. NUNCA mandes mensajes de espera ni prometas responder más tarde.` +
+        datosTxt;
+      respuesta = await generarRespuesta(
+        historial,
+        promptForzado,
+        cuenta.modelo,
+        { temperatura: cuenta.temperatura, max_tokens: cuenta.max_tokens },
+        cuenta.id,
+      );
+      continue;
+    }
+    break;
   }
 
   const duracion = Date.now() - inicio;

@@ -312,13 +312,13 @@ export const ESQUEMA_RESPUESTA = {
         filtros: {
           type: "array",
           description:
-            "Filtros de igualdad para acotar la consulta SOLO a los datos del cliente actual. OBLIGATORIO para datos personales/de cuenta (si está registrado, sus cursos, sus pedidos): poné el email O el teléfono del PROPIO cliente. Ej: [{\"columna\":\"email\",\"valor\":\"shalom@gmail.com\"}]. Dejá el array vacío SOLO para catálogo público (lista de cursos, precios). NUNCA consultes datos personales sin filtro — traería datos de otros clientes.",
+            "Filtros de igualdad para acotar la consulta SOLO a los datos del cliente actual. OBLIGATORIO para datos personales/de cuenta (si está registrado, sus cursos, sus pedidos): poné el email O el teléfono del PROPIO cliente, USANDO EL NOMBRE EXACTO de la columna tal como aparece en las tablas del prompt (la de email puede llamarse email, correo o correo_electronico; el valor del email SIEMPRE en minúsculas). Ej: [{\"columna\":\"correo_electronico\",\"valor\":\"juan@mail.com\"}]. Dejá el array vacío SOLO para catálogo público (lista de cursos, precios). NUNCA consultes datos personales sin filtro — traería datos de otros clientes.",
           items: {
             type: "object",
             properties: {
               columna: {
                 type: "string",
-                description: "Nombre de la columna por la que filtrar (ej: email, telefono, usuario_id, id).",
+                description: "Nombre EXACTO de la columna por la que filtrar, tal como figura en las tablas del prompt (ej: correo_electronico, telefono, usuario_id, id). NUNCA inventes el nombre de la columna.",
               },
               valor: {
                 type: "string",
