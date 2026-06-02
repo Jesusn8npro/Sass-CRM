@@ -36,12 +36,13 @@ export function construirPromptSistema(
 ): string {
   const partes: string[] = [];
 
-  // Contexto temporal SIEMPRE primero — sin esto la IA inventa fechas
-  // del pasado (training cutoff) y el validador las rechaza.
-  partes.push(bloqueFechaActual());
-
-  // Reglas anti-alucinación segundo, antes del prompt custom.
-  partes.push("\n\n" + REGLAS_ANTI_ALUCINACION);
+  // Reglas anti-alucinación primero (primacy). OJO: el contexto temporal
+  // (fecha/hora) NO va acá sino más abajo, justo antes de la parte variable
+  // por conversación. Motivo: así el INICIO del prompt (reglas + identidad +
+  // info del negocio) queda ESTABLE entre llamadas y OpenAI lo cachea
+  // (prompt caching) → ~50% menos tokens de entrada facturados por consulta.
+  // La fecha cambia cada minuto; si va al inicio, invalida todo el caché.
+  partes.push(REGLAS_ANTI_ALUCINACION);
 
   // ============================================================
   // IDENTIDAD del agente (Tab General de /configuracion).
@@ -434,6 +435,12 @@ En lugar de eso, hablá del NEGOCIO en términos comerciales:
 ✓ Si no está en la info del negocio: "Déjame chequear y te confirmo. ¿Tu
   nombre y por qué medio te llego mejor?"`);
   }
+
+  // Contexto temporal (fecha/hora real). Va ACÁ (no al inicio) para no
+  // romper el caché del prefijo estable. Sigue estando ANTES de los datos de
+  // la conversación, que es donde la IA lo necesita para generar fechas de
+  // citas/seguimientos correctamente.
+  partes.push("\n\n" + bloqueFechaActual());
 
   // ============================================================
   // Memoria a largo plazo de la conversación.

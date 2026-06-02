@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  *
  * Subí este número a mano en cada cambio importante que quieras verificar.
  */
-const VERSION = "perfil-sin-placeholders-2026-06-02-v6";
+const VERSION = "optimizacion-costos-2026-06-02-v7";
 
 export function GET() {
   return NextResponse.json({

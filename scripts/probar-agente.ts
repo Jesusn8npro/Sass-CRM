@@ -157,7 +157,7 @@ async function main() {
       const quedan = MAX_CONSULTAS - nConsultas;
       const promptConDatos =
         `${promptCompleto}\n\n## DATOS YA CONSULTADOS EN LA BASE (acumulado de ${nConsultas})\n` +
-        `${JSON.stringify(datosAcumulados).slice(0, 60000)}\n\n` +
+        `${JSON.stringify(datosAcumulados).slice(0, 40000)}\n\n` +
         `Si ya podés responder, HACELO ahora (consultar_datos.activar=false) con los datos REALES. ` +
         `Si falta un dato relacionado, activá consultar_datos otra vez${quedan > 0 ? ` (quedan ${quedan})` : " (última)"}. Si volvió vacío, NO inventes.`;
       respuesta = await generarRespuesta(
@@ -174,7 +174,7 @@ async function main() {
       const puedeConsultarMas = bdExternaActiva && nConsultas < MAX_CONSULTAS;
       console.log(`⏳ GUARD ANTI-CUELGUE activado (intento ${nAntiDefer}) — forzando acción inmediata`);
       const datosTxt = Object.keys(datosAcumulados).length
-        ? `\n\n## DATOS YA CONSULTADOS\n${JSON.stringify(datosAcumulados).slice(0, 60000)}`
+        ? `\n\n## DATOS YA CONSULTADOS\n${JSON.stringify(datosAcumulados).slice(0, 40000)}`
         : "";
       const promptForzado =
         `${promptCompleto}\n\n## CORRECCIÓN URGENTE — NO DIFIERAS\n` +

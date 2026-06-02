@@ -371,7 +371,7 @@ export async function generarYEnviarRespuesta(
       const quedan = MAX_CONSULTAS - nConsultas;
       const promptConDatos =
         `${promptCompleto}\n\n## DATOS YA CONSULTADOS EN LA BASE (acumulado de ${nConsultas} consulta/s)\n` +
-        `${JSON.stringify(datosAcumulados).slice(0, 60000)}\n\n` +
+        `${JSON.stringify(datosAcumulados).slice(0, 40000)}\n\n` +
         `Si con estos datos ya podés responder al cliente, HACELO ahora (consultar_datos.activar=false) con los datos REALES, redactando natural. ` +
         `Si todavía te falta un dato relacionado (ej: ya tenés ids y te faltan sus títulos), activá consultar_datos OTRA VEZ con la tabla y filtros que faltan${quedan > 0 ? ` (te quedan ${quedan} consultas)` : " (es tu última consulta)"}. Si una consulta volvió vacía, NO inventes: decílo con honestidad.`;
       try {
@@ -404,7 +404,7 @@ export async function generarYEnviarRespuesta(
         `${prefijo} ⏳ respuesta de espera detectada (intento ${nAntiDefer}/${MAX_ANTI_DEFER}) — forzando acción inmediata`,
       );
       const datosTxt = Object.keys(datosAcumulados).length
-        ? `\n\n## DATOS YA CONSULTADOS\n${JSON.stringify(datosAcumulados).slice(0, 60000)}`
+        ? `\n\n## DATOS YA CONSULTADOS\n${JSON.stringify(datosAcumulados).slice(0, 40000)}`
         : "";
       const promptForzado =
         `${promptCompleto}\n\n## CORRECCIÓN URGENTE — NO DIFIERAS\n` +
