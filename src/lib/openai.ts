@@ -7,7 +7,10 @@ const cliente = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY ?? "",
 });
 
-const MODELO_DEFAULT = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+// Default reliable para cuentas nuevas (modelo=null). gpt-4o-mini y gpt-4.1-mini
+// PROBADOS y descartados: inventaban datos al consultar la base. La confiabilidad
+// (cero invención) requiere gpt-4o. Se puede overridear por cuenta o con OPENAI_MODEL.
+const MODELO_DEFAULT = process.env.OPENAI_MODEL ?? "gpt-4o-2024-08-06";
 
 // ============================================================
 // Visión: convertir un mensaje del usuario con imagen a contenido

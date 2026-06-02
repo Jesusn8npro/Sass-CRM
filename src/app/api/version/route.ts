@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  *
  * Subí este número a mano en cada cambio importante que quieras verificar.
  */
-const VERSION = "operador-inscribir-2026-06-02-v9";
+const VERSION = "default-gpt4o-2026-06-02-v10";
 
 export function GET() {
   return NextResponse.json({
