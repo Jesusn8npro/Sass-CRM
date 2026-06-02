@@ -326,6 +326,7 @@ export async function generarYEnviarRespuesta(
   let datosAcumulados: Record<string, Record<string, unknown>[]> = {};
   let nConsultas = 0;
   let nAntiDefer = 0;
+  let errorRoundTrip = false;
   while (true) {
     // (A) El modelo pidió datos: ejecutamos la consulta y le devolvemos las
     // filas para que arme la respuesta final (o encadene otra consulta).
@@ -358,13 +359,21 @@ export async function generarYEnviarRespuesta(
         `${JSON.stringify(datosAcumulados).slice(0, 60000)}\n\n` +
         `Si con estos datos ya podés responder al cliente, HACELO ahora (consultar_datos.activar=false) con los datos REALES, redactando natural. ` +
         `Si todavía te falta un dato relacionado (ej: ya tenés ids y te faltan sus títulos), activá consultar_datos OTRA VEZ con la tabla y filtros que faltan${quedan > 0 ? ` (te quedan ${quedan} consultas)` : " (es tu última consulta)"}. Si una consulta volvió vacía, NO inventes: decílo con honestidad.`;
-      respuesta = await generarRespuesta(
-        historial,
-        promptConDatos,
-        cuenta.modelo,
-        { temperatura: cuenta.temperatura, max_tokens: cuenta.max_tokens },
-        cuenta.id,
-      );
+      try {
+        respuesta = await generarRespuesta(
+          historial,
+          promptConDatos,
+          cuenta.modelo,
+          { temperatura: cuenta.temperatura, max_tokens: cuenta.max_tokens },
+          cuenta.id,
+        );
+      } catch (err) {
+        console.error(
+          `${prefijo} ✗ error OpenAI en round-trip de consulta #${nConsultas}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        errorRoundTrip = true;
+        break;
+      }
       continue;
     }
     // (B) GUARD ANTI-CUELGUE: el modelo mandó un mensaje de ESPERA ("voy a
@@ -391,16 +400,44 @@ export async function generarYEnviarRespuesta(
           : `Ya consultaste la base; respondé YA con los datos que tengas. Si no encontraste el dato, decílo con honestidad y ofrecé una alternativa (otro email, pasar a soporte). NO consultes de nuevo. `) +
         `Si no necesitás datos, respondé YA con lo que sabés. NUNCA mandes mensajes de espera ni prometas responder más tarde.` +
         datosTxt;
-      respuesta = await generarRespuesta(
-        historial,
-        promptForzado,
-        cuenta.modelo,
-        { temperatura: cuenta.temperatura, max_tokens: cuenta.max_tokens },
-        cuenta.id,
-      );
+      try {
+        respuesta = await generarRespuesta(
+          historial,
+          promptForzado,
+          cuenta.modelo,
+          { temperatura: cuenta.temperatura, max_tokens: cuenta.max_tokens },
+          cuenta.id,
+        );
+      } catch (err) {
+        console.error(
+          `${prefijo} ✗ error OpenAI en guard anti-cuelgue: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        errorRoundTrip = true;
+        break;
+      }
       continue;
     }
     break;
+  }
+
+  // BLINDAJE FINAL: pase lo que pase, NUNCA dejamos la conversación sin
+  // respuesta. Si un round-trip falló o el modelo no devolvió contenido
+  // enviable, mandamos un fallback en lugar de colgar el chat.
+  const tieneContenidoEnviable = respuesta.partes.some((p) =>
+    p.tipo === "media" ? !!p.media_id?.trim() : !!p.contenido?.trim(),
+  );
+  if (errorRoundTrip || !tieneContenidoEnviable) {
+    console.warn(
+      `${prefijo} ⚠ respuesta vacía o error en round-trip — enviando fallback para no colgar el chat`,
+    );
+    respuesta.partes = [
+      {
+        tipo: "texto",
+        contenido:
+          "Perdoná, se me complicó procesar eso en este momento. ¿Me lo repetís, por favor? Si sigue fallando te paso con una persona del equipo.",
+        media_id: "",
+      },
+    ];
   }
 
   const duracion = Date.now() - inicio;

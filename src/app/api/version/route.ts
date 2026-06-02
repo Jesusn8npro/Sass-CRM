@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  *
  * Subí este número a mano en cada cambio importante que quieras verificar.
  */
-const VERSION = "nav-pasos-2026-05-29-v1";
+const VERSION = "blindaje-consultas-2026-06-01-v3";
 
 export function GET() {
   return NextResponse.json({
