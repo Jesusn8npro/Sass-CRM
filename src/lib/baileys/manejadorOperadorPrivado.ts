@@ -48,6 +48,7 @@ import {
   actualizarFilasExternas,
   contarFilasExternas,
   crearFilaExterna,
+  crearUsuarioAuthExterno,
   eliminarFilasExternas,
   leerFilasExternas,
   listarTablasExternas,
@@ -576,6 +577,26 @@ const TOOLS_EXTERNAS: ToolDef[] = [
           },
         },
         required: ["tabla", "filtros"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "crear_usuario",
+      description:
+        "Crea un USUARIO REAL con login (email + contraseña) en el Auth del negocio. Usalo cuando el dueño diga 'creá un perfil/usuario/cuenta con este correo y contraseña'. IMPORTANTE: NO uses bd_crear_fila para crear usuarios — los usuarios con login NO se crean insertando en la tabla de perfiles (su id depende del sistema de Auth y no hay columna de contraseña ahí). Esta tool lo hace bien y el perfil asociado se crea solo. Si el dueño también dio nombre/rol u otros datos del perfil, después usá bd_actualizar_filas sobre la tabla de perfiles filtrando por ese email para completarlos.",
+      parameters: {
+        type: "object",
+        properties: {
+          email: { type: "string", description: "Email del nuevo usuario." },
+          password: {
+            type: "string",
+            description: "Contraseña del nuevo usuario (mínimo 6 caracteres).",
+          },
+        },
+        required: ["email", "password"],
         additionalProperties: false,
       },
     },
@@ -1465,6 +1486,14 @@ async function toolBdCrearFila(cuentaId: string, args: Record<string, unknown>) 
   return crearFilaExterna(cuentaId, tabla, valores);
 }
 
+async function toolCrearUsuario(cuentaId: string, args: Record<string, unknown>) {
+  const email = typeof args.email === "string" ? args.email.trim() : "";
+  const password = typeof args.password === "string" ? args.password : "";
+  if (!email) return { ok: false, mensaje: "Falta el email del nuevo usuario." };
+  if (!password) return { ok: false, mensaje: "Falta la contraseña del nuevo usuario." };
+  return crearUsuarioAuthExterno(cuentaId, email, password);
+}
+
 async function toolBdActualizarFilas(cuentaId: string, args: Record<string, unknown>) {
   const tabla = typeof args.tabla === "string" ? args.tabla.trim() : "";
   if (!tabla) return { ok: false, mensaje: "Falta el nombre de la tabla." };
@@ -1579,6 +1608,8 @@ async function ejecutarTool(
       return toolBdActualizarFilas(cuentaId, args);
     case "bd_eliminar_filas":
       return toolBdEliminarFilas(cuentaId, args);
+    case "crear_usuario":
+      return toolCrearUsuario(cuentaId, args);
     default:
       return { error: `tool desconocida: ${nombre}` };
   }

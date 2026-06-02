@@ -664,6 +664,68 @@ export async function eliminarFilasExternas(
   };
 }
 
+/**
+ * Crea un usuario REAL con login (email + contraseña) en el Auth del Supabase
+ * del negocio, usando el Auth Admin API. SERVER-ONLY (solo operador/dueño).
+ *
+ * Necesario porque en Supabase la tabla de perfiles suele tener su `id` como
+ * FK a `auth.users` y NO tiene columna de contraseña → un usuario con login no
+ * se puede crear con un simple INSERT en la tabla. Si el negocio tiene el
+ * trigger típico `on_auth_user_created`, el perfil se crea solo.
+ */
+export async function crearUsuarioAuthExterno(
+  cuentaId: string,
+  email: string,
+  password: string,
+  metadata: Record<string, unknown> = {},
+): Promise<ResultadoOperacionExterna> {
+  const creds = await obtenerCredencialesExternas(cuentaId);
+  if (!creds) return { ok: false, mensaje: "No hay Supabase externo conectado." };
+  const correo = email.trim().toLowerCase();
+  if (!correo || !correo.includes("@")) {
+    return { ok: false, mensaje: "El email no es válido." };
+  }
+  if (!password || password.length < 6) {
+    return { ok: false, mensaje: "La contraseña debe tener al menos 6 caracteres." };
+  }
+  try {
+    const resp = await fetch(`${creds.url}/auth/v1/admin/users`, {
+      method: "POST",
+      headers: {
+        apikey: creds.serviceKey,
+        Authorization: `Bearer ${creds.serviceKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: correo,
+        password,
+        email_confirm: true,
+        user_metadata: metadata,
+      }),
+    });
+    const data = (await resp.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!resp.ok) {
+      const msg =
+        (typeof data.msg === "string" && data.msg) ||
+        (typeof data.error_description === "string" && data.error_description) ||
+        (typeof data.error === "string" && data.error) ||
+        `HTTP ${resp.status}`;
+      return { ok: false, mensaje: `No se pudo crear el usuario: ${msg}` };
+    }
+    const id = typeof data.id === "string" ? data.id : undefined;
+    return {
+      ok: true,
+      mensaje: `Usuario creado con login (${correo}). El perfil asociado se crea automáticamente.`,
+      filas: id ? [{ id, email: correo }] : [],
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      mensaje: `Error creando usuario: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
 /** Borra la conexión externa de la cuenta. */
 export async function borrarConfigExterna(cuentaId: string): Promise<void> {
   const { error } = await db()

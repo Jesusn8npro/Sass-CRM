@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  *
  * Subí este número a mano en cada cambio importante que quieras verificar.
  */
-const VERSION = "optimizacion-costos-2026-06-02-v7";
+const VERSION = "operador-crear-usuario-2026-06-02-v8";
 
 export function GET() {
   return NextResponse.json({
