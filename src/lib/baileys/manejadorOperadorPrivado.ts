@@ -1725,13 +1725,16 @@ El dueño conectó la base de datos de su propio negocio/web. Tenés acceso TOTA
 • bd_crear_fila — agregar un registro ("creá un producto en mi web: ...").
 • bd_actualizar_filas — modificar registros que coincidan con filtros.
 • bd_eliminar_filas — borrar registros que coincidan con filtros.
+• crear_usuario — crear un USUARIO con login (email + contraseña). Usala cuando pidan "creá un perfil/usuario/cuenta con este correo y contraseña". NO uses bd_crear_fila para esto: los usuarios con login NO se crean insertando en la tabla de perfiles (su id depende del sistema de Auth). El perfil asociado se crea solo.
 
 REGLAS DE SEGURIDAD (obligatorias):
 1. update y delete SIEMPRE requieren al menos un filtro — nunca sobre toda la tabla.
 2. Antes de BORRAR (cualquier cantidad) o de EDITAR VARIAS filas: la tool te devuelve un preview con la cantidad afectada y NO ejecuta. Mostrale al dueño cuántas filas afecta y pedile confirmación clara ("¿confirmás borrar esas 3 filas?"). Solo cuando confirme, volvé a llamar la tool con confirmado=true.
 3. Editar UNA sola fila ejecuta directo (no requiere confirmación).
 4. OBLIGATORIO antes de CREAR o EDITAR en una tabla: si todavía no viste sus columnas en esta conversación, PRIMERO llamá bd_leer_filas (1 fila) de esa tabla para ver los nombres EXACTOS de columnas. Construí "valores" usando SOLO esos nombres reales. PROHIBIDO inventar columnas (ej: si la tabla usa "precio_normal", NO pongas "precio"; si no existe "stock" ni "modulos", NO los pongas) — esas filas las rechaza la base.
-5. REPORTÁ ÉXITO SOLO si la tool devolvió ok:true. Si devolvió ok:false o un error (ej: "column X does not exist"), NO digas que se creó/editó — decile al dueño el error EXACTO y qué columna falló, y volvé a intentar con las columnas correctas. NUNCA inventes que algo se guardó si la tool no lo confirmó.`
+5. REPORTÁ ÉXITO SOLO si la tool devolvió ok:true. Si devolvió ok:false o un error (ej: "column X does not exist"), NO digas que se creó/editó — decile al dueño el error EXACTO y qué columna falló, y volvé a intentar con las columnas correctas. NUNCA inventes que algo se guardó si la tool no lo confirmó.
+
+DAR ACCESO / INSCRIBIR a un usuario en un curso o tutorial (ej: "agregale tal tutorial al perfil de X", "dale acceso al curso Y a este usuario"): ⚠️ NO es crear un contenido nuevo. Es una INSCRIPCIÓN = relacionar al usuario con el contenido que YA EXISTE. Pasos: 1) leé la tabla de perfiles/usuarios filtrando por el email → sacá el id del usuario. 2) leé la tabla de tutoriales/cursos filtrando por el nombre (parcial está bien) → sacá el id del contenido que ya existe. 3) creá una fila (bd_crear_fila) en la tabla que relaciona usuario↔contenido (suele llamarse "inscripciones") con el usuario_id y el tutorial_id (o curso_id). Si no sabés cómo se llama esa tabla o sus columnas, usá bd_listar_tablas y bd_leer_filas (1 fila) para verlo. NUNCA confundas "dar acceso a un tutorial que ya existe" con "crear un tutorial nuevo".`
       : ""
   }`;
 
@@ -1809,7 +1812,7 @@ async function chatConTools(
 
   let totalIn = 0;
   let totalOut = 0;
-  const MAX_LOOPS = 5;
+  const MAX_LOOPS = 10;
 
   console.log(
     `${prefijo} [operador] 📥 IN: "${preguntaUsuario.slice(0, 100)}" (historial=${mensajesHistorial.length})`,
