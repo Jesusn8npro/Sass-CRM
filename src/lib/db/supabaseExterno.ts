@@ -28,6 +28,27 @@ function invalidarCacheCuenta(cuentaId: string): void {
 /** Máximo de filas que el agente trae por tabla en una consulta. */
 const LIMITE_FILAS_CONSULTA = 50;
 
+/**
+ * Recorta strings largos (descripciones, objetivos, contenido…) para que el
+ * dump de datos al modelo no se infle ni se trunque, dejando intactos los
+ * campos cortos que el agente necesita (títulos, nombres, precios, estados).
+ * Recursivo: cubre también los datos embebidos por FK.
+ */
+function recortarTextosLargos(valor: unknown): unknown {
+  if (typeof valor === "string") {
+    return valor.length > 200 ? valor.slice(0, 200) + "…" : valor;
+  }
+  if (Array.isArray(valor)) return valor.map(recortarTextosLargos);
+  if (valor && typeof valor === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(valor as Record<string, unknown>)) {
+      out[k] = recortarTextosLargos(v);
+    }
+    return out;
+  }
+  return valor;
+}
+
 /** Config pública (sin la key) — segura para mandar al cliente. */
 export interface ConfigSupabaseExterno {
   conectado: boolean;
@@ -308,22 +329,66 @@ export async function consultarTablasExternas(
   );
   const tope = filtrosValidos.length > 0 ? 30 : LIMITE_FILAS_CONSULTA;
 
+  // Relaciones FK que el negocio YA definió en su base. Las usamos para
+  // auto-embeber los datos legibles relacionados en UNA sola consulta.
+  const relaciones = await obtenerRelacionesExternas(cuentaId);
+
+  // Auto-embed genérico (forward): con las FKs que la tabla tiene, traemos
+  // anidados los datos legibles relacionados en UNA consulta (ej: cada item de
+  // un paquete viene CON el título de su tutorial). Sin que el negocio configure
+  // nada. Solo se embeben tablas permitidas → respeta el gate deny-by-default.
+  const construirSelect = (tabla: string): string => {
+    const forward = [
+      ...new Set(
+        (relaciones[tabla] ?? [])
+          .map((r) => r.destino)
+          .filter((d) => permitidas.has(d) && d !== tabla),
+      ),
+    ];
+    return forward.length > 0 ? `*,${forward.map((d) => `${d}(*)`).join(",")}` : "*";
+  };
+
   const resultado: Record<string, Record<string, unknown>[]> = {};
   for (const tabla of objetivo) {
-    let q = cliente.from(tabla).select("*").limit(tope);
-    for (const f of filtrosValidos) {
-      if (Array.isArray(f.valores) && f.valores.length > 0) {
-        q = q.in(f.columna, f.valores) as typeof q;
-      } else {
-        q = q.eq(f.columna, f.valor) as typeof q;
+    const selectEmbed = construirSelect(tabla);
+
+    const armarQuery = (sel: string) => {
+      let q = cliente.from(tabla).select(sel).limit(tope);
+      for (const f of filtrosValidos) {
+        if (Array.isArray(f.valores) && f.valores.length > 0) {
+          q = q.in(f.columna, f.valores) as typeof q;
+        } else {
+          q = q.eq(f.columna, f.valor) as typeof q;
+        }
       }
+      return q;
+    };
+
+    // El auto-embed es best-effort: si falla (relación ambigua, etc.),
+    // reintentamos sin embeds para no romper la consulta básica.
+    let { data, error } = await armarQuery(selectEmbed);
+    if (error && selectEmbed !== "*") {
+      ({ data, error } = await armarQuery("*"));
     }
-    const { data, error } = await q;
     if (!error && data) {
-      resultado[tabla] = data as Record<string, unknown>[];
+      // Recortamos textos largos (descripciones, etc.) para que el dump al
+      // modelo no se infle ni se trunque y NO se pierdan los títulos/nombres.
+      resultado[tabla] = (data as unknown as Record<string, unknown>[]).map(
+        (row) => recortarTextosLargos(row) as Record<string, unknown>,
+      );
+    } else if (error) {
+      // En vez de omitir en SILENCIO (deja al agente a ciegas, repitiendo la
+      // misma consulta mala y terminando en "déjame revisar..."), devolvemos
+      // el error como MENSAJE — no datos, así no se filtra info de otros
+      // clientes — para que el agente se auto-corrija. El caso típico es una
+      // columna de filtro que no existe en esa tabla (ej: buscar
+      // `correo_electronico` en `inscripciones` cuando vive en `perfiles`).
+      resultado[tabla] = [
+        {
+          __error: `No se pudo consultar "${tabla}": ${error.message}. Verificá que las columnas del filtro EXISTAN en esta tabla (mirá las columnas reales del prompt). Si buscás a un cliente por su email, esa columna suele estar en la tabla de perfiles/usuarios; primero buscá ahí su id y después usá ese id para consultar las otras tablas.`,
+        },
+      ];
     }
-    // error (ej: columna de filtro inexistente) → omitimos la tabla. No
-    // devolvemos la tabla entera para no exponer datos de otros clientes.
   }
   return resultado;
 }
@@ -369,6 +434,63 @@ export async function obtenerColumnasPermitidas(
     /* si falla, devolvemos lo que haya (o vacío) — el agente igual puede consultar */
   }
   cacheColumnas.set(cuentaId, { cols: result, expira: Date.now() + 60 * 60 * 1000 });
+  return result;
+}
+
+// Cache de relaciones FK por cuenta. TTL 1h.
+const cacheRelaciones = new Map<
+  string,
+  { fks: Record<string, { columna: string; destino: string }[]>; expira: number }
+>();
+
+/**
+ * Devuelve { tabla: [{columna, destino}] } con las foreign keys de las tablas
+ * permitidas, parseadas del OpenAPI de PostgREST (que ya expone las FK en la
+ * descripción de cada columna: `...<fk table='X' column='Y'/>`). Genérico:
+ * cualquier negocio con FKs definidas obtiene auto-embed sin configurar nada.
+ * Cacheado 1h.
+ */
+export async function obtenerRelacionesExternas(
+  cuentaId: string,
+): Promise<Record<string, { columna: string; destino: string }[]>> {
+  const cached = cacheRelaciones.get(cuentaId);
+  if (cached && cached.expira > Date.now()) return cached.fks;
+
+  const config = await obtenerConfigExterna(cuentaId);
+  if (!config.conectado || !config.agenteHabilitado || config.tablasPermitidas.length === 0) {
+    return {};
+  }
+  const creds = await obtenerCredencialesExternas(cuentaId);
+  if (!creds) return {};
+
+  const result: Record<string, { columna: string; destino: string }[]> = {};
+  try {
+    const resp = await fetch(`${creds.url}/rest/v1/`, {
+      headers: { apikey: creds.serviceKey, Authorization: `Bearer ${creds.serviceKey}` },
+    });
+    if (resp.ok) {
+      const spec = (await resp.json()) as {
+        definitions?: Record<string, { properties?: Record<string, { description?: string }> }>;
+      };
+      const defs = spec.definitions ?? {};
+      const permitidas = new Set(config.tablasPermitidas);
+      for (const t of config.tablasPermitidas) {
+        const props = defs[t]?.properties ?? {};
+        const fks: { columna: string; destino: string }[] = [];
+        for (const [col, meta] of Object.entries(props)) {
+          const desc = meta?.description;
+          if (typeof desc === "string") {
+            const m = desc.match(/<fk table='([^']+)' column='[^']+'\/>/);
+            if (m && permitidas.has(m[1])) fks.push({ columna: col, destino: m[1] });
+          }
+        }
+        if (fks.length > 0) result[t] = fks;
+      }
+    }
+  } catch {
+    /* sin relaciones → el agente cae a navegación por pasos normal */
+  }
+  cacheRelaciones.set(cuentaId, { fks: result, expira: Date.now() + 60 * 60 * 1000 });
   return result;
 }
 
