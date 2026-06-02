@@ -314,6 +314,20 @@ export async function generarYEnviarRespuesta(
     } catch {
       /* ignorar */
     }
+    // No pudimos generar respuesta (ej: OpenAI sin cuota/429, API key, red).
+    // En vez de dejar al cliente en silencio total, le avisamos algo breve.
+    try {
+      await enviarParteTexto(
+        sock,
+        cuenta.id,
+        conversacion.id,
+        jidParaEnviar,
+        "Disculpá, estamos teniendo un inconveniente técnico en este momento. Ya lo estamos revisando y te respondemos a la brevedad. 🙏",
+        prefijo,
+        "1/1",
+        0,
+      );
+    } catch {}
     try {
       await sock.sendPresenceUpdate("paused", jidParaEnviar);
     } catch {}
