@@ -33,8 +33,8 @@ const API_PUBLICA_ALLOWLIST = [
   "/api/blog/desuscribir",
   // Demo público voz — registro de llamada desde widget landing (rate-limitado en handler).
   "/api/landing/llamada",
-  // Webhook de Academia Vallenata Online — valida x-webhook-secret en el handler.
-  "/api/academia/lead",
+  // Ingesta de leads desde el chat/formulario web del cliente — valida token por cuenta en el handler.
+  "/api/chat-web/lead",
 ];
 
 // UUID v4 exacto — solo coincide con IDs reales, no con "nueva" ni slugs

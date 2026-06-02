@@ -172,8 +172,9 @@ export function SidebarPanel({
           accesibles desde la página de Pipeline con sus cards.
         */}
         <SeccionNav titulo="Captación">
-          <ItemNav icono={<IconoLeads />}  etiqueta="Importar leads" href={`${b}/leads`}       actual={pathname} />
-          <ItemNav icono={<IconoFunnel />} etiqueta="Prospección"  href={`${b}/prospeccion`} actual={pathname} matchPaths={["prospeccion"]} />
+          <ItemNav icono={<IconoLeads />}          etiqueta="Importar leads" href={`${b}/leads`}          actual={pathname} />
+          <ItemNav icono={<IconoConversaciones />} etiqueta="Leads Chat Web" href={`${b}/leads-chat-web`} actual={pathname} matchPaths={["leads-chat-web"]} />
+          <ItemNav icono={<IconoFunnel />}         etiqueta="Prospección"    href={`${b}/prospeccion`}    actual={pathname} matchPaths={["prospeccion"]} />
         </SeccionNav>
 
         {/* ── VENTAS ───────────────────────────────────────── */}
