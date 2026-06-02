@@ -1,6 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { obtenerCuentaPorTokenChatWeb, crearLeadChatWeb } from "@/lib/db/leadsChatWeb";
+import { obtenerCuentaPorTokenChatWeb, crearLeadChatWeb, marcarLeadChatWeb } from "@/lib/db/leadsChatWeb";
+import { obtenerGestor } from "@/lib/baileys/gestor";
 import { log } from "@/lib/logger";
+
+// Celular colombiano de 10 dígitos sin indicativo → anteponer 57.
+function normalizarTelefono(tel: string): string {
+  const d = (tel || "").replace(/\D/g, "");
+  if (d.length === 10 && d.startsWith("3")) return "57" + d;
+  return d;
+}
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -59,7 +67,27 @@ export async function POST(req: NextRequest) {
       mensaje_sugerido: body?.sugerencia_mensaje || lead.mensaje_sugerido || null,
       extra: body,
     });
-    return NextResponse.json({ ok: true, id: creado.id }, { headers: CORS });
+
+    // Autoenvío opcional: si quien ingresa el lead pide `auto_enviar` y hay WhatsApp,
+    // mandamos el mensaje al instante por el WhatsApp (Baileys) de ESA cuenta.
+    let autoenviado = false;
+    if (body?.auto_enviar === true && whatsapp) {
+      const sock = obtenerGestor().obtenerSocket(cuentaId);
+      const numero = normalizarTelefono(whatsapp);
+      const texto = (creado.mensaje_sugerido || "").trim();
+      if (sock && numero.length >= 10 && texto) {
+        try {
+          await sock.sendMessage(`${numero}@s.whatsapp.net`, { text: texto });
+          await marcarLeadChatWeb(cuentaId, creado.id, "enviado");
+          autoenviado = true;
+        } catch (e) {
+          await marcarLeadChatWeb(cuentaId, creado.id, "error", String(e));
+          log.error({ err: String(e), id: creado.id }, "[chat-web:lead] fallo autoenvío");
+        }
+      }
+    }
+
+    return NextResponse.json({ ok: true, id: creado.id, autoenviado }, { headers: CORS });
   } catch (e) {
     log.error({ err: String(e) }, "[chat-web:lead] error guardando lead");
     return NextResponse.json({ error: "error_interno" }, { status: 500, headers: CORS });
