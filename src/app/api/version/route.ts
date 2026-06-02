@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  *
  * Subí este número a mano en cada cambio importante que quieras verificar.
  */
-const VERSION = "aviso-error-tecnico-2026-06-02-v5";
+const VERSION = "perfil-sin-placeholders-2026-06-02-v6";
 
 export function GET() {
   return NextResponse.json({
