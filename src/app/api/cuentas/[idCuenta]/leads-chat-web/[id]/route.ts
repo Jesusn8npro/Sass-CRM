@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verificarAccesoCuenta, parsearJSON } from "@/lib/auth/sesion";
 import { obtenerLeadChatWeb, marcarLeadChatWeb } from "@/lib/db/leadsChatWeb";
+import { obtenerOCrearConversacion, cambiarModo } from "@/lib/db";
 import { obtenerGestor } from "@/lib/baileys/gestor";
+import { enviarParteTexto } from "@/lib/baileys/manejadorEnvio";
 import { log } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +61,12 @@ export async function POST(
   }
 
   try {
-    await sock.sendMessage(`${numero}@s.whatsapp.net`, { text: mensaje });
+    // Enviar COMO IA (no operador): vía conversación + enviarParteTexto, y dejar
+    // la conversación en modo IA para que el agente siga la charla con el lead.
+    const jid = `${numero}@s.whatsapp.net`;
+    const conv = await obtenerOCrearConversacion(idCuenta, numero, lead.nombre, jid);
+    await cambiarModo(conv.id, "IA");
+    await enviarParteTexto(sock, idCuenta, conv.id, jid, mensaje, "[chat-web]", "1", 0);
     await marcarLeadChatWeb(idCuenta, id, "enviado");
     return NextResponse.json({ ok: true });
   } catch (e) {

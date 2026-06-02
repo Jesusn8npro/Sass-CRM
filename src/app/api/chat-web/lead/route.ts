@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerCuentaPorTokenChatWeb, crearLeadChatWeb, marcarLeadChatWeb } from "@/lib/db/leadsChatWeb";
+import { obtenerOCrearConversacion, cambiarModo } from "@/lib/db";
 import { obtenerGestor } from "@/lib/baileys/gestor";
+import { enviarParteTexto } from "@/lib/baileys/manejadorEnvio";
 import { log } from "@/lib/logger";
 
 // Celular colombiano de 10 dígitos sin indicativo → anteponer 57.
@@ -77,7 +79,14 @@ export async function POST(req: NextRequest) {
       const texto = (creado.mensaje_sugerido || "").trim();
       if (sock && numero.length >= 10 && texto) {
         try {
-          await sock.sendMessage(`${numero}@s.whatsapp.net`, { text: texto });
+          // Enviar COMO IA: vía la conversación + enviarParteTexto (registra el
+          // msgId como propio del bot, así el echo NO se interpreta como operador
+          // y la conversación NO se marca HUMANO). Además forzamos modo IA para
+          // que el agente siga respondiendo automáticamente al lead.
+          const jid = `${numero}@s.whatsapp.net`;
+          const conv = await obtenerOCrearConversacion(cuentaId, numero, nombre, jid);
+          await cambiarModo(conv.id, "IA");
+          await enviarParteTexto(sock, cuentaId, conv.id, jid, texto, "[chat-web]", "1", 0);
           await marcarLeadChatWeb(cuentaId, creado.id, "enviado");
           autoenviado = true;
         } catch (e) {

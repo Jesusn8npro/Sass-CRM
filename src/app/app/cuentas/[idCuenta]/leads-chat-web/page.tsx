@@ -19,7 +19,7 @@ interface Lead {
   created_at: string;
 }
 
-const FILTROS = ["nuevo", "enviado", "descartado", "error", ""] as const;
+const FILTROS = ["", "nuevo", "enviado", "descartado", "error"] as const;
 const ETIQUETA: Record<string, string> = {
   nuevo: "Nuevos", enviado: "Enviados", descartado: "Descartados", error: "Con error", "": "Todos",
 };
@@ -37,7 +37,7 @@ export default function PaginaLeadsChatWeb() {
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [token, setToken] = useState<string | null>(null);
-  const [filtro, setFiltro] = useState<string>("nuevo");
+  const [filtro, setFiltro] = useState<string>("");
   const [cargando, setCargando] = useState(true);
   const [editado, setEditado] = useState<Record<string, string>>({});
   const [ocupado, setOcupado] = useState<string | null>(null);
