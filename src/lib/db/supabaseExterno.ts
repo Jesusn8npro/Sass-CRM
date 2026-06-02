@@ -303,7 +303,7 @@ export async function obtenerCredencialesExternas(
 export async function consultarTablasExternas(
   cuentaId: string,
   tablasSolicitadas: string[],
-  filtros: { columna: string; valor: string; valores?: string[] }[] = [],
+  filtros: { columna: string; valor: string; valores?: string[]; operador?: string }[] = [],
 ): Promise<Record<string, Record<string, unknown>[]>> {
   const config = await obtenerConfigExterna(cuentaId);
   if (!config.conectado || !config.agenteHabilitado) return {};
@@ -357,6 +357,10 @@ export async function consultarTablasExternas(
       for (const f of filtrosValidos) {
         if (Array.isArray(f.valores) && f.valores.length > 0) {
           q = q.in(f.columna, f.valores) as typeof q;
+        } else if (f.operador === "contiene") {
+          // Búsqueda parcial sin importar mayúsculas (ej: artista CONTIENE
+          // "Diomedes") → permite "qué tenés de X" sin coincidencia exacta.
+          q = q.ilike(f.columna, `%${f.valor}%`) as typeof q;
         } else {
           q = q.eq(f.columna, f.valor) as typeof q;
         }

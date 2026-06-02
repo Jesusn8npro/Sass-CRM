@@ -329,8 +329,14 @@ export const ESQUEMA_RESPUESTA = {
                 items: { type: "string" },
                 description: "Lista de valores para traer VARIOS registros de una (IN), ej: varios ids de tutoriales que obtuviste antes. Dejá [] si usás 'valor'.",
               },
+              operador: {
+                type: "string",
+                enum: ["eq", "contiene"],
+                description:
+                  "Cómo comparar 'valor': \"eq\" = igual exacto (default, para ids/emails). \"contiene\" = búsqueda PARCIAL sin importar mayúsculas (ilike), IDEAL para buscar por nombre/artista/título, ej: tutoriales cuyo artista CONTIENE 'Diomedes'. Cuando el cliente pide 'qué tenés de X' o busca por nombre, usá \"contiene\".",
+              },
             },
-            required: ["columna", "valor", "valores"],
+            required: ["columna", "valor", "valores", "operador"],
             additionalProperties: false,
           },
         },
