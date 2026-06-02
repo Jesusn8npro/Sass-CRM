@@ -2,8 +2,11 @@
  * Leads capturados por el chat/formulario web del cliente (multi-tenant).
  * El widget del cliente ingresa leads vía /api/chat-web/lead usando el
  * token_chat_web de su cuenta. Cada cuenta ve y gestiona SOLO sus leads.
+ *
+ * Usa el cliente Supabase (`db()`, service_role) como el resto de la capa DB.
  */
-import { sql } from "./sql";
+import { randomBytes } from "node:crypto";
+import { db, lanzar } from "./cliente";
 
 export interface LeadChatWeb {
   id: string;
@@ -25,26 +28,35 @@ export interface LeadChatWeb {
 /** Resuelve la cuenta dueña de un token de chat web (para ingesta sin sesión). */
 export async function obtenerCuentaPorTokenChatWeb(token: string): Promise<string | null> {
   if (!token) return null;
-  const filas = await sql()<{ id: string }[]>`
-    select id from cuentas where token_chat_web = ${token} limit 1`;
-  return filas[0]?.id ?? null;
+  const { data, error } = await db()
+    .from("cuentas")
+    .select("id")
+    .eq("token_chat_web", token)
+    .maybeSingle();
+  if (error) lanzar(error, "obtenerCuentaPorTokenChatWeb");
+  return (data as { id: string } | null)?.id ?? null;
 }
 
 /** Token de la cuenta (puede ser null si aún no se generó). */
 export async function obtenerTokenChatWeb(cuentaId: string): Promise<string | null> {
-  const filas = await sql()<{ token_chat_web: string | null }[]>`
-    select token_chat_web from cuentas where id = ${cuentaId}`;
-  return filas[0]?.token_chat_web ?? null;
+  const { data, error } = await db()
+    .from("cuentas")
+    .select("token_chat_web")
+    .eq("id", cuentaId)
+    .maybeSingle();
+  if (error) lanzar(error, "obtenerTokenChatWeb");
+  return (data as { token_chat_web: string | null } | null)?.token_chat_web ?? null;
 }
 
 /** Genera (o rota) el token de chat web de la cuenta y lo devuelve. */
 export async function generarTokenChatWeb(cuentaId: string): Promise<string> {
-  const filas = await sql()<{ token_chat_web: string }[]>`
-    update cuentas
-    set token_chat_web = 'cw_' || encode(gen_random_bytes(20), 'hex')
-    where id = ${cuentaId}
-    returning token_chat_web`;
-  return filas[0].token_chat_web;
+  const token = "cw_" + randomBytes(20).toString("hex");
+  const { error } = await db()
+    .from("cuentas")
+    .update({ token_chat_web: token })
+    .eq("id", cuentaId);
+  if (error) lanzar(error, "generarTokenChatWeb");
+  return token;
 }
 
 export async function crearLeadChatWeb(d: {
@@ -56,38 +68,50 @@ export async function crearLeadChatWeb(d: {
   mensaje?: string | null;
   origen_url?: string | null;
   mensaje_sugerido?: string | null;
-  extra?: unknown;
+  extra?: Record<string, unknown>;
 }): Promise<LeadChatWeb> {
-  const filas = await sql()<LeadChatWeb[]>`
-    insert into leads_chat_web (
-      cuenta_id, nombre, email, whatsapp, interes, mensaje, origen_url, mensaje_sugerido, extra
-    ) values (
-      ${d.cuenta_id}, ${d.nombre ?? null}, ${d.email ?? null}, ${d.whatsapp ?? null},
-      ${d.interes ?? null}, ${d.mensaje ?? null}, ${d.origen_url ?? null},
-      ${d.mensaje_sugerido ?? null}, ${JSON.stringify(d.extra ?? {})}::jsonb
-    )
-    returning *`;
-  return filas[0];
+  const { data, error } = await db()
+    .from("leads_chat_web")
+    .insert({
+      cuenta_id: d.cuenta_id,
+      nombre: d.nombre ?? null,
+      email: d.email ?? null,
+      whatsapp: d.whatsapp ?? null,
+      interes: d.interes ?? null,
+      mensaje: d.mensaje ?? null,
+      origen_url: d.origen_url ?? null,
+      mensaje_sugerido: d.mensaje_sugerido ?? null,
+      extra: d.extra ?? {},
+    })
+    .select("*")
+    .single();
+  if (error) lanzar(error, "crearLeadChatWeb");
+  return data as LeadChatWeb;
 }
 
 export async function listarLeadsChatWeb(cuentaId: string, estado?: string): Promise<LeadChatWeb[]> {
-  if (estado) {
-    return await sql()<LeadChatWeb[]>`
-      select * from leads_chat_web
-      where cuenta_id = ${cuentaId} and estado = ${estado}
-      order by created_at desc limit 300`;
-  }
-  return await sql()<LeadChatWeb[]>`
-    select * from leads_chat_web
-    where cuenta_id = ${cuentaId}
-    order by created_at desc limit 300`;
+  let q = db()
+    .from("leads_chat_web")
+    .select("*")
+    .eq("cuenta_id", cuentaId)
+    .order("created_at", { ascending: false })
+    .limit(300);
+  if (estado) q = q.eq("estado", estado);
+  const { data, error } = await q;
+  if (error) lanzar(error, "listarLeadsChatWeb");
+  return (data ?? []) as LeadChatWeb[];
 }
 
 /** Obtiene un lead validando que pertenezca a la cuenta (defensa multi-tenant). */
 export async function obtenerLeadChatWeb(cuentaId: string, id: string): Promise<LeadChatWeb | null> {
-  const filas = await sql()<LeadChatWeb[]>`
-    select * from leads_chat_web where id = ${id} and cuenta_id = ${cuentaId}`;
-  return filas[0] ?? null;
+  const { data, error } = await db()
+    .from("leads_chat_web")
+    .select("*")
+    .eq("id", id)
+    .eq("cuenta_id", cuentaId)
+    .maybeSingle();
+  if (error) lanzar(error, "obtenerLeadChatWeb");
+  return (data as LeadChatWeb) ?? null;
 }
 
 export async function marcarLeadChatWeb(
@@ -96,10 +120,14 @@ export async function marcarLeadChatWeb(
   estado: "enviado" | "descartado" | "error",
   errorEnvio?: string | null,
 ): Promise<void> {
-  await sql()`
-    update leads_chat_web
-    set estado = ${estado},
-        error_envio = ${errorEnvio ?? null},
-        enviado_at = ${estado === "enviado" ? new Date().toISOString() : null}
-    where id = ${id} and cuenta_id = ${cuentaId}`;
+  const { error } = await db()
+    .from("leads_chat_web")
+    .update({
+      estado,
+      error_envio: errorEnvio ?? null,
+      enviado_at: estado === "enviado" ? new Date().toISOString() : null,
+    })
+    .eq("id", id)
+    .eq("cuenta_id", cuentaId);
+  if (error) lanzar(error, "marcarLeadChatWeb");
 }
