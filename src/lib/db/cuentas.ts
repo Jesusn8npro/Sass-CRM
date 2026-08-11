@@ -125,6 +125,7 @@ export async function actualizarCuenta(
     telefono_operador_privado: string | null;
     operador_privado_resumen_diario: boolean;
     operador_privado_alertas: boolean;
+    eventos_negocio_activos: boolean;
     notificaciones_email_activas: boolean;
     responder_humanizado: boolean;
     usar_emojis: boolean;

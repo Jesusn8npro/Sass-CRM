@@ -35,6 +35,9 @@ const API_PUBLICA_ALLOWLIST = [
   "/api/landing/llamada",
   // Ingesta de leads desde el chat/formulario web del cliente — valida token por cuenta en el handler.
   "/api/chat-web/lead",
+  // Disparadores de negocio (registro de usuario, compra iniciada…) que avisan
+  // al operador privado — valida token_eventos por cuenta en el handler.
+  "/api/eventos/negocio",
 ];
 
 // UUID v4 exacto — solo coincide con IDs reales, no con "nueva" ni slugs

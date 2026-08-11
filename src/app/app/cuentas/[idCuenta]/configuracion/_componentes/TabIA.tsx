@@ -11,6 +11,7 @@ import {
 } from "./compartido";
 import { SeccionVoz } from "./SeccionVoz";
 import { SeccionOperadorPrivado } from "./SeccionOperadorPrivado";
+import { SeccionDisparadores } from "./SeccionDisparadores";
 import { SeccionConfiguracionIA, SeccionComportamiento } from "./_TabIA-ia";
 import { SeccionRitmoYMemoria, SeccionPromptAvanzado } from "./_TabIA-ritmo";
 
@@ -116,6 +117,7 @@ export function TabIA({ cuenta, setCuenta }: { cuenta: Cuenta; setCuenta: (c: Cu
       <SeccionRitmoYMemoria cuenta={cuenta} onActualizada={setCuenta} />
       <SeccionVoz cuenta={cuenta} onActualizada={setCuenta} />
       <SeccionOperadorPrivado cuenta={cuenta} onActualizada={setCuenta} />
+      <SeccionDisparadores cuenta={cuenta} onActualizada={setCuenta} />
       <SeccionPromptAvanzado cuenta={cuenta} onActualizada={setCuenta} />
       <SeccionAvanzado cuenta={cuenta} />
     </>

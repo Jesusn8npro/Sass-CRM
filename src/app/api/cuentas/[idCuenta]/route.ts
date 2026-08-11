@@ -134,6 +134,7 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     telefono_operador_privado?: unknown;
     operador_privado_resumen_diario?: unknown;
     operador_privado_alertas?: unknown;
+    eventos_negocio_activos?: unknown;
     notificaciones_email_activas?: unknown;
     responder_humanizado?: unknown;
     usar_emojis?: unknown;
@@ -304,6 +305,10 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     typeof payload.operador_privado_alertas === "boolean"
       ? payload.operador_privado_alertas
       : undefined;
+  const eventos_negocio_activos =
+    typeof payload.eventos_negocio_activos === "boolean"
+      ? payload.eventos_negocio_activos
+      : undefined;
   const notificaciones_email_activas =
     typeof payload.notificaciones_email_activas === "boolean"
       ? payload.notificaciones_email_activas
@@ -352,6 +357,7 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     telefono_operador_privado,
     operador_privado_resumen_diario,
     operador_privado_alertas,
+    eventos_negocio_activos,
     notificaciones_email_activas,
     responder_humanizado,
     usar_emojis,
