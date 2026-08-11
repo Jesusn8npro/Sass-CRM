@@ -58,10 +58,16 @@ export function PanelConversacion({
     // minuto aunque la conversación esté quieta, y eso satura el server en
     // dev. Refrescamos rápido mientras hay actividad y vamos aflojando
     // cuando no llega nada; al primer mensaje nuevo se vuelve al mínimo.
-    const MS_MIN = 3_000;
-    const MS_MAX = 20_000;
+    // Dos regímenes: mientras la charla está viva el techo es bajo, porque
+    // un mensaje que tarda 20s en aparecer se siente roto. Recién cuando
+    // hace rato que no pasa nada aflojamos de verdad.
+    const MS_MIN = 2_500;
+    const MS_MAX_ACTIVA = 5_000;
+    const MS_MAX_FRIA = 20_000;
+    const MS_CONSIDERAR_ACTIVA = 3 * 60_000;
     let msActual = MS_MIN;
     let firmaPrevia = "";
+    let ultimoCambio = Date.now();
 
     async function cargar() {
       try {
@@ -78,9 +84,12 @@ export function PanelConversacion({
         const firma = `${data.mensajes.length}:${ultimo?.id ?? ""}:${data.conversacion?.modo ?? ""}`;
         if (firma !== firmaPrevia) {
           firmaPrevia = firma;
+          ultimoCambio = Date.now();
           msActual = MS_MIN;
         } else {
-          msActual = Math.min(MS_MAX, Math.round(msActual * 1.5));
+          const activa = Date.now() - ultimoCambio < MS_CONSIDERAR_ACTIVA;
+          const techo = activa ? MS_MAX_ACTIVA : MS_MAX_FRIA;
+          msActual = Math.min(techo, Math.round(msActual * 1.4));
         }
       } catch {
         // ignorar

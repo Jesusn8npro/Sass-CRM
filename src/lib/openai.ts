@@ -6,6 +6,7 @@ import {
   generarRespuestaRespaldo,
   type MensajeParaRespaldo,
 } from "./respaldoAnthropic";
+import { circuitoOpenaiAbierto, registrarFalloOpenai } from "./circuitoOpenai";
 
 const cliente = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY ?? "",
@@ -273,6 +274,19 @@ export async function generarRespuesta(
     }
   }
 
+  // Si OpenAI ya falló por cuenta caída hace poco, no perdemos otro
+  // round-trip en confirmarlo: vamos derecho al respaldo.
+  if (circuitoOpenaiAbierto()) {
+    const crudo = await generarRespuestaRespaldo({
+      promptCompleto,
+      mensajes: mensajesParaLLM as MensajeParaRespaldo[],
+      temperatura,
+      maxTokens,
+      cuentaId,
+    });
+    return normalizarRespuesta(crudo as unknown as RespuestaIA);
+  }
+
   let respuesta;
   try {
     respuesta = await conReintentos(
@@ -300,6 +314,7 @@ export async function generarRespuesta(
     // OpenAI agotó los reintentos (cuenta sin billing, cuota, caída del
     // proveedor). Antes de dejar al cliente con un "inconveniente técnico",
     // probamos el respaldo, que devuelve el MISMO esquema.
+    registrarFalloOpenai(errOpenai);
     log.error(
       { err: String(errOpenai), modelo },
       "[openai] falló tras reintentos — intentando respaldo Anthropic",

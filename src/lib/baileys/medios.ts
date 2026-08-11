@@ -245,9 +245,18 @@ export async function transcribirAudio(
   cuentaId?: string,
 ): Promise<string | null> {
   const { transcribirConGemini } = await import("../transcripcionRespaldo");
+  const { circuitoOpenaiAbierto, registrarFalloOpenai } = await import(
+    "../circuitoOpenai"
+  );
 
   if (!process.env.OPENAI_API_KEY) {
     console.warn("[media] no hay OPENAI_API_KEY, transcribiendo con Gemini");
+    return transcribirConGemini(buffer, nombreSugerido, cuentaId);
+  }
+  // El mensaje no se guarda hasta que termina la transcripción, así que cada
+  // segundo acá es un segundo que el audio no aparece en el panel. Si ya
+  // sabemos que OpenAI está caído, no lo intentamos de nuevo.
+  if (circuitoOpenaiAbierto()) {
     return transcribirConGemini(buffer, nombreSugerido, cuentaId);
   }
   try {
@@ -279,6 +288,7 @@ export async function transcribirAudio(
     // No es un fallo del proveedor, así que no vale la pena reintentar.
     return texto || null;
   } catch (err) {
+    registrarFalloOpenai(err);
     console.error("[media] error transcribiendo con Whisper:", err);
     return transcribirConGemini(buffer, nombreSugerido, cuentaId);
   }
