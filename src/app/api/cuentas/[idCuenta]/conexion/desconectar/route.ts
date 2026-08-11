@@ -1,3 +1,4 @@
+import { botHabilitado } from "@/lib/bot/botHabilitado";
 import { NextResponse, type NextRequest } from "next/server";
 import path from "node:path";
 import fs from "node:fs";
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
   // el QR nuevo aparezca en ~2-3s en vez de esperar el ciclo de
   // sincronizar() (cada 30s). Si se pausó (esta_activa=false), sincronizar
   // la ignora — no regenera QR, queda apagada como se pidió.
-  if (!pausar && process.env.BOT_ENABLED !== "false") {
+  if (!pausar && botHabilitado()) {
     void obtenerGestor().sincronizar();
   }
 

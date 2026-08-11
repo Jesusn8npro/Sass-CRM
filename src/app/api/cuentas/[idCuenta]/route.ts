@@ -1,3 +1,4 @@
+import { botHabilitado } from "@/lib/bot/botHabilitado";
 import { NextResponse, type NextRequest } from "next/server";
 import QRCode from "qrcode";
 import {
@@ -368,7 +369,7 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
   // Al reactivar una cuenta (esta_activa: false → true), disparamos una
   // reconexión inmediata para que el QR aparezca en ~2-3s en vez de esperar
   // el ciclo de sincronizar() (cada 30s).
-  if (esta_activa === true && process.env.BOT_ENABLED !== "false") {
+  if (esta_activa === true && botHabilitado()) {
     void obtenerGestor().sincronizar();
   }
   return NextResponse.json({ cuenta: actualizada });

@@ -13,6 +13,7 @@ import {
 import { procesarAutoSeguimientos } from "./procesarAutoSeguimientos";
 import { procesarReporteDiario } from "@/lib/admin/reporteDiario";
 import { procesarOutreach } from "@/lib/outreach/orquestador";
+import { botHabilitado } from "./botHabilitado";
 
 interface EstadoCicloVida {
   arrancando: boolean;
@@ -275,9 +276,9 @@ export async function arrancarBotEnProceso(): Promise<void> {
   // pisar la sesión que está corriendo en producción (Easy Panel),
   // poné BOT_ENABLED=false en tu .env.local. El panel sigue funcionando
   // pero el bot Baileys NO arranca → no compite por la sesión.
-  if (process.env.BOT_ENABLED === "false") {
+  if (!botHabilitado()) {
     console.log(
-      "[bot] ⏸ BOT_ENABLED=false — bot deshabilitado. UI funciona, Baileys no arranca.",
+      `[bot] ⏸ BOT_ENABLED=${JSON.stringify(process.env.BOT_ENABLED)} — bot deshabilitado. UI funciona, Baileys no arranca.`,
     );
     return;
   }
