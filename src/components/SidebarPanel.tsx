@@ -8,6 +8,7 @@ import { BadgeNotificaciones } from "./BadgeNotificaciones";
 import { InterruptorTema } from "./InterruptorTema";
 import { PillCreditos } from "./PillCreditos";
 import { SeccionNav, ItemNav } from "./SidebarPanel.helpers";
+import { usePollingVisible } from "./usePollingVisible";
 import {
   IconoAgenda,
   IconoAgente,
@@ -39,7 +40,7 @@ interface InfoUsuario {
 
 export function SidebarPanel({
   idCuentaActual,
-  cuentas,
+  cuentas: cuentasIniciales,
   abierto = true,
   onCerrar,
 }: {
@@ -52,6 +53,26 @@ export function SidebarPanel({
   const router = useRouter();
   const [info, setInfo] = useState<InfoUsuario | null>(null);
   const [dropdownAbierto, setDropdownAbierto] = useState(false);
+
+  // `cuentas` llega del layout de SERVIDOR: se renderiza una vez y no se vuelve
+  // a evaluar mientras navegás por el panel. Por eso, al vincular un WhatsApp el
+  // punto de estado seguía gris hasta recargar a mano, aunque la cuenta ya
+  // estuviera `conectado`. Refrescamos la lista en cliente para que el indicador
+  // siga al estado real (el prop se usa solo como valor inicial → sin parpadeo
+  // en el primer render).
+  const [cuentas, setCuentas] = useState<Cuenta[]>(cuentasIniciales);
+  useEffect(() => setCuentas(cuentasIniciales), [cuentasIniciales]);
+
+  usePollingVisible(async () => {
+    try {
+      const res = await fetch("/api/cuentas", { cache: "no-store" });
+      if (!res.ok) return;
+      const d = (await res.json()) as { cuentas?: Cuenta[] };
+      if (d.cuentas) setCuentas(d.cuentas);
+    } catch {
+      /* la lista previa sigue siendo válida */
+    }
+  }, 15_000);
 
   useEffect(() => {
     fetch("/api/usuarios/me", { cache: "no-store" })
