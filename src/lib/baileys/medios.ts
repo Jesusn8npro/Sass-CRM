@@ -229,8 +229,12 @@ export async function descargarYGuardarMedia(
 }
 
 /**
- * Transcribe un audio con Whisper. Si se pasa `cuentaId` registra el
- * uso en `metering_uso` para facturación.
+ * Transcribe un audio con Whisper, con respaldo en Gemini.
+ *
+ * Si Whisper no está disponible (cuenta de OpenAI caída, cuota, red), el
+ * audio se transcribe con Gemini en vez de perderse: una nota de voz sin
+ * transcribir deja al agente respondiendo a ciegas, y eso no se nota hasta
+ * que el cliente ya se fue.
  *
  * Whisper cobra USD 0.006 por minuto. Estimamos duración del audio por
  * tamaño del buffer (audio comprimido ≈ 16 kbps OGG/Opus).
@@ -240,9 +244,11 @@ export async function transcribirAudio(
   nombreSugerido = "audio.ogg",
   cuentaId?: string,
 ): Promise<string | null> {
+  const { transcribirConGemini } = await import("../transcripcionRespaldo");
+
   if (!process.env.OPENAI_API_KEY) {
-    console.warn("[media] no hay OPENAI_API_KEY, no se puede transcribir");
-    return null;
+    console.warn("[media] no hay OPENAI_API_KEY, transcribiendo con Gemini");
+    return transcribirConGemini(buffer, nombreSugerido, cuentaId);
   }
   try {
     const archivo = await OpenAI.toFile(buffer, nombreSugerido);
@@ -268,10 +274,13 @@ export async function transcribirAudio(
         costo_usd: (segundos / 60) * 0.006,
       });
     }
-    return transcripcion.text?.trim() || null;
+    const texto = transcripcion.text?.trim();
+    // Whisper puede responder 200 con texto vacío (audio ruidoso o mudo).
+    // No es un fallo del proveedor, así que no vale la pena reintentar.
+    return texto || null;
   } catch (err) {
-    console.error("[media] error transcribiendo:", err);
-    return null;
+    console.error("[media] error transcribiendo con Whisper:", err);
+    return transcribirConGemini(buffer, nombreSugerido, cuentaId);
   }
 }
 

@@ -1756,9 +1756,20 @@ export async function procesarMensajeOperadorPrivado(
     respuesta = await chatConTools(cuenta, conversacion.id, texto, prefijo);
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);
-    console.error(`${prefijo} [operador] error procesando:`, detalle);
-    respuesta =
-      "Hubo un error procesando tu mensaje. Probá de nuevo en un rato — si persiste avisame qué intentaste hacer.";
+    console.error(`${prefijo} [operador] OpenAI fallo:`, detalle);
+    // Mismo criterio que el agente de ventas: antes de darle un error al
+    // dueño, reintentamos con Claude. El operador es su panel de control
+    // por WhatsApp — dejarlo mudo porque un proveedor está caído es lo peor.
+    try {
+      respuesta = await chatConToolsRespaldo(cuenta, conversacion.id, texto, prefijo);
+    } catch (err2) {
+      console.error(
+        `${prefijo} [operador] respaldo Anthropic tambien fallo:`,
+        err2 instanceof Error ? err2.message : String(err2),
+      );
+      respuesta =
+        "Hubo un error procesando tu mensaje. Probá de nuevo en un rato — si persiste avisame qué intentaste hacer.";
+    }
   }
 
   try {
@@ -1781,6 +1792,70 @@ export async function procesarMensajeOperadorPrivado(
  * Loop de chat con tool calling. La IA puede invocar varias tools en cadena
  * antes de devolver la respuesta final al operador.
  */
+/**
+ * Mismo agente del operador, pero sobre Claude. Se usa solo cuando OpenAI
+ * falló. Reutiliza las MISMAS tools y el MISMO dispatcher (`ejecutarTool`):
+ * lo único que cambia es el formato del catálogo, porque Anthropic espera
+ * `input_schema` plano donde OpenAI anida todo bajo `function`.
+ */
+async function chatConToolsRespaldo(
+  cuenta: Cuenta,
+  conversacionId: string,
+  preguntaUsuario: string,
+  prefijo: string,
+): Promise<string> {
+  const { conversarConHerramientas, calcularCostoAnthropicUSD } = await import(
+    "../anthropic"
+  );
+  const { MODELO_RESPALDO } = await import("../respaldoAnthropic");
+
+  const historial = await obtenerHistorialReciente(conversacionId, 12);
+  const mensajesHistorial = historial
+    .filter((m) => m.rol === "usuario" || m.rol === "asistente")
+    .map((m) => ({
+      role: m.rol === "usuario" ? ("user" as const) : ("assistant" as const),
+      content: m.contenido,
+    }));
+
+  const toolsActivas = cuenta.supabase_externo_url
+    ? [...TOOLS, ...TOOLS_EXTERNAS]
+    : TOOLS;
+
+  const herramientas = toolsActivas.map((t) => ({
+    name: t.function.name,
+    description: t.function.description ?? "",
+    input_schema: (t.function.parameters ?? {
+      type: "object",
+      properties: {},
+    }) as { type: "object"; properties: Record<string, unknown>; required?: string[] },
+    ejecutar: async (input: Record<string, unknown>) => {
+      const resultado = await ejecutarTool(cuenta.id, t.function.name, input);
+      return typeof resultado === "string" ? resultado : JSON.stringify(resultado);
+    },
+  }));
+
+  console.log(`${prefijo} [operador] ↩ usando respaldo Anthropic`);
+
+  const salida = await conversarConHerramientas(
+    SYSTEM_PROMPT(cuenta),
+    [...mensajesHistorial, { role: "user" as const, content: preguntaUsuario }],
+    herramientas,
+    { modelo: MODELO_RESPALDO, maxTokens: 1500 },
+  );
+
+  registrarUso({
+    cuenta_id: cuenta.id,
+    proveedor: "anthropic",
+    modelo: MODELO_RESPALDO,
+    tokens_in: salida.tokensIn,
+    tokens_out: salida.tokensOut,
+    costo_usd: calcularCostoAnthropicUSD(MODELO_RESPALDO, salida.tokensIn, salida.tokensOut),
+    metadata: { motivo: "respaldo_openai_caido", origen: "operador_privado" },
+  });
+
+  return salida.respuesta;
+}
+
 async function chatConTools(
   cuenta: Cuenta,
   conversacionId: string,
