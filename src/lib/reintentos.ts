@@ -17,12 +17,30 @@ interface OpcionesReintento {
 }
 
 /**
+ * 429 que NO se arreglan esperando: la cuenta del proveedor está sin
+ * billing, sin cuota o desactivada. Reintentarlos es tiempo tirado —
+ * con backoff exponencial son ~3.4s por llamada, y como el agente
+ * encadena hasta 5 llamadas por mensaje, el cliente esperaba casi 20
+ * segundos de más antes de que entrara el respaldo.
+ */
+function es429Permanente(msg: string): boolean {
+  return (
+    /billing_not_active|insufficient_quota|account_deactivated/i.test(msg) ||
+    /account is not active/i.test(msg) ||
+    /exceeded your current quota/i.test(msg) ||
+    /check your billing details/i.test(msg)
+  );
+}
+
+/**
  * Errores que SÍ vale la pena reintentar (transitorios).
  * Los 4xx (excepto 429) no se reintentan — son errores de programación
  * o validación que no se arreglan esperando.
  */
 function esTransitorio(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
+  // Un 429 por rate limit se reintenta; uno por cuenta caída, no.
+  if (es429Permanente(msg)) return false;
   return (
     msg.includes("ECONNRESET") ||
     msg.includes("ETIMEDOUT") ||
@@ -32,11 +50,10 @@ function esTransitorio(err: unknown): boolean {
     msg.includes("fetch failed") ||
     msg.includes("Timed Out") ||
     msg.includes("timeout") ||
-    msg.includes(" 429") ||
-    msg.includes(" 500") ||
-    msg.includes(" 502") ||
-    msg.includes(" 503") ||
-    msg.includes(" 504")
+    // Los SDK arrancan el mensaje con el código ("429 Rate limit…"), así que
+    // buscar " 429" con espacio delante no casaba nunca y NINGÚN 5xx se
+    // reintentaba. \b cubre el código esté al principio o en medio.
+    /\b(429|500|502|503|504)\b/.test(msg)
   );
 }
 
