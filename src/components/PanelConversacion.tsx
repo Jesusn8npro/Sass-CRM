@@ -54,6 +54,15 @@ export function PanelConversacion({
     let cancelado = false;
     const url = `/api/cuentas/${idCuenta}/mensajes/${idConversacion}`;
 
+    // Backoff adaptativo: un intervalo fijo de 4s son 15 peticiones por
+    // minuto aunque la conversación esté quieta, y eso satura el server en
+    // dev. Refrescamos rápido mientras hay actividad y vamos aflojando
+    // cuando no llega nada; al primer mensaje nuevo se vuelve al mínimo.
+    const MS_MIN = 3_000;
+    const MS_MAX = 20_000;
+    let msActual = MS_MIN;
+    let firmaPrevia = "";
+
     async function cargar() {
       try {
         const res = await fetch(url, { cache: "no-store" });
@@ -62,29 +71,46 @@ export function PanelConversacion({
         if (cancelado) return;
         setConversacion(data.conversacion);
         setMensajes(data.mensajes);
+
+        // Cantidad + id del último mensaje alcanza para detectar cambios
+        // sin comparar el historial entero en cada vuelta.
+        const ultimo = data.mensajes[data.mensajes.length - 1];
+        const firma = `${data.mensajes.length}:${ultimo?.id ?? ""}:${data.conversacion?.modo ?? ""}`;
+        if (firma !== firmaPrevia) {
+          firmaPrevia = firma;
+          msActual = MS_MIN;
+        } else {
+          msActual = Math.min(MS_MAX, Math.round(msActual * 1.5));
+        }
       } catch {
         // ignorar
       }
     }
 
     cargar();
-    // Mensajes de la conv abierta: polling cada 4s (era 2s).
     // Pausa cuando la pestaña no está visible — no tiene sentido
     // refrescar mensajes si el usuario no está mirando.
     let intervalo: NodeJS.Timeout | null = null;
     const arrancar = () => {
-      if (intervalo) clearInterval(intervalo);
-      intervalo = setInterval(cargar, 4000);
+      if (intervalo) clearTimeout(intervalo);
+      const tick = async () => {
+        await cargar();
+        if (cancelado) return;
+        intervalo = setTimeout(tick, msActual);
+      };
+      intervalo = setTimeout(tick, msActual);
     };
     const detener = () => {
       if (intervalo) {
-        clearInterval(intervalo);
+        clearTimeout(intervalo);
         intervalo = null;
       }
     };
     const onVis = () => {
       if (document.visibilityState === "visible") {
-        cargar();
+        // Al volver a la pestaña queremos ver lo último ya mismo, así que
+        // reseteamos el backoff en vez de retomarlo donde quedó.
+        msActual = MS_MIN;
         arrancar();
       } else {
         detener();

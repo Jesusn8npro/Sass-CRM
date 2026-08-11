@@ -12,7 +12,11 @@
 import { registrarUso } from "./db/meteringUso";
 import { log } from "./logger";
 
-const MODELO_GEMINI = process.env.GEMINI_MODELO_AUDIO ?? "gemini-2.5-flash";
+// OJO: los alias versionados (gemini-2.5-flash, gemini-2.0-flash…) aparecen
+// en /models pero devuelven 404 "no longer available to new users" al
+// invocarlos. Los alias `-latest` son los que responden. Verificado
+// transcribiendo un audio real de WhatsApp.
+const MODELO_GEMINI = process.env.GEMINI_MODELO_AUDIO ?? "gemini-flash-latest";
 
 /** Precio de Gemini Flash por millón de tokens de entrada de audio (USD). */
 const USD_POR_MILLON_AUDIO = 1.0;

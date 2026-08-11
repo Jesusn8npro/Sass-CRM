@@ -72,7 +72,10 @@ export function SidebarPanel({
     } catch {
       /* la lista previa sigue siendo válida */
     }
-  }, 15_000);
+    // 45s: esto solo mantiene al día el puntito de estado de la cuenta.
+    // A 15s eran 4 peticiones por minuto en TODAS las pantallas del panel,
+    // por un dato que cambia un par de veces al día.
+  }, 45_000);
 
   useEffect(() => {
     fetch("/api/usuarios/me", { cache: "no-store" })

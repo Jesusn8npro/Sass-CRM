@@ -84,7 +84,7 @@ export function PanelConversaciones({ idCuenta }: { idCuenta: string }) {
       /* ignorar */
     }
   }, [idCuenta]);
-  usePollingVisible(cargarConversaciones, 25_000, cuenta?.estado === "conectado");
+  usePollingVisible(cargarConversaciones, 40_000, cuenta?.estado === "conectado");
 
   // Deep link ?conv=X
   useEffect(() => {
