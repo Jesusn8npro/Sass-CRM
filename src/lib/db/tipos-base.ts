@@ -188,6 +188,14 @@ export interface Cuenta {
   /** Si true, recibe alertas urgentes en tiempo real (lead score >=80,
    *  handoff a humano, cuenta caída). */
   operador_privado_alertas: boolean;
+  /** Secreto que autentica el webhook público /api/eventos/negocio.
+   *  Nunca se expone al navegador salvo en la pantalla de configuración
+   *  del propio dueño, que lo necesita para instalar sus disparadores. */
+  token_eventos: string | null;
+  /** Interruptor maestro de los disparadores de negocio (registro de
+   *  usuario, compra iniciada…). En false el webhook acepta el evento
+   *  pero no manda nada — corta el ruido sin desarmar los triggers. */
+  eventos_negocio_activos: boolean;
   /** Opt-in para emails transaccionales por Resend (bienvenida,
    *  reportes, cuenta caída). Billing va aparte. */
   notificaciones_email_activas: boolean;

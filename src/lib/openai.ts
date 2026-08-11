@@ -2,6 +2,10 @@ import OpenAI from "openai";
 import { PROMPT_SISTEMA_DEFAULT } from "./promptSistema";
 import type { Mensaje } from "./baseDatos";
 import { descargarMediaChat } from "./baileys/medios";
+import {
+  generarRespuestaRespaldo,
+  type MensajeParaRespaldo,
+} from "./respaldoAnthropic";
 
 const cliente = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY ?? "",
@@ -269,27 +273,46 @@ export async function generarRespuesta(
     }
   }
 
-  const respuesta = await conReintentos(
-    () =>
-      cliente.chat.completions.create({
-        model: modelo,
-        messages: [
-          { role: "system", content: promptCompleto },
-          ...mensajesParaLLM,
-        ],
-        temperature: temperatura,
-        max_tokens: maxTokens,
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "respuesta_agente",
-            strict: true,
-            schema: ESQUEMA_RESPUESTA,
+  let respuesta;
+  try {
+    respuesta = await conReintentos(
+      () =>
+        cliente.chat.completions.create({
+          model: modelo,
+          messages: [
+            { role: "system", content: promptCompleto },
+            ...mensajesParaLLM,
+          ],
+          temperature: temperatura,
+          max_tokens: maxTokens,
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "respuesta_agente",
+              strict: true,
+              schema: ESQUEMA_RESPUESTA,
+            },
           },
-        },
-      }),
-    { contexto: "openai.chat", maxIntentos: 3, baseMs: 800 },
-  );
+        }),
+      { contexto: "openai.chat", maxIntentos: 3, baseMs: 800 },
+    );
+  } catch (errOpenai) {
+    // OpenAI agotó los reintentos (cuenta sin billing, cuota, caída del
+    // proveedor). Antes de dejar al cliente con un "inconveniente técnico",
+    // probamos el respaldo, que devuelve el MISMO esquema.
+    log.error(
+      { err: String(errOpenai), modelo },
+      "[openai] falló tras reintentos — intentando respaldo Anthropic",
+    );
+    const crudo = await generarRespuestaRespaldo({
+      promptCompleto,
+      mensajes: mensajesParaLLM as MensajeParaRespaldo[],
+      temperatura,
+      maxTokens,
+      cuentaId,
+    });
+    return normalizarRespuesta(crudo as unknown as RespuestaIA);
+  }
 
   if (cuentaId && respuesta.usage) {
     const tIn = respuesta.usage.prompt_tokens ?? 0;
@@ -318,6 +341,15 @@ export async function generarRespuesta(
     throw new Error("OpenAI devolvió formato inválido.");
   }
 
+  return normalizarRespuesta(parsed);
+}
+
+/**
+ * Rellena los campos que el modelo pudo omitir. El pipeline de abajo asume
+ * que todas las acciones existen (aunque estén desactivadas), así que esto
+ * corre para CUALQUIER proveedor — OpenAI o el respaldo.
+ */
+function normalizarRespuesta(parsed: RespuestaIA): RespuestaIA {
   if (!parsed.partes || parsed.partes.length === 0) {
     parsed.partes = [{ tipo: "texto", contenido: "...", media_id: "" }];
   }

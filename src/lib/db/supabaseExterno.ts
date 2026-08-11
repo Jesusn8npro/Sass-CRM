@@ -26,22 +26,46 @@ function invalidarCacheCuenta(cuentaId: string): void {
 }
 
 /** Máximo de filas que el agente trae por tabla en una consulta. */
-const LIMITE_FILAS_CONSULTA = 50;
+const LIMITE_FILAS_CONSULTA = 25;
+
+/** Largo máximo de un string antes de recortarlo en el dump al modelo. */
+const LARGO_MAX_TEXTO = 120;
 
 /**
- * Recorta strings largos (descripciones, objetivos, contenido…) para que el
- * dump de datos al modelo no se infle ni se trunque, dejando intactos los
- * campos cortos que el agente necesita (títulos, nombres, precios, estados).
+ * Columnas que NUNCA aportan a una respuesta de venta por chat y sí inflan
+ * el prompt (y por tanto el costo por mensaje): timestamps de auditoría,
+ * metadatos de SEO, URLs de media que el agente no puede mostrar en texto,
+ * y vectores de embedding. Genérico: aplica a cualquier negocio.
+ */
+const COLUMNAS_RUIDO = [
+  /^(created_at|updated_at|fecha_creacion|fecha_actualizacion|ultima_actualizacion)$/i,
+  /^meta_/i,
+  /(imagen|image|foto|avatar|banner|thumbnail|portada|video)_url$/i,
+  /embedding/i,
+];
+
+function esColumnaRuido(nombre: string): boolean {
+  return COLUMNAS_RUIDO.some((re) => re.test(nombre));
+}
+
+/**
+ * Aligera una fila antes de mandarla al modelo: descarta columnas de ruido,
+ * recorta strings largos (descripciones, objetivos…) y suelta los valores
+ * nulos, que ocupan tokens sin decir nada. Deja intactos los campos que el
+ * agente necesita para vender (títulos, nombres, precios, estados, slug).
  * Recursivo: cubre también los datos embebidos por FK.
  */
 function recortarTextosLargos(valor: unknown): unknown {
   if (typeof valor === "string") {
-    return valor.length > 200 ? valor.slice(0, 200) + "…" : valor;
+    return valor.length > LARGO_MAX_TEXTO
+      ? valor.slice(0, LARGO_MAX_TEXTO) + "…"
+      : valor;
   }
   if (Array.isArray(valor)) return valor.map(recortarTextosLargos);
   if (valor && typeof valor === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(valor as Record<string, unknown>)) {
+      if (v === null || esColumnaRuido(k)) continue;
       out[k] = recortarTextosLargos(v);
     }
     return out;
@@ -292,10 +316,14 @@ export async function obtenerCredencialesExternas(
  *   - Deny-by-default: solo se consultan tablas en `agente_tablas_permitidas`.
  *   - Solo lectura (select). Nunca escribe.
  *   - Filtros de igualdad para acotar la consulta a los datos del PROPIO
- *     cliente (ej: email/teléfono). Con filtros el tope baja a 10 filas; sin
+ *     cliente (ej: email/teléfono). Con filtros el tope baja a 20 filas; sin
  *     filtros (catálogo público) usa el tope general.
  *   - Si una columna de filtro no existe en una tabla, esa tabla se OMITE
  *     (no se devuelve completa) — evita fugas de datos de otros clientes.
+ *
+ * Costo: cada fila se aligera antes de ir al modelo (columnas de ruido fuera,
+ * nulos fuera, textos recortados) y los embeds por FK traen solo columnas
+ * legibles. El prompt por mensaje baja sin perder poder de venta.
  *
  * Devuelve un mapa { tabla: filas[] }. Si la cuenta no tiene la integración
  * habilitada o no hay credenciales, devuelve {} (el agente responde sin datos).
@@ -327,11 +355,23 @@ export async function consultarTablasExternas(
       ((f.valor != null && String(f.valor) !== "") ||
         (Array.isArray(f.valores) && f.valores.length > 0)),
   );
-  const tope = filtrosValidos.length > 0 ? 30 : LIMITE_FILAS_CONSULTA;
+  const tope = filtrosValidos.length > 0 ? 20 : LIMITE_FILAS_CONSULTA;
 
   // Relaciones FK que el negocio YA definió en su base. Las usamos para
   // auto-embeber los datos legibles relacionados en UNA sola consulta.
   const relaciones = await obtenerRelacionesExternas(cuentaId);
+  const columnas = await obtenerColumnasPermitidas(cuentaId);
+
+  // De una tabla embebida por FK solo interesan los campos que hacen legible
+  // la fila (cómo se llama, cuánto vale, dónde está). Traer el `*` del destino
+  // multiplicaba el tamaño del dump por cada relación. Si no reconocemos
+  // ninguna columna legible, caemos a `*` para no perder el dato.
+  const PATRON_LEGIBLE =
+    /^(id|titulo|title|nombre|name|slug|precio.*|price.*|valor|estado|status|nivel|categoria|tipo|artista|activo|visible)$/i;
+  const columnasLegibles = (tabla: string): string => {
+    const cols = (columnas[tabla] ?? []).filter((c) => PATRON_LEGIBLE.test(c));
+    return cols.length > 0 ? cols.join(",") : "*";
+  };
 
   // Auto-embed genérico (forward): con las FKs que la tabla tiene, traemos
   // anidados los datos legibles relacionados en UNA consulta (ej: cada item de
@@ -345,7 +385,9 @@ export async function consultarTablasExternas(
           .filter((d) => permitidas.has(d) && d !== tabla),
       ),
     ];
-    return forward.length > 0 ? `*,${forward.map((d) => `${d}(*)`).join(",")}` : "*";
+    return forward.length > 0
+      ? `*,${forward.map((d) => `${d}(${columnasLegibles(d)})`).join(",")}`
+      : "*";
   };
 
   const resultado: Record<string, Record<string, unknown>[]> = {};
