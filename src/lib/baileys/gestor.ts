@@ -182,11 +182,20 @@ class GestorCuentas {
       // "escribiendo..." funcione: WhatsApp solo lo muestra cuando
       // estamos online ante el contacto.
       markOnlineOnConnect: true,
-      // true = al emparejar el QR, WhatsApp envía un historial amplio
-      // (varios meses) que se guarda vía 'messaging-history.set'. Hace el
-      // primer sync más pesado, pero permite ver conversaciones anteriores
-      // del cliente, no solo las nuevas.
-      syncFullHistory: true,
+      // EN false A PROPÓSITO. Con `true`, WhatsApp corta el handshake con
+      // código 428 ("Connection Terminated") ANTES de emitir el QR, así que la
+      // cuenta no se podía vincular: quedaba en bucle de reconexión infinito.
+      //
+      // Verificado aislando la opción contra Baileys puro, sin nada de la app:
+      //   syncFullHistory:true      -> 428, sin QR
+      //   markOnlineOnConnect:true  -> QR OK
+      //   getMessage                -> QR OK
+      //
+      // El costo es que al vincular ya no llega el historial previo (varios
+      // meses) por 'messaging-history.set': solo se ven las conversaciones
+      // nuevas. Es el precio de poder conectar. Si WhatsApp vuelve a aceptarlo,
+      // reactivar y re-verificar con el mismo test antes de subirlo.
+      syncFullHistory: false,
       // Sin esto, cuando el receptor pide reupload de un audio/imagen
       // después de unos minutos, Baileys responde null y WhatsApp
       // muestra "este audio ya no está disponible". Devolviendo el
@@ -351,10 +360,16 @@ class GestorCuentas {
     if (entrada.temporizadorReconexion) return;
 
     // Detección de conflicto multi-proceso: si el socket se cierra
-    // rapido varias veces (sea 440 o cualquier otro codigo), casi
-    // seguro hay otra instancia del bot compitiendo. Pausamos.
+    // rapido varias veces, casi seguro hay otra instancia del bot
+    // compitiendo. Pausamos.
+    //
+    // El 428 (connectionClosed) queda FUERA del conteo. Es un cierre normal del
+    // socket —la doc de Baileys dice que se puede reconectar sin más— y no
+    // implica que haya otra instancia. Contándolo, dos cierres benignos en 20s
+    // pausaban la cuenta 15 minutos, y durante la pausa `sincronizar()` la
+    // saltea: el QR no llegaba a emitirse nunca, ni en local ni en producción.
     const ahora = Date.now();
-    entrada.timestamps440.push(ahora);
+    if (codigo !== 428) entrada.timestamps440.push(ahora);
     entrada.timestamps440 = entrada.timestamps440.filter(
       (t) => ahora - t < VENTANA_CONFLICTO_MS,
     );
