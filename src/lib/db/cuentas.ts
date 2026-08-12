@@ -66,9 +66,14 @@ export async function crearCuenta(
       etiqueta: etiqueta.trim(),
       prompt_sistema: prompt,
       modelo: modelo ?? null,
-      // Buffer de 15s por defecto: el bot espera a que el cliente termine de
-      // escribir (con detección de "escribiendo") antes de responder.
-      buffer_segundos: 15,
+      // Buffer de 10s: el bot espera a que el cliente termine de escribir
+      // (con detección de "escribiendo") antes de responder. 15s se sentía
+      // muerto; menos de 10 corta al que manda varios mensajes seguidos.
+      buffer_segundos: 10,
+      // Base del delay entre partes. El valor real se sortea entre 3 y 5s en
+      // cada envío (ver delayEntrePartesMs) para que no salgan siempre
+      // espaciadas igual, que es lo que delata a un bot.
+      delay_entre_partes_segundos: 4,
     })
     .select()
     .single();

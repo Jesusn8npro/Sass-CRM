@@ -530,9 +530,15 @@ export async function generarYEnviarRespuesta(
   // Se aplica ANTES de cada envío. Como el caller emite presence
   // 'composing' antes del loop y al final de cada parte, durante
   // este delay se ve "escribiendo..." al cliente.
-  const delayPartesMs = Math.round(
-    Math.max(0, Math.min(30, cuenta.delay_entre_partes_segundos ?? 3)) * 1000,
-  );
+  // Un delay fijo hace que todas las partes salgan exactamente igual de
+  // espaciadas, y eso se nota como bot. Lo variamos ±25% alrededor del valor
+  // configurado (con el default de 4s queda entre 3 y 5s), sorteando de nuevo
+  // en cada parte. Si el dueño lo pone en 0, sigue siendo 0.
+  const delayBaseSeg = Math.max(0, Math.min(30, cuenta.delay_entre_partes_segundos ?? 4));
+  const delayPartesMs = () =>
+    delayBaseSeg === 0
+      ? 0
+      : Math.round(delayBaseSeg * 1000 * (0.75 + Math.random() * 0.5));
 
   for (let i = 0; i < respuesta.partes.length; i++) {
     const parte = respuesta.partes[i]!;
@@ -557,7 +563,8 @@ export async function generarYEnviarRespuesta(
               `${prefijo} parte ${numParte} producto:${productoId} no existe o no pertenece a esta cuenta, ignorada`,
             );
           } else {
-            if (delayPartesMs > 0) await dormir(delayPartesMs);
+            const esperaMs = delayPartesMs();
+            if (esperaMs > 0) await dormir(esperaMs);
             await enviarFotoProducto(
               sock,
               jidParaEnviar,
@@ -575,7 +582,8 @@ export async function generarYEnviarRespuesta(
             `${prefijo} parte ${numParte} media id="${idRaw}" no existe en biblioteca, ignorada`,
           );
         } else {
-          if (delayPartesMs > 0) await dormir(delayPartesMs);
+          const esperaMs = delayPartesMs();
+          if (esperaMs > 0) await dormir(esperaMs);
           await enviarMedioBiblioteca(
             sock,
             jidParaEnviar,
@@ -597,7 +605,7 @@ export async function generarYEnviarRespuesta(
             parte.contenido.trim(),
             prefijo,
             numParte,
-            delayPartesMs,
+            delayPartesMs(),
           )
         : false;
       if (!exito) {
@@ -614,7 +622,7 @@ export async function generarYEnviarRespuesta(
           parte.contenido,
           prefijo,
           numParte,
-          delayPartesMs,
+          delayPartesMs(),
         );
       }
     } else if (parte.contenido.trim()) {
@@ -626,7 +634,7 @@ export async function generarYEnviarRespuesta(
         parte.contenido,
         prefijo,
         numParte,
-        delayPartesMs,
+        delayPartesMs(),
       );
     }
 
