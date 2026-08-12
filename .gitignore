@@ -51,3 +51,6 @@ EjemploN8N
 # Material local del usuario (no va al repo)
 Guiais/
 exportacion_viejo.json
+
+# Herramienta local de Blender (se regenera sola)
+.blender-toolkit/
