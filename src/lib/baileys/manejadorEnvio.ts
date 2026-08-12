@@ -250,12 +250,23 @@ export async function enviarParteAudio(
         detalle.includes("fetch failed") ||
         detalle.includes("socket hang up") ||
         detalle.includes("Timed Out");
-      if (!transient) throw err;
-      console.warn(
-        `${prefijo} ⚠ ElevenLabs falló (${detalle.slice(0, 80)}) — retry en 800ms`,
-      );
-      await dormir(800);
-      tts = await generarAudioTTS(texto, cuenta.voz_elevenlabs!, cuenta.id);
+      if (transient) {
+        console.warn(
+          `${prefijo} ⚠ ElevenLabs falló (${detalle.slice(0, 80)}) — retry en 800ms`,
+        );
+        await dormir(800);
+        tts = await generarAudioTTS(texto, cuenta.voz_elevenlabs!, cuenta.id);
+      } else {
+        // No es transitorio: cuota agotada, voz no permitida por el plan,
+        // key sin permisos. Reintentar no sirve. Antes de caer a texto —que
+        // en espejo_voz rompe la expectativa del cliente que escribió por
+        // voz— probamos con Gemini, que tiene TTS dentro de su cuota general.
+        console.warn(
+          `${prefijo} ⚠ ElevenLabs no disponible (${detalle.slice(0, 80)}) — probando respaldo Gemini`,
+        );
+        const { generarAudioRespaldo } = await import("../ttsRespaldo");
+        tts = await generarAudioRespaldo(texto, cuenta.id);
+      }
     }
     const ttsDur = Date.now() - ttsInicio;
     console.log(
