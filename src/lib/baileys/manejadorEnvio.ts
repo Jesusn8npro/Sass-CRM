@@ -112,6 +112,37 @@ export function dormir(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// ============================================================
+// Anti-repetición literal por conversación.
+// Guardamos un hash liviano (texto normalizado) de cada parte enviada
+// con su timestamp. Ventana corta: repetir la misma frase 6 minutos
+// después es casi siempre un duplicado, no una respuesta legítima.
+// ============================================================
+const VENTANA_ANTI_REPETICION_MS = 6 * 60 * 1000;
+const enviadosRecientes = new Map<string, Map<string, number>>();
+
+function claveTexto(contenido: string): string {
+  return contenido.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function yaSeEnvioHacePoco(conversacionId: string, contenido: string): boolean {
+  const ahora = Date.now();
+  let porConv = enviadosRecientes.get(conversacionId);
+  if (!porConv) {
+    porConv = new Map();
+    enviadosRecientes.set(conversacionId, porConv);
+  }
+  // Limpieza oportunista de entradas vencidas (evita crecer sin límite).
+  for (const [k, ts] of porConv) {
+    if (ahora - ts > VENTANA_ANTI_REPETICION_MS) porConv.delete(k);
+  }
+
+  const clave = claveTexto(contenido);
+  if (porConv.has(clave)) return true;
+  porConv.set(clave, ahora);
+  return false;
+}
+
 /**
  * Envía una parte de texto del bot: espera el delay configurado por
  * la cuenta (durante ese tiempo el "escribiendo..." sigue visible
@@ -134,6 +165,17 @@ export async function enviarParteTexto(
   delayMs: number,
 ): Promise<void> {
   if (delayMs > 0) await dormir(delayMs);
+
+  // Última barrera anti-duplicado: si este MISMO texto ya salió a esta
+  // conversación hace poco, no lo repetimos. Cubre el caso en que el
+  // modelo vuelve a formular la pregunta palabra por palabra porque el
+  // cliente no la contestó — al cliente le llegaba dos veces igual.
+  if (contenido.trim() && yaSeEnvioHacePoco(conversacionId, contenido)) {
+    console.log(
+      `${prefijo} ⏭ parte ${numParte} idéntica a una enviada hace <${VENTANA_ANTI_REPETICION_MS / 60000}min — no la repito`,
+    );
+    return;
+  }
 
   // El sock que llegó por parámetro pudo haberse cerrado mientras la
   // IA pensaba (code 440 reconecta y deja un sock nuevo en el gestor).

@@ -160,6 +160,31 @@ function obtenerConvDeEnvio(
   return idsEnviadosPorBot.get(cuentaId)?.get(msgId)?.conversacionId ?? null;
 }
 
+// ============================================================
+// Dedupe de ENTREGA (no de fila en DB).
+// WhatsApp re-entrega el mismo mensaje: como "notify" y otra vez como
+// "append" al reconectar, o dos veces seguidas si el ack se perdió.
+// El upsert por wa_msg_id evita la fila duplicada, pero el pipeline
+// (transcripción, visión, buffer, respuesta IA) seguía corriendo entero
+// la segunda vez → el bot contestaba DOS veces lo mismo con distinto
+// wa_msg_id. Cortamos acá, antes de gastar un solo token.
+// ============================================================
+const idsProcesados = new Map<string, Set<string>>();
+const TTL_PROCESADOS_MS = 30 * 60 * 1000;
+
+function yaSeProceso(cuentaId: string, msgId: string): boolean {
+  let vistos = idsProcesados.get(cuentaId);
+  if (!vistos) {
+    vistos = new Set();
+    idsProcesados.set(cuentaId, vistos);
+  }
+  if (vistos.has(msgId)) return true;
+  vistos.add(msgId);
+  const t = setTimeout(() => vistos.delete(msgId), TTL_PROCESADOS_MS);
+  t.unref?.();
+  return false;
+}
+
 export function registrarManejadores(
   sock: WASocket,
   cuentaId: string,
@@ -252,6 +277,17 @@ export function registrarManejadores(
         );
 
         if (!remoteJid) continue;
+
+        // Misma entrega, segunda vez (notify + append, o re-entrega tras
+        // reconexión). Sin este corte el bot vuelve a generar y enviar
+        // la MISMA respuesta con otro wa_msg_id.
+        if (msg.key.id && yaSeProceso(cuentaId, msg.key.id)) {
+          console.log(
+            `${prefijo} ⏭ re-entrega de ${msg.key.id} (type=${type}) — ya procesado, ignorado`,
+          );
+          continue;
+        }
+
         if (remoteJid.endsWith("@g.us")) continue;
         if (remoteJid.endsWith("@broadcast")) continue;
         if (remoteJid.endsWith("@newsletter")) continue;
@@ -460,11 +496,26 @@ export function registrarManejadores(
           continue;
         }
 
-        await insertarMensaje(cuentaId, conversacion.id, "usuario", contenido, {
-          tipo,
-          media_path: mediaPath,
-          wa_msg_id: msg.key.id ?? null,
-        });
+        // Segundo cinturón, este sí cubre reinicios del proceso y una
+        // eventual segunda instancia: si el upsert no devolvió fila es
+        // porque ese wa_msg_id YA estaba en DB → alguien ya lo contestó.
+        const filaMensaje = await insertarMensaje(
+          cuentaId,
+          conversacion.id,
+          "usuario",
+          contenido,
+          {
+            tipo,
+            media_path: mediaPath,
+            wa_msg_id: msg.key.id ?? null,
+          },
+        );
+        if (!filaMensaje) {
+          console.log(
+            `${prefijo} ⏭ ${msg.key.id} ya estaba en DB — no re-disparo la IA`,
+          );
+          continue;
+        }
 
         // ============================================================
         // SUPER-ADMIN: solo activo en la cuenta dedicada (es_panel_admin).

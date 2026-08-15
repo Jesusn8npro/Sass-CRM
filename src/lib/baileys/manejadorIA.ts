@@ -61,7 +61,45 @@ function pareceMensajeDeEspera(respuesta: RespuestaIA): boolean {
 // ============================================================
 // Generar respuesta con IA y enviar como múltiples partes
 // ============================================================
+
+/**
+ * Candado por conversación. Una respuesta tarda entre 5 y 20 segundos
+ * (LLM + delays de 3-5s entre partes). Si en esa ventana entra otro
+ * disparo para la misma conversación — buffer que venció, re-entrega de
+ * WhatsApp, seguimiento programado — el segundo run leía un historial
+ * sin las partes que el primero todavía no terminó de escribir y
+ * generaba una respuesta CASI IDÉNTICA. El cliente veía todo dos veces.
+ */
+const respuestasEnCurso = new Set<string>();
+
 export async function generarYEnviarRespuesta(
+  sock: WASocket,
+  cuenta: Cuenta,
+  conversacion: Conversacion,
+  jidParaEnviar: string,
+  prefijo: string,
+): Promise<void> {
+  if (respuestasEnCurso.has(conversacion.id)) {
+    console.log(
+      `${prefijo} ⏭ ya hay una respuesta en curso para esta conversación — descarto el disparo duplicado`,
+    );
+    return;
+  }
+  respuestasEnCurso.add(conversacion.id);
+  try {
+    await generarYEnviarRespuestaInterna(
+      sock,
+      cuenta,
+      conversacion,
+      jidParaEnviar,
+      prefijo,
+    );
+  } finally {
+    respuestasEnCurso.delete(conversacion.id);
+  }
+}
+
+async function generarYEnviarRespuestaInterna(
   sock: WASocket,
   cuenta: Cuenta,
   conversacion: Conversacion,

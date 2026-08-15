@@ -104,6 +104,9 @@ class GestorCuentas {
    */
   private cierresIntencionales = new Set<string>();
 
+  /** Cuentas cuya bandeja de salida se está procesando ahora mismo. */
+  private bandejasEnCurso = new Set<string>();
+
   async iniciar(): Promise<void> {
     await this.sincronizar();
   }
@@ -581,6 +584,12 @@ class GestorCuentas {
 
   async procesarBandejasDeSalida(): Promise<void> {
     for (const [cuentaId, entrada] of this.sockets) {
+      // El interval dispara cada 20s sin esperar al ciclo anterior. Si
+      // una cuenta está mandando media pesada y tarda más que eso, el
+      // tick siguiente releía los mismos items (enviado=false todavía)
+      // y los mandaba DE NUEVO. Un flag por cuenta lo corta.
+      if (this.bandejasEnCurso.has(cuentaId)) continue;
+      this.bandejasEnCurso.add(cuentaId);
       try {
         await procesarBandejaSalidaDeCuenta(
           entrada.sock,
@@ -592,6 +601,8 @@ class GestorCuentas {
           `[bot:${entrada.etiqueta}] error procesando bandeja:`,
           err,
         );
+      } finally {
+        this.bandejasEnCurso.delete(cuentaId);
       }
     }
   }
