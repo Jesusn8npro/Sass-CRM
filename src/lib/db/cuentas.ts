@@ -3,6 +3,7 @@ import { PROMPT_SISTEMA_DEFAULT } from "../promptSistema";
 import { sembrarEtapasSiVacias } from "./etapas";
 import { cache, TTL } from "@/lib/cache";
 import type { CampoCaptura, Cuenta, EstadoConexion } from "./tipos";
+import type { ObjecionPlaybook } from "../playbook";
 
 /**
  * Lista las cuentas de un usuario (excluye archivadas).
@@ -134,6 +135,8 @@ export async function actualizarCuenta(
     notificaciones_email_activas: boolean;
     responder_humanizado: boolean;
     usar_emojis: boolean;
+    playbook_objeciones: ObjecionPlaybook[];
+    playbook_activo: boolean;
   }>,
 ): Promise<Cuenta | null> {
   const cambios: Record<string, unknown> = {};

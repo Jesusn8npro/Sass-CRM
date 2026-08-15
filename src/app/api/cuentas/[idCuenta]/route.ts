@@ -7,6 +7,7 @@ import {
   type CampoCaptura,
 } from "@/lib/baseDatos";
 import { calcularBotVivo } from "@/lib/latidoBot";
+import { sanearPlaybook } from "@/lib/playbook";
 import { parsearJSON, verificarAccesoCuenta } from "@/lib/auth/sesion";
 import { obtenerGestor } from "@/lib/baileys/gestor";
 
@@ -139,6 +140,8 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     notificaciones_email_activas?: unknown;
     responder_humanizado?: unknown;
     usar_emojis?: unknown;
+    playbook_objeciones?: unknown;
+    playbook_activo?: unknown;
   }>(req);
   if (payload instanceof NextResponse) return payload;
 
@@ -322,6 +325,11 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     typeof payload.usar_emojis === "boolean"
       ? payload.usar_emojis
       : undefined;
+  const playbook_objeciones = sanearPlaybook(payload.playbook_objeciones);
+  const playbook_activo =
+    typeof payload.playbook_activo === "boolean"
+      ? payload.playbook_activo
+      : undefined;
 
   const actualizada = await actualizarCuenta(idCuenta, {
     etiqueta,
@@ -362,6 +370,8 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     notificaciones_email_activas,
     responder_humanizado,
     usar_emojis,
+    playbook_objeciones,
+    playbook_activo,
   });
   if (!actualizada) {
     return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });

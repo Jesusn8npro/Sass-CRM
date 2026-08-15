@@ -9,6 +9,7 @@ import {
   PLANTILLAS_INDUSTRIA,
 } from "@/lib/plantillas-industria";
 import { parsearJSON, verificarAccesoCuenta } from "@/lib/auth/sesion";
+import { PLAYBOOK_BASE } from "@/lib/playbook";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -63,8 +64,20 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     );
   }
 
+  // El playbook base sirve igual para un curso, una clínica o una
+  // inmobiliaria: ninguna de las ocho respuestas afirma un hecho del
+  // negocio. Lo sembramos en el onboarding para que el agente arranque
+  // sabiendo qué hacer con "está caro" y con "¿me hacés descuento?",
+  // en vez de improvisar. Si el dueño ya cargó el suyo, no lo pisamos.
+  const yaTienePlaybook =
+    Array.isArray(acceso.cuenta.playbook_objeciones) &&
+    acceso.cuenta.playbook_objeciones.length > 0;
+
   // 1) Aplicar identidad y prompt a la cuenta.
   await actualizarCuenta(idCuenta, {
+    ...(yaTienePlaybook
+      ? {}
+      : { playbook_objeciones: PLAYBOOK_BASE, playbook_activo: true }),
     agente_nombre: plantilla.agente_nombre_default,
     agente_rol: plantilla.agente_rol_default,
     agente_personalidad: plantilla.agente_personalidad_default,

@@ -182,6 +182,12 @@ INSTRUCCIONES DE FORMATO DE RESPUESTA (siempre seguir):
 
     REGLA: activá activar=true cada vez que haya >= 10 puntos de cambio. El score actual te lo paso en el contexto bajo "Lead score actual: X/100".
 
+    MOTIVO — una línea con lo que LEÍSTE en el mensaje, no con una conclusión.
+    "Pidió horario y nombró el curso de acordeón, no dijo presupuesto" sirve.
+    "Lead calificado" no dice nada y no sirve para nada.
+    Si el motivo menciona un monto, ese monto tiene que estar escrito en el
+    mensaje del cliente. Deducirlo es inventarlo.
+
     Si no hay señal: activar=false, score=0, motivo="".
 
 12) "cambiar_estado" — transiciones del lead en el CRM. Activá cuando corresponda:

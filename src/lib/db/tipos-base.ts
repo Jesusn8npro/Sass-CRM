@@ -2,6 +2,7 @@
  * Tipos compartidos por toda la capa de acceso a datos.
  * IDs son UUIDs (string). Timestamps son strings ISO 8601 (timestamptz).
  */
+import type { ObjecionPlaybook } from "../playbook";
 
 // ============================================================
 // Enums / unions
@@ -154,6 +155,11 @@ export interface Cuenta {
   temperatura: number;
   max_tokens: number;
   instrucciones_extra: string;
+  // ===== Playbook de objeciones (migración 42) =====
+  /** Cómo cierra este negocio: objeción → enfoque de respuesta. */
+  playbook_objeciones?: ObjecionPlaybook[] | null;
+  /** Si es false, el playbook no se inyecta aunque esté cargado. */
+  playbook_activo?: boolean | null;
   // ===== WhatsApp Business Cloud API (Meta) =====
   wa_phone_number_id: string | null;
   wa_business_account_id: string | null;

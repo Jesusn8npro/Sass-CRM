@@ -20,6 +20,7 @@ import { PROMPT_SISTEMA_DEFAULT } from "./promptSistema";
  *    de la conversación actual. Se incluye si se pasa `conversacion`.
  */
 import { REGLAS_ANTI_ALUCINACION, bloqueFechaActual } from "./construirPrompt-bloques";
+import { bloquePlaybook } from "./playbook";
 import type { ResultadoBusquedaChunk } from "./baseDatos";
 
 
@@ -280,6 +281,15 @@ USO DE EMOJIS — DESHABILITADO:
   if (extra) {
     partes.push(`\n\n# Instrucciones personalizadas del negocio\n\n${extra}`);
   }
+
+  // Playbook de objeciones. Va en la parte ESTABLE del prompt (antes de
+  // la fecha y de los datos de la conversación) para que entre en el
+  // caché de OpenAI: cambia cuando el dueño lo edita, no en cada turno.
+  const playbook = bloquePlaybook(
+    cuenta.playbook_objeciones,
+    cuenta.playbook_activo === true,
+  );
+  if (playbook) partes.push(playbook);
 
   const promptBase = cuenta.prompt_sistema?.trim();
   partes.push("\n\n" + (promptBase || PROMPT_SISTEMA_DEFAULT));

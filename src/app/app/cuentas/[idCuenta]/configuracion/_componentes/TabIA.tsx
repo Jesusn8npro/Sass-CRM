@@ -12,6 +12,7 @@ import {
 import { SeccionVoz } from "./SeccionVoz";
 import { SeccionOperadorPrivado } from "./SeccionOperadorPrivado";
 import { SeccionDisparadores } from "./SeccionDisparadores";
+import { SeccionPlaybook } from "./SeccionPlaybook";
 import { SeccionConfiguracionIA, SeccionComportamiento } from "./_TabIA-ia";
 import { SeccionRitmoYMemoria, SeccionPromptAvanzado } from "./_TabIA-ritmo";
 
@@ -114,6 +115,7 @@ export function TabIA({ cuenta, setCuenta }: { cuenta: Cuenta; setCuenta: (c: Cu
       <SeccionConfiguracionIA cuenta={cuenta} onActualizada={setCuenta} />
       <SeccionPersonalidadAgente cuenta={cuenta} onActualizada={setCuenta} />
       <SeccionComportamiento cuenta={cuenta} onActualizada={setCuenta} />
+      <SeccionPlaybook cuenta={cuenta} onActualizada={setCuenta} />
       <SeccionRitmoYMemoria cuenta={cuenta} onActualizada={setCuenta} />
       <SeccionVoz cuenta={cuenta} onActualizada={setCuenta} />
       <SeccionOperadorPrivado cuenta={cuenta} onActualizada={setCuenta} />
