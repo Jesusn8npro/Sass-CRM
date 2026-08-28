@@ -301,13 +301,21 @@ USO DE EMOJIS — DESHABILITADO:
 
   // Modo RAG: si vinieron chunks pre-buscados por similitud semántica,
   // los usamos en vez del dump completo. Es lo más eficiente.
+  // OJO: los chunks CAMBIAN en cada turno (dependen de lo último que escribió
+  // el cliente). Emitidos acá, en plena zona estable, invalidan el caché de
+  // prompt de OpenAI para TODO lo que viene después (biblioteca, catálogo,
+  // formato de respuesta). Por eso se acumulan y se emiten más abajo, junto
+  // a la fecha y al contexto de la conversación, que también son variables.
+  let bloqueRAG = "";
   if (chunksRAG && chunksRAG.length > 0) {
-    partes.push("\n\n# Información clave de referencia (relevante a la consulta)\n");
+    const trozos: string[] = [];
+    trozos.push("\n\n# Información clave de referencia (relevante a la consulta)\n");
     for (const c of chunksRAG) {
-      partes.push(
+      trozos.push(
         `\n## ${c.titulo} ${c.categoria !== "general" ? `· ${c.categoria}` : ""}\n\n${c.contenido}\n`,
       );
     }
+    bloqueRAG = trozos.join("");
   } else {
     // Modo dump (fallback): la cuenta no tiene RAG indexado todavia,
     // o la búsqueda devolvió cero matches. Inyectamos todo el
@@ -450,6 +458,10 @@ En lugar de eso, hablá del NEGOCIO en términos comerciales:
   // romper el caché del prefijo estable. Sigue estando ANTES de los datos de
   // la conversación, que es donde la IA lo necesita para generar fechas de
   // citas/seguimientos correctamente.
+  // Desde acá arranca la zona VARIABLE del prompt. Todo lo de arriba es
+  // estable entre llamadas y lo cachea OpenAI a mitad de precio.
+  if (bloqueRAG) partes.push(bloqueRAG);
+
   partes.push("\n\n" + bloqueFechaActual());
 
   // ============================================================

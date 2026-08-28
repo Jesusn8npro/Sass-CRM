@@ -6,6 +6,7 @@ import {
   generarRespuestaRespaldo,
   type MensajeParaRespaldo,
 } from "./respaldoAnthropic";
+import { generarRespuestaRespaldo2 } from "./respaldoGemini";
 import { circuitoOpenaiAbierto, registrarFalloOpenai } from "./circuitoOpenai";
 
 const cliente = new OpenAI({
@@ -208,9 +209,42 @@ const COSTO_OPENAI_USD: Record<string, { in: number; out: number }> = {
   "gpt-4.1-mini": { in: 0.4, out: 1.6 },
 };
 
-function calcularCostoOpenai(modelo: string, tIn: number, tOut: number): number {
+function calcularCostoOpenai(
+  modelo: string,
+  tIn: number,
+  tOut: number,
+  tCache = 0,
+): number {
   const c = COSTO_OPENAI_USD[modelo] ?? { in: 0, out: 0 };
-  return (tIn * c.in + tOut * c.out) / 1_000_000;
+  // Los tokens servidos desde el caché de prompt se facturan a mitad de
+  // precio. tIn ya los incluye, así que descontamos la mitad de esa parte.
+  const frescos = Math.max(0, tIn - tCache);
+  return (frescos * c.in + tCache * c.in * 0.5 + tOut * c.out) / 1_000_000;
+}
+
+/**
+ * Cascada de respaldos: Anthropic y, si también falla, Gemini.
+ *
+ * Los tres proveedores facturan por separado, así que una cuenta sin saldo
+ * no deja mudo al agente. Sólo si los tres fallan sube el error y el cliente
+ * ve el aviso de "inconveniente técnico".
+ */
+async function respaldoEnCascada(parametros: {
+  promptCompleto: string;
+  mensajes: MensajeParaRespaldo[];
+  temperatura: number;
+  maxTokens: number;
+  cuentaId?: string;
+}): Promise<Record<string, unknown>> {
+  try {
+    return await generarRespuestaRespaldo(parametros);
+  } catch (errAnthropic) {
+    log.error(
+      { err: String(errAnthropic) },
+      "[openai] respaldo Anthropic también falló — intentando Gemini",
+    );
+    return await generarRespuestaRespaldo2(parametros);
+  }
 }
 
 export async function generarRespuesta(
@@ -277,7 +311,7 @@ export async function generarRespuesta(
   // Si OpenAI ya falló por cuenta caída hace poco, no perdemos otro
   // round-trip en confirmarlo: vamos derecho al respaldo.
   if (circuitoOpenaiAbierto()) {
-    const crudo = await generarRespuestaRespaldo({
+    const crudo = await respaldoEnCascada({
       promptCompleto,
       mensajes: mensajesParaLLM as MensajeParaRespaldo[],
       temperatura,
@@ -319,7 +353,7 @@ export async function generarRespuesta(
       { err: String(errOpenai), modelo },
       "[openai] falló tras reintentos — intentando respaldo Anthropic",
     );
-    const crudo = await generarRespuestaRespaldo({
+    const crudo = await respaldoEnCascada({
       promptCompleto,
       mensajes: mensajesParaLLM as MensajeParaRespaldo[],
       temperatura,
@@ -332,14 +366,21 @@ export async function generarRespuesta(
   if (cuentaId && respuesta.usage) {
     const tIn = respuesta.usage.prompt_tokens ?? 0;
     const tOut = respuesta.usage.completion_tokens ?? 0;
+    const tCache = respuesta.usage.prompt_tokens_details?.cached_tokens ?? 0;
     registrarUso({
       cuenta_id: cuentaId,
       proveedor: "openai",
       modelo,
       tokens_in: tIn,
       tokens_out: tOut,
-      costo_usd: calcularCostoOpenai(modelo, tIn, tOut),
-      metadata: { con_imagen: conImagen },
+      costo_usd: calcularCostoOpenai(modelo, tIn, tOut, tCache),
+      metadata: {
+        con_imagen: conImagen,
+        tokens_cacheados: tCache,
+        // % del prompt servido desde caché. Si cae, es que algo variable se
+        // coló en la zona estable del prompt: hay que revisarlo.
+        cache_hit: tIn > 0 ? Math.round((tCache / tIn) * 100) : 0,
+      },
     });
   }
 

@@ -10,7 +10,7 @@ export const ESQUEMA_RESPUESTA = {
     partes: {
       type: "array",
       description:
-        "Respuesta dividida en partes. Cada parte se envía como mensaje separado de WhatsApp con un pequeño delay para que se sienta natural. Se pueden intercalar textos con medios de la biblioteca.",
+        "Respuesta en partes; cada una se envía como mensaje separado de WhatsApp. Se pueden intercalar textos con medios de la biblioteca.",
       items: {
         type: "object",
         properties: {
@@ -72,7 +72,7 @@ export const ESQUEMA_RESPUESTA = {
     programar_seguimiento: {
       type: "object",
       description:
-        "Programar un MENSAJE futuro de re-engagement (ej: el cliente dijo 'lo pienso y te aviso', programá un follow-up en 24-48h). Solo activar si tiene sentido — no programar mensajes que el cliente no espera.",
+        "Programar un MENSAJE futuro de re-engagement (ej: 'lo pienso y te aviso' → follow-up en 24-48h). Solo si tiene sentido — no programes mensajes que el cliente no espera.",
       properties: {
         activar: { type: "boolean" },
         fecha_iso: {
@@ -97,7 +97,7 @@ export const ESQUEMA_RESPUESTA = {
     agendar_cita: {
       type: "object",
       description:
-        "Agendar una CITA / reunión / demo / asesoría / clase. Solo si el cliente CONFIRMÓ una fecha y hora específica. Genera entrada en la agenda del negocio + recordatorio automático 1h antes.",
+        "Agendar CITA/demo/asesoría/clase. Solo si el cliente CONFIRMÓ fecha y hora específica. Crea entrada en la agenda + recordatorio 1h antes.",
       properties: {
         activar: { type: "boolean" },
         fecha_iso: {
@@ -127,7 +127,7 @@ export const ESQUEMA_RESPUESTA = {
     agendar_llamada: {
       type: "object",
       description:
-        "Programar una LLAMADA telefónica Vapi a una fecha/hora futura. Distinto de iniciar_llamada (que llama AHORA). Útil cuando el cliente dice 'llamame mañana a las 10am' o 'mejor el viernes después de las 3'. El bot va a disparar la llamada automáticamente a esa hora con el contexto de la conversación.",
+        "Programar una LLAMADA Vapi a futuro (distinto de iniciar_llamada, que llama AHORA). Ej: 'llamame mañana a las 10am'. El bot la dispara a esa hora con el contexto de la conversación.",
       properties: {
         activar: { type: "boolean" },
         fecha_iso: {
@@ -147,7 +147,7 @@ export const ESQUEMA_RESPUESTA = {
     capturar_datos: {
       type: "object",
       description:
-        "Capturar/actualizar datos del cliente. Activá CADA VEZ que el cliente te dé información NUEVA: nombre real, email, otro teléfono, qué necesita, qué negocio tiene, qué le importa (ventajas), qué le preocupa (miedos/objeciones). El sistema MERGEA con lo guardado — los campos vacíos NO pisan datos previos. Es CRÍTICO porque alimenta el CRM y el contexto que recibe el agente Vapi cuando llama.",
+        "Capturar/actualizar datos del cliente. Activá CADA VEZ que dé información NUEVA (nombre real, email, otro teléfono, interés, negocio, ventajas, miedos/objeciones). El sistema MERGEA — campos vacíos NO pisan datos previos. Alimenta el CRM y el contexto de las llamadas Vapi.",
       properties: {
         activar: { type: "boolean" },
         nombre: {
@@ -206,7 +206,7 @@ export const ESQUEMA_RESPUESTA = {
     actualizar_score: {
       type: "object",
       description:
-        "Subir/bajar la puntuación de calificación del lead (0-100). Subila a medida que el cliente muestra señales de interés (pregunta precio, agenda demo, comparte info personal). Bajala si frena o se aleja. Activá solo cuando el cambio sea significativo (>= 10 puntos).",
+        "Subir/bajar el score del lead (0-100) según señales de interés (pregunta precio, agenda demo, comparte datos; bajalo si se aleja). Activá solo con cambios >= 10 puntos.",
       properties: {
         activar: { type: "boolean" },
         score: {
@@ -226,7 +226,7 @@ export const ESQUEMA_RESPUESTA = {
     cambiar_estado: {
       type: "object",
       description:
-        "Cambiar el estado del lead en el CRM. Estados: nuevo (recién entró), contactado (ya respondiste), calificado (mostró interés real y dio datos), interesado (pidió info concreta o agendó demo), negociacion (hablando precios/condiciones), cerrado (ganó), perdido (rechazó o ghosting confirmado). Activá solo en transiciones reales.",
+        "Cambiar estado del lead: nuevo, contactado, calificado (interés real y dio datos), interesado (pidió info concreta o demo), negociacion (precios/condiciones), cerrado (ganó), perdido (rechazó o ghosting). Solo en transiciones reales.",
       properties: {
         activar: { type: "boolean" },
         nuevo_estado: {
@@ -300,7 +300,7 @@ export const ESQUEMA_RESPUESTA = {
     consultar_datos: {
       type: "object",
       description:
-        "Consultar la base de datos REAL del negocio (solo lectura) ANTES de responder con cifras concretas. Activá esto cuando el cliente pregunte por información que vive en esas tablas (precios, stock, disponibilidad, estado de un pedido, datos de su cuenta, etc.) y no la tengas ya en el contexto. El sistema trae las filas y te vuelve a preguntar para que respondas con datos reales. NO inventes números: si los necesitás, consultalos. Solo se permiten las tablas que el negocio habilitó (te las listo en el prompt). Si no hace falta consultar nada, activar=false.",
+        "Consultar la base REAL del negocio (solo lectura) ANTES de responder cifras concretas (precios, stock, pedidos, datos de su cuenta) que no tengas en el contexto. El sistema trae las filas y te repregunta para que respondas con datos reales. NO inventes números: consultalos. Solo las tablas habilitadas (listadas en el prompt). Si no hace falta, activar=false.",
       properties: {
         activar: { type: "boolean" },
         tablas: {
@@ -312,28 +312,28 @@ export const ESQUEMA_RESPUESTA = {
         filtros: {
           type: "array",
           description:
-            "Filtros de igualdad para acotar la consulta SOLO a los datos del cliente actual. OBLIGATORIO para datos personales/de cuenta (si está registrado, sus cursos, sus pedidos): poné el email O el teléfono del PROPIO cliente, USANDO EL NOMBRE EXACTO de la columna tal como aparece en las tablas del prompt (la de email puede llamarse email, correo o correo_electronico; el valor del email SIEMPRE en minúsculas). Ej: [{\"columna\":\"correo_electronico\",\"valor\":\"juan@mail.com\"}]. Dejá el array vacío SOLO para catálogo público (lista de cursos, precios). NUNCA consultes datos personales sin filtro — traería datos de otros clientes.",
+            "Filtros para acotar SOLO al cliente actual. OBLIGATORIO para datos personales/de cuenta: email O teléfono del PROPIO cliente, con el NOMBRE EXACTO de columna según el prompt (la de email puede ser email, correo o correo_electronico; email siempre en minúsculas). Ej: [{\"columna\":\"correo_electronico\",\"valor\":\"juan@mail.com\"}]. Array vacío SOLO para catálogo público. NUNCA datos personales sin filtro — traería datos de otros clientes.",
           items: {
             type: "object",
             properties: {
               columna: {
                 type: "string",
-                description: "Nombre EXACTO de la columna por la que filtrar, tal como figura en las tablas del prompt (ej: correo_electronico, telefono, usuario_id, id). NUNCA inventes el nombre de la columna.",
+                description: "Nombre EXACTO de la columna, tal como figura en el prompt (ej: correo_electronico, telefono, usuario_id). NUNCA lo inventes.",
               },
               valor: {
                 type: "string",
-                description: "Valor exacto a buscar (=). Para encadenar: poné acá el id/email que obtuviste en una consulta anterior. Dejá \"\" si vas a usar 'valores'.",
+                description: "Valor exacto a buscar. Para encadenar: el id/email de una consulta anterior. \"\" si usás 'valores'.",
               },
               valores: {
                 type: "array",
                 items: { type: "string" },
-                description: "Lista de valores para traer VARIOS registros de una (IN), ej: varios ids de tutoriales que obtuviste antes. Dejá [] si usás 'valor'.",
+                description: "Lista de valores (IN) para traer varios registros de una, ej: ids obtenidos antes. [] si usás 'valor'.",
               },
               operador: {
                 type: "string",
                 enum: ["eq", "contiene"],
                 description:
-                  "Cómo comparar 'valor': \"eq\" = igual exacto (default, para ids/emails). \"contiene\" = búsqueda PARCIAL sin importar mayúsculas (ilike), IDEAL para buscar por nombre/artista/título, ej: tutoriales cuyo artista CONTIENE 'Diomedes'. Cuando el cliente pide 'qué tenés de X' o busca por nombre, usá \"contiene\".",
+                  "\"eq\" = igual exacto (default, ids/emails). \"contiene\" = búsqueda PARCIAL sin mayúsculas (ilike), para nombre/artista/título ('qué tenés de X').",
               },
             },
             required: ["columna", "valor", "valores", "operador"],
