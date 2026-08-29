@@ -18,7 +18,8 @@ INSTRUCCIONES DE FORMATO DE RESPUESTA (siempre seguir):
    - Si la respuesta es corta (1 frase), 1 sola parte.
    - Si hay saludo + contenido, separalos.
    - Cada parte de texto: máximo 2-3 líneas, natural en WhatsApp.
-   - NO uses emojis.
+   - Emojis: seguí la política del negocio indicada más arriba en este prompt
+     (si el negocio los habilita, usalos con naturalidad; si los prohíbe, ninguno).
    - VARIÁ formatos para que se sienta humano. Ejemplos válidos:
        · solo texto (lo más común para datos rápidos, links, precios)
        · texto + media (cuando mostrás algo visual)

@@ -23,6 +23,11 @@ import {
   borrarSesionBaileysDeCuenta,
   useSupabaseAuthState,
 } from "./auth-supabase";
+import {
+  persistirMensajeEnviado,
+  leerMensajePersistido,
+  limpiarMensajesViejos,
+} from "./msgCache";
 import { notificarCuentaDesconectada } from "../notificaciones";
 import { enviarWhatsAppCaido } from "../emails/disparadores";
 
@@ -67,6 +72,10 @@ function recordarMensaje(
   mensaje: proto.IMessage | null | undefined,
 ): void {
   if (!id || !mensaje) return;
+  // Copia persistente: la caché en memoria muere con cada deploy y sin
+  // ella los retries de descifrado post-reinicio quedaban sin responder
+  // (el receptor veía "Esperando el mensaje..." para siempre).
+  persistirMensajeEnviado(entrada.cuentaId, id, mensaje);
   const cache = entrada.mensajesEnviados;
   // LRU simple: si ya existe, lo movemos al final reinsertando.
   if (cache.has(id)) cache.delete(id);
@@ -159,6 +168,9 @@ class GestorCuentas {
     // Sobrevive reinicios y permite multi-instancia del bot.
     const { state, saveCreds } = await useSupabaseAuthState(cuenta.id);
 
+    // TTL de la caché persistente de mensajes (fire-and-forget).
+    limpiarMensajesViejos(cuenta.id);
+
     let version: [number, number, number] | undefined;
     try {
       const obtenida = await fetchLatestBaileysVersion();
@@ -207,7 +219,12 @@ class GestorCuentas {
         key: WAMessageKey,
       ): Promise<proto.IMessage | undefined> => {
         if (!key.id) return undefined;
-        return mensajesEnviados.get(key.id);
+        // Memoria primero; si el mensaje es de antes del último reinicio,
+        // cae a la copia persistida en baileys_auth (tipo msg-cache).
+        return (
+          mensajesEnviados.get(key.id) ??
+          (await leerMensajePersistido(cuenta.id, key.id))
+        );
       },
     });
 

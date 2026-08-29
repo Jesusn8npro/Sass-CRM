@@ -108,10 +108,21 @@ export async function procesarAccionesIA(
       nombre: conversacion.nombre,
       razon,
     });
-    // Alerta al operador privado (fire-and-forget)
+    // Alerta al operador privado (fire-and-forget). Si el cliente pidió
+    // una LLAMADA, el título lo grita: es el aviso que el dueño espera
+    // para levantar el teléfono ya.
+    const pideLlamada = /llamad|tel[eé]fono|📞/i.test(razon);
     void enviarAlertaOperador(
       cuenta,
-      `⚠️ Handoff solicitado por: ${nombreCliente(conversacion)} — Razón: ${razon}\n` +
+      (pideLlamada
+        ? `📞 ¡${nombreCliente(conversacion)} quiere que lo LLAMEN YA!
+` +
+          `Tel: ${conversacion.telefono}
+`
+        : `⚠️ Handoff solicitado por: ${nombreCliente(conversacion)}
+`) +
+        `Razón: ${razon}
+` +
         `Ver: ${urlApp()}/app/cuentas/${cuenta.id}/conversaciones`,
     );
   }
